@@ -1,0 +1,567 @@
+import discord
+from discord.ext import commands, tasks
+import feedparser
+import aiohttp
+import json
+import os
+import re
+import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta
+from typing import Set, Dict, List, Optional
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Configuration
+DISCORD_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
+CHECK_INTERVAL_MINUTES = 5
+
+# Auto-subscription configuration
+AUTO_SUBSCRIBE_RSS_URL = "https://gitlab.com/gitlab-org/gitlab/-/work_items.atom?sort=created_date&state=opened&first_page_size=100"
+AUTO_SUBSCRIBE_CHANNEL_NAME = "issue-feed"
+AUTO_SUBSCRIBE_LABELS = {
+    "backend",
+    "frontend",
+    "documentation",
+    "type::bug",
+    "type::feature",
+    "type::maintenance",
+    "quick-win",
+    "quick-win::first-time-contributor",
+    "community-bonus::100",
+    "community-bonus::200",
+    "community-bonus::300",
+    "community-bonus::500",
+    "co-create"
+}
+
+class GitLabRSSBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.message_content = True
+        super().__init__(command_prefix='!gitlab ', intents=intents, help_command=None)
+        
+        # Store subscriptions: {channel_id: {'url': str, 'labels': set, 'last_checked': datetime}}
+        self.subscriptions: Dict[int, Dict] = {}
+        self.seen_issues: Dict[int, Set[str]] = {}
+        
+        # Load subscriptions from file
+        self.load_subscriptions()
+        
+    def load_subscriptions(self):
+        """Load subscriptions from JSON file"""
+        try:
+            if os.path.exists('subscriptions.json'):
+                with open('subscriptions.json', 'r') as f:
+                    data = json.load(f)
+                    for channel_id_str, sub_data in data.items():
+                        channel_id = int(channel_id_str)
+                        self.subscriptions[channel_id] = {
+                            'url': sub_data['url'],
+                            'labels': set(sub_data.get('labels', [])),
+                            'last_checked': datetime.fromisoformat(sub_data.get('last_checked', datetime.now().isoformat()))
+                        }
+                        self.seen_issues[channel_id] = set(sub_data.get('seen_issues', []))
+        except Exception as e:
+            print(f"Error loading subscriptions: {e}")
+    
+    def save_subscriptions(self):
+        """Save subscriptions to JSON file"""
+        try:
+            data = {}
+            for channel_id, sub_data in self.subscriptions.items():
+                data[str(channel_id)] = {
+                    'url': sub_data['url'],
+                    'labels': list(sub_data['labels']),
+                    'last_checked': sub_data['last_checked'].isoformat(),
+                    'seen_issues': list(self.seen_issues.get(channel_id, []))
+                }
+            with open('subscriptions.json', 'w') as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            print(f"Error saving subscriptions: {e}")
+    
+    async def setup_hook(self):
+        """Called when the bot is starting up"""
+        self.check_feeds.start()
+    
+    async def fetch_feed_with_labels(self, url: str) -> tuple:
+        """Fetch feed and parse labels from raw XML"""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                raw_xml = await response.text()
+        
+        # Parse with feedparser for entry metadata
+        feed = feedparser.parse(raw_xml)
+        
+        # Parse raw XML to extract labels using regex (more reliable than namespace handling)
+        labels_map = {}
+        
+        # Split by <entry> to process each entry
+        entry_pattern = re.compile(r'<entry>(.*?)</entry>', re.DOTALL)
+        id_pattern = re.compile(r'<id>([^<]+)</id>')
+        labels_pattern = re.compile(r'<labels>(.*?)</labels>', re.DOTALL)
+        label_pattern = re.compile(r'<label>([^<]+)</label>')
+        
+        for entry_match in entry_pattern.finditer(raw_xml):
+            entry_xml = entry_match.group(1)
+            
+            # Extract issue ID
+            id_match = id_pattern.search(entry_xml)
+            if id_match:
+                issue_id = id_match.group(1)
+                labels = []
+                
+                # Extract labels container
+                labels_match = labels_pattern.search(entry_xml)
+                if labels_match:
+                    labels_xml = labels_match.group(1)
+                    labels = label_pattern.findall(labels_xml)
+                
+                labels_map[issue_id] = labels
+        
+        return feed, labels_map
+    
+    @tasks.loop(minutes=CHECK_INTERVAL_MINUTES)
+    async def check_feeds(self):
+        """Periodically check RSS feeds for new issues"""
+        for channel_id, sub_data in list(self.subscriptions.items()):
+            try:
+                channel = self.get_channel(channel_id)
+                if not channel:
+                    continue
+                
+                feed, labels_map = await self.fetch_feed_with_labels(sub_data['url'])
+                
+                if channel_id not in self.seen_issues:
+                    self.seen_issues[channel_id] = set()
+                
+                new_issues = []
+                for entry in feed.entries:
+                    issue_id = entry.get('id', entry.get('link', ''))
+                    
+                    # Skip if we've seen this issue before
+                    if issue_id in self.seen_issues[channel_id]:
+                        continue
+                    
+                    # Get labels from our parsed map
+                    issue_labels = labels_map.get(issue_id, [])
+                    
+                    # Filter by labels if configured
+                    if sub_data['labels']:
+                        if not any(label in sub_data['labels'] for label in issue_labels):
+                            self.seen_issues[channel_id].add(issue_id)
+                            continue
+                    
+                    new_issues.append((entry, issue_labels, issue_id))
+                
+                # Post new issues
+                for entry, issue_labels, issue_id in new_issues:
+                    await self.post_issue(channel, entry, issue_labels)
+                    self.seen_issues[channel_id].add(issue_id)
+                
+                if new_issues:
+                    sub_data['last_checked'] = datetime.now()
+                    self.save_subscriptions()
+                    
+            except Exception as e:
+                print(f"Error checking feed for channel {channel_id}: {e}")
+    
+    @check_feeds.before_loop
+    async def before_check_feeds(self):
+        """Wait until the bot is ready before starting the loop"""
+        await self.wait_until_ready()
+    
+    def extract_labels(self, entry) -> List[str]:
+        """Extract labels from RSS entry"""
+        import re
+        labels = []
+        
+        # GitLab RSS feeds include labels in tags
+        if hasattr(entry, 'tags'):
+            for tag in entry.tags:
+                labels.append(tag.term)
+        
+        # GitLab work_items Atom feed has labels in a different format
+        # Parse from the raw XML content if available
+        if hasattr(entry, 'content'):
+            for content in entry.content:
+                content_value = content.get('value', '')
+                # Look for label patterns in content
+                label_matches = re.findall(r'<label>([^<]+)</label>', content_value)
+                labels.extend(label_matches)
+        
+        # Check summary/description for labels
+        summary = entry.get('summary', '') + entry.get('description', '')
+        
+        # Parse <label> tags from summary
+        label_matches = re.findall(r'<label>([^<]+)</label>', summary)
+        labels.extend(label_matches)
+        
+        # Parse labels formatted as ~label
+        label_matches = re.findall(r'~([^\s~]+)', summary)
+        labels.extend(label_matches)
+        
+        # Deduplicate
+        return list(set(labels))
+    
+    async def post_issue(self, channel, entry, labels: List[str]):
+        """Post a new issue to Discord"""
+        title = entry.get('title', 'No title')
+        link = entry.get('link', '')
+        author = entry.get('author', 'Unknown')
+        published = entry.get('published', '')
+        
+        embed = discord.Embed(
+            title=title,
+            url=link,
+            color=discord.Color.blue(),
+            timestamp=datetime.now()
+        )
+        
+        embed.add_field(name="Author", value=author, inline=True)
+        
+        if labels:
+            # Color code based on priority labels
+            if any('bug' in label.lower() for label in labels):
+                embed.color = discord.Color.red()
+            elif any('feature' in label.lower() for label in labels):
+                embed.color = discord.Color.green()
+            
+            # Format labels nicely
+            label_text = ', '.join([f"`{label}`" for label in labels])
+            embed.add_field(name="Labels", value=label_text, inline=False)
+        
+        embed.set_footer(text="GitLab Issue")
+        
+        await channel.send(embed=embed)
+
+# Initialize bot
+bot = GitLabRSSBot()
+
+@bot.command(name='subscribe')
+async def subscribe(ctx, rss_url: str):
+    """Subscribe this channel to a GitLab RSS feed
+    
+    Example: !gitlab subscribe https://gitlab.com/group/project/-/issues.atom
+    """
+    channel_id = ctx.channel.id
+    
+    # Test the RSS feed
+    try:
+        feed = feedparser.parse(rss_url)
+        if not feed.entries and not feed.get('feed'):
+            await ctx.send("❌ Invalid RSS feed URL. Please check the URL and try again.")
+            return
+    except Exception as e:
+        await ctx.send(f"❌ Error accessing RSS feed: {e}")
+        return
+    
+    bot.subscriptions[channel_id] = {
+        'url': rss_url,
+        'labels': set(),
+        'last_checked': datetime.now()
+    }
+    
+    bot.seen_issues[channel_id] = set()
+    bot.save_subscriptions()
+    
+    await ctx.send(f"✅ Subscribed to GitLab RSS feed!\n"
+                   f"This channel will receive all new issues.\n"
+                   f"Use `!gitlab filter` to customize which labels to track.")
+
+@bot.command(name='unsubscribe')
+async def unsubscribe(ctx):
+    """Unsubscribe this channel from the RSS feed"""
+    channel_id = ctx.channel.id
+    
+    if channel_id in bot.subscriptions:
+        del bot.subscriptions[channel_id]
+        if channel_id in bot.seen_issues:
+            del bot.seen_issues[channel_id]
+        bot.save_subscriptions()
+        await ctx.send("✅ Unsubscribed from GitLab RSS feed.")
+    else:
+        await ctx.send("❌ This channel is not subscribed to any feed.")
+
+@bot.command(name='filter')
+async def filter_labels(ctx, *labels: str):
+    """Set label filters for this channel
+    
+    Examples:
+    !gitlab filter backend frontend type::bug
+    !gitlab filter quick-win community-bonus::100
+    !gitlab filter (clears all filters)
+    """
+    channel_id = ctx.channel.id
+    
+    if channel_id not in bot.subscriptions:
+        await ctx.send("❌ This channel is not subscribed to any feed. Use `!gitlab subscribe` first.")
+        return
+    
+    if not labels:
+        bot.subscriptions[channel_id]['labels'] = set()
+        bot.save_subscriptions()
+        await ctx.send("✅ Cleared all label filters. This channel will receive all issues.")
+        return
+    
+    # Normalize labels (replace spaces with hyphens)
+    normalized_labels = {label.replace(' ', '-') for label in labels}
+    
+    bot.subscriptions[channel_id]['labels'] = normalized_labels
+    bot.save_subscriptions()
+    
+    label_list = '\n'.join([f"• `{label}`" for label in sorted(normalized_labels)])
+    await ctx.send(f"✅ Label filters updated! This channel will only receive issues with these labels:\n{label_list}")
+
+@bot.command(name='status')
+async def status(ctx):
+    """Show subscription status for this channel"""
+    channel_id = ctx.channel.id
+    
+    if channel_id not in bot.subscriptions:
+        await ctx.send("❌ This channel is not subscribed to any feed.")
+        return
+    
+    sub = bot.subscriptions[channel_id]
+    
+    embed = discord.Embed(
+        title="GitLab RSS Subscription Status",
+        color=discord.Color.green()
+    )
+    
+    embed.add_field(name="RSS URL", value=sub['url'], inline=False)
+    embed.add_field(
+        name="Last Checked",
+        value=sub['last_checked'].strftime("%Y-%m-%d %H:%M:%S"),
+        inline=True
+    )
+    embed.add_field(
+        name="Issues Tracked",
+        value=str(len(bot.seen_issues.get(channel_id, []))),
+        inline=True
+    )
+    
+    if sub['labels']:
+        label_list = '\n'.join([f"• `{label}`" for label in sorted(sub['labels'])])
+        embed.add_field(name="Active Label Filters", value=label_list, inline=False)
+    else:
+        embed.add_field(name="Active Label Filters", value="None (tracking all issues)", inline=False)
+    
+    await ctx.send(embed=embed)
+
+@bot.command(name='check')
+async def check_now(ctx):
+    """Manually check the feed and show debug info"""
+    channel_id = ctx.channel.id
+    
+    if channel_id not in bot.subscriptions:
+        await ctx.send("❌ This channel is not subscribed to any feed.")
+        return
+    
+    sub = bot.subscriptions[channel_id]
+    await ctx.send("🔍 Checking feed...")
+    
+    try:
+        feed, labels_map = await bot.fetch_feed_with_labels(sub['url'])
+        total_entries = len(feed.entries)
+        
+        if channel_id not in bot.seen_issues:
+            bot.seen_issues[channel_id] = set()
+        
+        new_count = 0
+        matching_count = 0
+        sample_labels = []
+        
+        for entry in feed.entries[:10]:  # Check first 10 for debug
+            issue_id = entry.get('id', entry.get('link', ''))
+            is_new = issue_id not in bot.seen_issues[channel_id]
+            issue_labels = labels_map.get(issue_id, [])
+            
+            if is_new:
+                new_count += 1
+            
+            # Check if labels match
+            matches_filter = True
+            if sub['labels']:
+                matches_filter = any(label in sub['labels'] for label in issue_labels)
+            
+            if matches_filter and is_new:
+                matching_count += 1
+            
+            # Collect sample labels for debugging
+            if len(sample_labels) < 5:  # Always collect samples for debugging
+                sample_labels.append({
+                    'title': entry.get('title', 'No title')[:50],
+                    'labels': issue_labels[:5],
+                    'is_new': is_new,
+                    'matches': matches_filter
+                })
+        
+        # Build debug message
+        embed = discord.Embed(
+            title="Feed Check Results",
+            color=discord.Color.blue()
+        )
+        embed.add_field(name="Total in feed", value=str(total_entries), inline=True)
+        embed.add_field(name="Already seen", value=str(len(bot.seen_issues[channel_id])), inline=True)
+        embed.add_field(name="New & matching", value=str(matching_count), inline=True)
+        embed.add_field(name="Labels parsed", value=str(len([v for v in labels_map.values() if v])), inline=True)
+        
+        if sample_labels:
+            sample_text = ""
+            for s in sample_labels:
+                status = "✅" if s['matches'] and s['is_new'] else "❌"
+                labels_str = ", ".join(s['labels'][:3]) if s['labels'] else "(no labels)"
+                sample_text += f"{status} **{s['title']}...**\n└ Labels: `{labels_str}`\n"
+            embed.add_field(name="Sample Issues", value=sample_text[:1024], inline=False)
+        else:
+            embed.add_field(name="Sample Issues", value="No labels found in entries", inline=False)
+        
+        await ctx.send(embed=embed)
+        
+    except Exception as e:
+        await ctx.send(f"❌ Error checking feed: {e}")
+
+@bot.command(name='debug')
+async def debug_feed(ctx):
+    """Show raw feed data for debugging"""
+    channel_id = ctx.channel.id
+    
+    if channel_id not in bot.subscriptions:
+        await ctx.send("❌ This channel is not subscribed to any feed.")
+        return
+    
+    sub = bot.subscriptions[channel_id]
+    await ctx.send("🔍 Fetching raw feed for debug...")
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(sub['url']) as response:
+                raw_xml = await response.text()
+        
+        # Check if <labels> exists anywhere in the feed
+        has_labels_tag = '<labels>' in raw_xml
+        labels_count = raw_xml.count('<label>')
+        
+        # Get first entry snippet
+        entry_start = raw_xml.find('<entry>')
+        entry_end = raw_xml.find('</entry>') + 8
+        first_entry = raw_xml[entry_start:entry_end] if entry_start != -1 else "No entry found"
+        
+        # Truncate for Discord
+        first_entry_preview = first_entry[:1500] + "..." if len(first_entry) > 1500 else first_entry
+        
+        await ctx.send(f"**Feed Debug Info:**\n"
+                       f"• Has `<labels>` tag: {has_labels_tag}\n"
+                       f"• Total `<label>` tags: {labels_count}\n"
+                       f"• Feed size: {len(raw_xml)} chars\n\n"
+                       f"**First entry preview:**\n```xml\n{first_entry_preview}\n```")
+        
+    except Exception as e:
+        await ctx.send(f"❌ Error: {e}")
+
+@bot.command(name='labels')
+async def show_labels(ctx):
+    """Show available label options"""
+    labels = [
+        "backend",
+        "frontend",
+        "documentation",
+        "type::bug",
+        "type::feature",
+        "type::maintenance",
+        "quick-win",
+        "quick-win::first-time-contributor",
+        "community-bonus::100",
+        "community-bonus::200",
+        "community-bonus::300",
+        "community-bonus::500",
+        "co-create"
+    ]
+    
+    embed = discord.Embed(
+        title="Available GitLab Labels",
+        description="Use these labels with the `!gitlab filter` command",
+        color=discord.Color.blue()
+    )
+    
+    categories = {
+        "Component": ["backend", "frontend", "documentation"],
+        "Type": ["type::bug", "type::feature", "type::maintenance"],
+        "Difficulty": ["quick-win", "quick-win::first-time-contributor"],
+        "Community Bonus": ["community-bonus::100", "community-bonus::200", "community-bonus::300", "community-bonus::500"],
+        "Other": ["co-create"]
+    }
+    
+    for category, category_labels in categories.items():
+        label_text = '\n'.join([f"`{label}`" for label in category_labels])
+        embed.add_field(name=category, value=label_text, inline=True)
+    
+    await ctx.send(embed=embed)
+
+@bot.command(name='help')
+async def help_command(ctx):
+    """Show help information"""
+    embed = discord.Embed(
+        title="GitLab RSS Bot - Help",
+        description="Monitor GitLab issues and filter by labels",
+        color=discord.Color.purple()
+    )
+    
+    commands_info = {
+        "subscribe <rss_url>": "Subscribe this channel to a GitLab RSS feed",
+        "unsubscribe": "Unsubscribe this channel from the RSS feed",
+        "filter <labels...>": "Set label filters (space-separated)",
+        "status": "Show current subscription status",
+        "check": "Manually check feed and show debug info",
+        "labels": "Show available label options",
+        "help": "Show this help message"
+    }
+    
+    for cmd, desc in commands_info.items():
+        embed.add_field(name=f"!gitlab {cmd}", value=desc, inline=False)
+    
+    embed.add_field(
+        name="Examples",
+        value=(
+            "```\n"
+            "!gitlab subscribe https://gitlab.com/group/project/-/issues.atom\n"
+            "!gitlab filter backend type::bug quick-win\n"
+            "!gitlab status\n"
+            "```"
+        ),
+        inline=False
+    )
+    
+    await ctx.send(embed=embed)
+
+@bot.event
+async def on_ready():
+    print(f'Logged in as {bot.user.name} ({bot.user.id})')
+    
+    # Auto-subscribe to the configured channel if not already subscribed
+    for guild in bot.guilds:
+        channel = discord.utils.get(guild.text_channels, name=AUTO_SUBSCRIBE_CHANNEL_NAME)
+        if channel and channel.id not in bot.subscriptions:
+            bot.subscriptions[channel.id] = {
+                'url': AUTO_SUBSCRIBE_RSS_URL,
+                'labels': AUTO_SUBSCRIBE_LABELS.copy(),
+                'last_checked': datetime.now()
+            }
+            bot.seen_issues[channel.id] = set()
+            bot.save_subscriptions()
+            print(f'Auto-subscribed #{AUTO_SUBSCRIBE_CHANNEL_NAME} in {guild.name} to GitLab RSS feed')
+            print(f'Filtering for labels: {", ".join(sorted(AUTO_SUBSCRIBE_LABELS))}')
+    
+    print(f'Monitoring {len(bot.subscriptions)} channel(s)')
+    print('------')
+
+# Run the bot
+if __name__ == '__main__':
+    if not DISCORD_TOKEN:
+        print("Error: DISCORD_BOT_TOKEN environment variable not set")
+        exit(1)
+    
+    bot.run(DISCORD_TOKEN)

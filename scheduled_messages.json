@@ -1,0 +1,30 @@
+{
+  "937fcde1": {
+    "group": "failures",
+    "type": "hourly",
+    "config": {
+      "hours": 2
+    },
+    "message": "This message will be sent every 2 hours... Please ignore",
+    "next_run": "2026-02-11T00:00:00+00:00",
+    "active": true,
+    "created_by": 432551600100474881,
+    "target_type": "dm",
+    "last_sent": "2026-02-10T22:00:02.772702+00:00"
+  },
+  "c4360965": {
+    "group": "failures",
+    "type": "weekly",
+    "config": {
+      "day": 1,
+      "hour": 18,
+      "minute": 20
+    },
+    "message": "Hello, Testing Weekly",
+    "next_run": "2026-02-17T18:20:00+00:00",
+    "active": true,
+    "created_by": 432551600100474881,
+    "target_type": "dm",
+    "last_sent": "2026-02-10T18:20:00.925817+00:00"
+  }
+}
