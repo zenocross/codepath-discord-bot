@@ -14,6 +14,11 @@ class Config:
     DISCORD_TOKEN: str = os.getenv('DISCORD_BOT_TOKEN', '')
     BOT_OWNER_ID: int = int(os.getenv('BOT_OWNER_ID', '0'))
     
+    # Notion settings
+    NOTION_TOKEN: str = os.getenv('NOTION_TOKEN', '')
+    NOTION_DATABASE_ID: str = os.getenv('NOTION_DATABASE_ID', '')
+    NOTION_ENABLED: bool = os.getenv('NOTION_ENABLED', 'false').lower() == 'true'
+    
     # Timing intervals
     CHECK_INTERVAL_MINUTES: int = 5
     ANNOUNCEMENT_CHECK_INTERVAL_SECONDS: int = 60  # Check every minute, aligned to :00
@@ -53,5 +58,13 @@ class Config:
         if not cls.DISCORD_TOKEN:
             print("Error: DISCORD_BOT_TOKEN environment variable not set")
             return False
+        
+        # Warn if Notion is enabled but not configured
+        if cls.NOTION_ENABLED:
+            if not cls.NOTION_TOKEN:
+                print("Warning: NOTION_ENABLED is true but NOTION_TOKEN is not set")
+            if not cls.NOTION_DATABASE_ID:
+                print("Warning: NOTION_ENABLED is true but NOTION_DATABASE_ID is not set")
+        
         return True
 
