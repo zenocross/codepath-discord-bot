@@ -828,6 +828,11 @@ class TrackerDataProcessor(FileProcessor):
                 at_risk = True
                 intervention = "PHASE_CRITICAL"
             
+            # Phase critical (less than 2 weeks remaining and not yet in Phase 4)
+            elif student.weeks_remaining < 2 and phase_num < 4:
+                at_risk = True
+                intervention = "PHASE_CRITICAL"
+            
             # Stalled with blockers
             elif student.blocked and student.blocker_desc:
                 at_risk = True
