@@ -10,6 +10,7 @@ from bot.config import Config
 from services.persistence import PersistenceService
 from services.rss_service import RSSService
 from services.scheduler_service import SchedulerService
+from services.notion_service import NotionService
 from utils.embeds import EmbedBuilder
 
 
@@ -287,7 +288,7 @@ class GitLabRSSBot(commands.Bot):
     # ==================== Internal Helpers ====================
     
     async def _post_issue(self, channel, entry, labels: List[str]) -> None:
-        """Post a new issue to Discord."""
+        """Post a new issue to Discord and optionally write to Notion."""
         title = entry.get('title', 'No title')
         link = entry.get('link', '')
         author = entry.get('author', 'Unknown')
@@ -295,6 +296,21 @@ class GitLabRSSBot(commands.Bot):
         
         embed = EmbedBuilder.issue_embed(title, link, author, labels, published)
         await channel.send(embed=embed)
+        
+        # Write to Notion if enabled
+        if Config.NOTION_ENABLED:
+            try:
+                success = await NotionService.create_issue_page_from_rss_entry(
+                    entry,
+                    labels,
+                    issue_url=link
+                )
+                if success:
+                    print(f"✓ Added issue to Notion: {title[:50]}...")
+                else:
+                    print(f"⚠ Failed to add issue to Notion: {title[:50]}...")
+            except Exception as e:
+                print(f"Error writing issue to Notion: {e}")
     
     async def _send_scheduled_announcement(self, schedule_id: str, sched: Dict) -> None:
         """Send a scheduled announcement to channels or DMs based on target_type."""
