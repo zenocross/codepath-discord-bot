@@ -10,6 +10,10 @@ Usage:
 Environment Variables:
     DISCORD_BOT_TOKEN: Your Discord bot token (required)
     BOT_OWNER_ID: Your Discord user ID for admin permissions (optional)
+    
+    NOTION_ENABLED: Set to 'true' to enable Notion integration (optional, default: false)
+    NOTION_TOKEN: Your Notion integration token (required if NOTION_ENABLED=true)
+    NOTION_DATABASE_ID: Your Notion database ID (required if NOTION_ENABLED=true)
 """
 
 from bot.config import Config
