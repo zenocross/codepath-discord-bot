@@ -661,17 +661,17 @@ class TrackerDataProcessor(FileProcessor):
                             estimated_phase_start = contribution_start_week + (phase_num - 1)
                             phase_start_week = min(week, max(contribution_start_week, estimated_phase_start))
                         submission.phase_changed_this_week = False
-                        submission._illogical_phase_change = False
+                        submission._unexpected_phase_change = False
                     else:
                         # We have history for this contribution - phase just changed
                         phase_start_week = week
                         submission.phase_changed_this_week = True
                         # Check for illogical phase change (going backwards)
-                        submission._illogical_phase_change = (phase_num < previous_phase_num)
+                        submission._unexpected_phase_change = (phase_num < previous_phase_num)
                 else:
                     # Same phase as previous submission
                     submission.phase_changed_this_week = False
-                    submission._illogical_phase_change = False
+                    submission._unexpected_phase_change = False
                 
                 # Calculate weeks in current phase
                 weeks_in_current_phase = week - phase_start_week + 1
@@ -851,9 +851,9 @@ class TrackerDataProcessor(FileProcessor):
                     intervention = "MISSING_PREVIOUS_PHASE"
                 
                 # Check for illogical phase change (going backwards, e.g., Phase 3 -> Phase 2)
-                elif getattr(student, '_illogical_phase_change', False):
+                elif getattr(student, '_unexpected_phase_change', False):
                     flagged = True
-                    intervention = "ILLOGICAL_PHASE_CHANGE"
+                    intervention = "UNEXPECTED_PHASE_CHANGE"
                 
                 # Check for MR URL added in wrong phase (should only be in Phase 4)
                 elif phase_num == 3 and student.mr_url and str(student.mr_url).strip():
