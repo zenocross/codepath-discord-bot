@@ -471,17 +471,34 @@ class EmbedBuilder:
         )
         
         embed.add_field(
-            name="🔧 Commands",
+            name="📤 Upload Commands",
             value=(
                 "`!tracker upload` - Interactive wizard (all CSVs)\n"
                 "`!tracker upload master` - Upload master roster\n"
                 "`!tracker upload typeform` - Upload typeform responses\n"
                 "`!tracker upload zoom` - Upload zoom attendance\n"
-                "`!tracker download` - Generate tracker report\n"
                 "`!tracker files` - Check uploaded file status\n"
                 "`!tracker clear <type>` - Clear specific CSV\n"
-                "`!tracker clearall` - Clear all CSVs\n"
-                "`!tracker help` - Show this help message"
+                "`!tracker clearall` - Clear all CSVs"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📅 Real-Time Submissions",
+            value=(
+                "`!tracker start_date [MM/DD/YYYY]` - Set/view program start date\n"
+                "`!tracker submissions [MM/DD/YYYY]` - Check submissions up to date\n"
+                "`!tracker submissions_download` - Download filtered report"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📥 Download Commands",
+            value=(
+                "`!tracker download` - Generate full tracker report\n"
+                "`!tracker submissions_download` - Report filtered by last submissions date"
             ),
             inline=False
         )
@@ -500,14 +517,10 @@ class EmbedBuilder:
         embed.add_field(
             name="📑 Report Tabs",
             value=(
-                "**P1 - At Risk** 🔴\n"
-                "└─ Missing submissions, phase critical, stalled\n"
-                "**P2 - Flagged** 🟡\n"
-                "└─ Missing deliverables, no activity, compressed timeline\n"
-                "**P3 - On Track** 🟢\n"
-                "└─ Students progressing normally\n"
-                "**Weekly Summary** 📊\n"
-                "└─ Dashboard with statistics"
+                "**P1 - At Risk** 🔴 - Missing submissions, phase critical\n"
+                "**P2 - Flagged** 🟡 - Missing deliverables, no activity\n"
+                "**P3 - On Track** 🟢 - Progressing normally\n"
+                "**Weekly Summary** 📊 - Dashboard with statistics"
             ),
             inline=False
         )

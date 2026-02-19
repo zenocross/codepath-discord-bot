@@ -453,6 +453,69 @@ class FileStorageService:
                 deleted += 1
         
         return deleted
+    
+    # ==================== Tracker Settings Storage ====================
+    
+    def _get_settings_file(self) -> Path:
+        """Get the tracker settings file path."""
+        return self.storage_dir / "_tracker_settings.json"
+    
+    def _load_settings(self) -> Dict[str, Any]:
+        """Load tracker settings from disk."""
+        settings_file = self._get_settings_file()
+        if not settings_file.exists():
+            return {}
+        
+        try:
+            import json
+            with open(settings_file, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[FileStorage] Failed to load tracker settings: {e}")
+            return {}
+    
+    def _save_settings(self, settings: Dict[str, Any]) -> None:
+        """Save tracker settings to disk."""
+        try:
+            import json
+            with open(self._get_settings_file(), 'w') as f:
+                json.dump(settings, f, indent=2)
+        except Exception as e:
+            print(f"[FileStorage] Failed to save tracker settings: {e}")
+    
+    def set_start_date(self, date: datetime) -> None:
+        """Set the program start date for week calculations."""
+        settings = self._load_settings()
+        settings['start_date'] = date.isoformat()
+        self._save_settings(settings)
+    
+    def get_start_date(self) -> Optional[datetime]:
+        """Get the program start date."""
+        settings = self._load_settings()
+        date_str = settings.get('start_date')
+        if date_str:
+            try:
+                return datetime.fromisoformat(date_str)
+            except:
+                return None
+        return None
+    
+    def set_last_submissions_date(self, date: datetime) -> None:
+        """Set the last used submissions date for downloads."""
+        settings = self._load_settings()
+        settings['last_submissions_date'] = date.isoformat()
+        self._save_settings(settings)
+    
+    def get_last_submissions_date(self) -> Optional[datetime]:
+        """Get the last used submissions date."""
+        settings = self._load_settings()
+        date_str = settings.get('last_submissions_date')
+        if date_str:
+            try:
+                return datetime.fromisoformat(date_str)
+            except:
+                return None
+        return None
 
 
 # ==================== Processor Registry (Dependency Inversion) ====================

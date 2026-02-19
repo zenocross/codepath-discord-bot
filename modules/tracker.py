@@ -9,11 +9,15 @@ Commands:
     !tracker files            - Show status of uploaded CSV files
     !tracker clear <type>     - Clear specific CSV file
     !tracker clearall         - Clear all uploaded CSV files
+    !tracker start_date       - Set or view program start date
+    !tracker submissions      - Real-time submission checking
+    !tracker submissions_download - Download report filtered by submissions date
     !tracker help             - Show help (handled by bot/events.py)
 """
 
 import asyncio
 import io
+from datetime import datetime, timedelta
 from typing import Optional
 
 import discord
@@ -315,6 +319,223 @@ class TrackerCog(commands.Cog, name="Tracker"):
             await ctx.send(f"✅ **All CSV files cleared!** ({deleted} file(s) removed)")
         else:
             await ctx.send("ℹ️ No CSV files to clear.")
+    
+    @commands.command(name='start_date')
+    async def start_date(self, ctx: commands.Context, date_str: Optional[str] = None):
+        """Set or view the program start date for week calculations.
+        
+        Usage:
+            !tracker start_date           - View current start date
+            !tracker start_date MM/DD/YYYY - Set start date
+        """
+        if date_str is None:
+            # View current start date
+            current = self.storage.get_start_date()
+            if current:
+                await ctx.send(
+                    f"📅 **Program Start Date:** {current.strftime('%m/%d/%Y')}\n"
+                    f"Week 1 began on this date."
+                )
+            else:
+                await ctx.send(
+                    "📅 **No start date set.**\n\n"
+                    "Set it using `!tracker start_date MM/DD/YYYY`"
+                )
+            return
+        
+        # Parse and set the date
+        try:
+            parsed_date = datetime.strptime(date_str, "%m/%d/%Y")
+            self.storage.set_start_date(parsed_date)
+            await ctx.send(
+                f"✅ **Start date set!**\n"
+                f"• Date: {parsed_date.strftime('%m/%d/%Y')} ({parsed_date.strftime('%A')})\n"
+                f"• Week 1 begins on this date."
+            )
+        except ValueError:
+            await ctx.send(
+                "❌ **Invalid date format.**\n\n"
+                "Use MM/DD/YYYY format, e.g., `!tracker start_date 01/15/2026`"
+            )
+    
+    @commands.command(name='submissions')
+    async def submissions(self, ctx: commands.Context, date_str: Optional[str] = None):
+        """Real-time submission checking up to a specific date.
+        
+        Usage:
+            !tracker submissions          - Check submissions up to today
+            !tracker submissions MM/DD/YYYY - Check submissions up to specified date
+        """
+        # Check for required files
+        typeform_file = self.storage.get_file("typeform")
+        master_file = self.storage.get_file("master")
+        
+        if not typeform_file:
+            await ctx.send(
+                "❌ **No typeform CSV uploaded.**\n\n"
+                "Upload it using `!tracker upload typeform`."
+            )
+            return
+        
+        if not master_file:
+            await ctx.send(
+                "❌ **No master CSV uploaded.**\n\n"
+                "The master CSV (enrollee list) is required for submission checking.\n"
+                "Upload it using `!tracker upload master`."
+            )
+            return
+        
+        # Check for start date
+        start_date = self.storage.get_start_date()
+        if not start_date:
+            await ctx.send(
+                "❌ **No start date set.**\n\n"
+                "Set the program start date first using `!tracker start_date MM/DD/YYYY`."
+            )
+            return
+        
+        # Parse the target date
+        if date_str:
+            try:
+                target_date = datetime.strptime(date_str, "%m/%d/%Y")
+            except ValueError:
+                await ctx.send(
+                    "❌ **Invalid date format.**\n\n"
+                    "Use MM/DD/YYYY format, e.g., `!tracker submissions 02/15/2026`"
+                )
+                return
+        else:
+            target_date = datetime.now()
+        
+        # Calculate current week
+        days_since_start = (target_date - start_date).days
+        current_week = max(1, (days_since_start // 7) + 1)
+        
+        # Store the last submissions date for downloads
+        self.storage.set_last_submissions_date(target_date)
+        
+        await ctx.send(
+            f"📊 **Checking Submissions**\n"
+            f"• Start Date: {start_date.strftime('%m/%d/%Y')}\n"
+            f"• Target Date: {target_date.strftime('%m/%d/%Y')}\n"
+            f"• Current Week: {current_week}\n\n"
+            f"⏳ Analyzing submissions..."
+        )
+        
+        try:
+            # Read files
+            typeform_data = self.storage.read_file(typeform_file)
+            master_data = self.storage.read_file(master_file)
+            
+            # Process with date filter
+            result = self.processor.process_submissions(
+                typeform_data,
+                master_data=master_data,
+                start_date=start_date,
+                target_date=target_date,
+                current_week=current_week
+            )
+            
+            if not result.success:
+                await ctx.send(f"❌ Processing failed: {result.error_message}")
+                return
+            
+            # Send the summary embed
+            await ctx.send(embed=result.summary_embed)
+            
+        except Exception as e:
+            await ctx.send(f"❌ Error processing submissions: {e}")
+    
+    @commands.command(name='submissions_download')
+    async def submissions_download(self, ctx: commands.Context):
+        """Download tracker report filtered by the last used submissions date.
+        
+        Uses the date from the most recent !tracker submissions command.
+        """
+        # Check for required files
+        typeform_file = self.storage.get_file("typeform")
+        master_file = self.storage.get_file("master")
+        
+        if not typeform_file:
+            await ctx.send(
+                "❌ **No typeform CSV uploaded.**\n\n"
+                "Upload it using `!tracker upload typeform`."
+            )
+            return
+        
+        # Check for start date and last submissions date
+        start_date = self.storage.get_start_date()
+        target_date = self.storage.get_last_submissions_date()
+        
+        if not start_date:
+            await ctx.send(
+                "❌ **No start date set.**\n\n"
+                "Set the program start date first using `!tracker start_date MM/DD/YYYY`."
+            )
+            return
+        
+        if not target_date:
+            await ctx.send(
+                "❌ **No submissions date set.**\n\n"
+                "Run `!tracker submissions <DATE>` first to set the date filter."
+            )
+            return
+        
+        # Calculate current week
+        days_since_start = (target_date - start_date).days
+        current_week = max(1, (days_since_start // 7) + 1)
+        
+        await ctx.send(
+            f"📂 **Generating Filtered Report**\n"
+            f"• Start Date: {start_date.strftime('%m/%d/%Y')}\n"
+            f"• Target Date: {target_date.strftime('%m/%d/%Y')}\n"
+            f"• Week: {current_week}\n\n"
+            f"⏳ Creating report..."
+        )
+        
+        try:
+            # Read files
+            typeform_data = self.storage.read_file(typeform_file)
+            master_data = self.storage.read_file(master_file) if master_file else None
+            zoom_data = self.storage.read_file_by_category("zoom")
+            
+            # Process with date filter
+            result = self.processor.process(
+                typeform_data,
+                options={
+                    'master_data': master_data,
+                    'zoom_data': zoom_data,
+                    'start_date': start_date,
+                    'target_date': target_date,
+                    'current_week': current_week,
+                    'filter_by_date': True
+                }
+            )
+            
+            if not result.success:
+                await ctx.send(f"❌ Processing failed: {result.error_message}")
+                return
+            
+            # Generate output filename
+            date_suffix = target_date.strftime("%Y%m%d")
+            output_filename = f"submissions_report_week{current_week}_{date_suffix}.xlsx"
+            
+            # Create file and send
+            file = discord.File(
+                fp=io.BytesIO(result.output_data),
+                filename=output_filename
+            )
+            
+            await ctx.send(
+                f"✅ **Filtered Report Generated!**\n"
+                f"• Students processed: {result.rows_processed}\n"
+                f"• Filtered through: {target_date.strftime('%m/%d/%Y')}\n"
+                f"• Week: {current_week}",
+                file=file
+            )
+            
+        except Exception as e:
+            await ctx.send(f"❌ Error generating report: {e}")
     
     @commands.command(name='download')
     async def download(self, ctx: commands.Context):

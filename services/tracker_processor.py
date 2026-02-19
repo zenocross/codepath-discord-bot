@@ -6,8 +6,9 @@ with multiple tabs for different priority levels and a summary dashboard.
 
 import csv
 import io
+import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from openpyxl import Workbook
@@ -16,8 +17,23 @@ from openpyxl.utils import get_column_letter
 
 from services.file_processor import FileProcessor, ProcessingResult
 
+import discord  # For embed creation
+
 
 # ==================== Data Classes ====================
+
+@dataclass
+class SubmissionsResult:
+    """Result of a submissions check operation."""
+    success: bool
+    summary_embed: Optional[discord.Embed] = None
+    error_message: Optional[str] = None
+    total_enrolled: int = 0
+    submitted_count: int = 0
+    missing_count: int = 0
+    at_risk_students: List[Dict] = field(default_factory=list)
+    flagged_students: List[Dict] = field(default_factory=list)
+    on_track_students: List[Dict] = field(default_factory=list)
 
 @dataclass
 class StudentRecord:
@@ -92,6 +108,8 @@ class StudentRecord:
     intervention_type: str = ""
     intervention_sent_date: str = ""
     consecutive_misses: int = 0
+    last_week_wed_missing: bool = False  # Missing Wednesday from previous week
+    last_week_sun_missing: bool = False  # Missing Sunday from previous week
     
     # Office hours
     tue_office_hours: bool = False
@@ -299,12 +317,39 @@ class TrackerDataProcessor(FileProcessor):
             csv_reader = csv.DictReader(io.StringIO(text_data), dialect=dialect)
             raw_rows = list(csv_reader)
             
-            
-            if not raw_rows:
-                return ProcessingResult(
-                    success=False,
-                    error_message="CSV file is empty"
-                )
+            # Filter by date if specified
+            if options.get('filter_by_date') and options.get('target_date'):
+                target_date = options['target_date']
+                filtered_rows = []
+                
+                # Find submission date column
+                if raw_rows:
+                    headers = list(raw_rows[0].keys())
+                    date_col = None
+                    for col in ["Submitted At", "submission_date", "Submit Date", "Submit Date (UTC)"]:
+                        if col in headers:
+                            date_col = col
+                            break
+                    
+                    if date_col:
+                        for row in raw_rows:
+                            date_str = row.get(date_col, "")
+                            submission_dt = None
+                            if date_str:
+                                for fmt in ["%m/%d/%Y %H:%M:%S", "%m/%d/%Y %H:%M", "%Y-%m-%d %H:%M:%S", 
+                                           "%Y-%m-%dT%H:%M:%S", "%m/%d/%Y", "%Y-%m-%d"]:
+                                    try:
+                                        submission_dt = datetime.strptime(date_str.strip(), fmt)
+                                        break
+                                    except ValueError:
+                                        continue
+                            
+                            # Include if submission is on or before target date
+                            if submission_dt is None or submission_dt.date() <= target_date.date():
+                                filtered_rows.append(row)
+                        
+                        raw_rows = filtered_rows
+                        print(f"[TrackerProcessor] Filtered to {len(raw_rows)} rows (on or before {target_date.strftime('%m/%d/%Y')})")
             
             # Build discord username lookup from master CSV (primary source)
             discord_lookup: Dict[str, str] = {}
@@ -312,20 +357,52 @@ class TrackerDataProcessor(FileProcessor):
             if master_data:
                 discord_lookup = self._build_master_discord_lookup(master_data)
             
-            # Supplement with typeform discord data (fills gaps if master doesn't have entry)
-            typeform_discord_lookup = self._build_discord_lookup(raw_rows)
-            for member_id, discord_name in typeform_discord_lookup.items():
-                if member_id not in discord_lookup:
-                    discord_lookup[member_id] = discord_name
-            
-            # Transform to StudentRecord objects
-            students = self._transform_records(raw_rows, discord_lookup)
-            
-            # Calculate derived fields
-            self._calculate_derived_fields(students)
-            
-            # Determine grade status and interventions
-            self._calculate_grade_status(students)
+            # If no rows after filtering, but we have master data, continue with just At Risk students
+            if not raw_rows:
+                if options.get('filter_by_date') and master_data:
+                    # No typeform submissions before target date - all enrolled students are At Risk
+                    students = []
+                    current_week = options.get('current_week', 1)
+                    start_date = options.get('start_date')
+                    students = self._add_missing_students_as_at_risk(
+                        students, master_data, discord_lookup, options['target_date'], 
+                        current_week, start_date
+                    )
+                    
+                    if not students:
+                        return ProcessingResult(
+                            success=False,
+                            error_message="No students found in master CSV"
+                        )
+                else:
+                    return ProcessingResult(
+                        success=False,
+                        error_message="CSV file is empty"
+                    )
+            else:
+                # Supplement with typeform discord data (fills gaps if master doesn't have entry)
+                typeform_discord_lookup = self._build_discord_lookup(raw_rows)
+                for member_id, discord_name in typeform_discord_lookup.items():
+                    if member_id not in discord_lookup:
+                        discord_lookup[member_id] = discord_name
+                
+                # Transform to StudentRecord objects
+                students = self._transform_records(raw_rows, discord_lookup)
+                
+                # Calculate derived fields
+                self._calculate_derived_fields(students)
+                
+                # Determine grade status and interventions
+                self._calculate_grade_status(students)
+                
+                # If filtering by date, add students with NO submissions as "At Risk"
+                if options.get('filter_by_date') and options.get('target_date') and master_data:
+                    current_week = options.get('current_week', 1)
+                    start_date = options.get('start_date')
+                    students = self._add_missing_students_as_at_risk(
+                        students, master_data, discord_lookup, options['target_date'], 
+                        current_week, start_date
+                    )
             
             # Create workbook
             wb = Workbook()
@@ -358,6 +435,273 @@ class TrackerDataProcessor(FileProcessor):
                 error_message=f"Processing error: {e}"
             )
     
+    def process_submissions(self, typeform_data: bytes, master_data: bytes,
+                           start_date: datetime, target_date: datetime,
+                           current_week: int) -> SubmissionsResult:
+        """Process submissions for real-time checking.
+        
+        Args:
+            typeform_data: Typeform CSV data bytes
+            master_data: Master roster CSV data bytes
+            start_date: Program start date
+            target_date: Date to filter submissions up to
+            current_week: Calculated current week number
+            
+        Returns:
+            SubmissionsResult with summary embed and student lists
+        """
+        try:
+            # Parse master CSV to get all enrolled students
+            master_text = master_data.decode('utf-8-sig')
+            sample = master_text[:4096]
+            try:
+                dialect = csv.Sniffer().sniff(sample, delimiters=',\t;|')
+            except csv.Error:
+                dialect = 'excel'
+            
+            master_reader = csv.DictReader(io.StringIO(master_text), dialect=dialect)
+            master_rows = list(master_reader)
+            
+            if not master_rows:
+                return SubmissionsResult(
+                    success=False,
+                    error_message="Master CSV is empty"
+                )
+            
+            # Build enrolled students lookup
+            headers = list(master_rows[0].keys())
+            member_id_col = self._find_column(headers, MASTER_CSV_COLUMNS["member_id"])
+            name_col = self._find_column(headers, MASTER_CSV_COLUMNS["full_name"])
+            discord_col = self._find_column(headers, MASTER_CSV_COLUMNS["discord_username"])
+            
+            enrolled_students: Dict[str, Dict] = {}
+            for row in master_rows:
+                member_id = str(row.get(member_id_col, "")).strip() if member_id_col else ""
+                if member_id:
+                    enrolled_students[member_id] = {
+                        'member_id': member_id,
+                        'name': str(row.get(name_col, "")).strip() if name_col else "",
+                        'discord': str(row.get(discord_col, "")).strip() if discord_col else "",
+                        'submissions': [],
+                        'issues': []
+                    }
+            
+            # Parse typeform CSV and filter by date
+            typeform_text = typeform_data.decode('utf-8-sig')
+            sample = typeform_text[:4096]
+            try:
+                dialect = csv.Sniffer().sniff(sample, delimiters=',\t;|')
+            except csv.Error:
+                dialect = 'excel'
+            
+            typeform_reader = csv.DictReader(io.StringIO(typeform_text), dialect=dialect)
+            typeform_rows = list(typeform_reader)
+            
+            # Get submission date column
+            submission_date_col = None
+            if typeform_rows:
+                tf_headers = list(typeform_rows[0].keys())
+                for col in ["Submitted At", "submission_date", "Submit Date", "Submit Date (UTC)"]:
+                    if col in tf_headers:
+                        submission_date_col = col
+                        break
+            
+            # Process typeform submissions
+            submitted_member_ids = set()
+            for row in typeform_rows:
+                # Parse submission date
+                date_str = row.get(submission_date_col, "") if submission_date_col else ""
+                submission_dt = None
+                if date_str:
+                    for fmt in ["%m/%d/%Y %H:%M:%S", "%m/%d/%Y %H:%M", "%Y-%m-%d %H:%M:%S", 
+                               "%Y-%m-%dT%H:%M:%S", "%m/%d/%Y"]:
+                        try:
+                            submission_dt = datetime.strptime(date_str.strip(), fmt)
+                            break
+                        except ValueError:
+                            continue
+                
+                # Filter by target date
+                if submission_dt and submission_dt > target_date:
+                    continue
+                
+                # Get member ID
+                member_id = None
+                for col in ["What's your Member ID?", "Member ID", "member_id"]:
+                    if col in row:
+                        member_id = str(row[col]).strip()
+                        break
+                
+                if member_id and member_id in enrolled_students:
+                    submitted_member_ids.add(member_id)
+                    
+                    # Get week number from submission
+                    week_str = row.get("Which week is this?", "")
+                    week_num = 0
+                    if week_str:
+                        try:
+                            week_num = int(week_str.replace("Week ", "").strip())
+                        except:
+                            pass
+                    
+                    # Track submission info
+                    enrolled_students[member_id]['submissions'].append({
+                        'week': week_num,
+                        'date': submission_dt,
+                        'phase': row.get("What phase are you currently in?", ""),
+                        'wed': "Wednesday" in row.get("Which submission are you completing?", ""),
+                        'sun': "Sunday" in row.get("Which submission are you completing?", "")
+                    })
+            
+            # Calculate deadline dates for current week
+            # Week N starts at: start_date + (N-1) * 7 days
+            week_start = start_date + timedelta(days=(current_week - 1) * 7)
+            
+            # Wednesday deadline: 3 days after week start (if start is Monday)
+            # Sunday deadline: 6 days after week start
+            # Adjust based on what day start_date is
+            start_weekday = start_date.weekday()  # Monday=0, Sunday=6
+            
+            # Calculate days until Wednesday (weekday 2) and Sunday (weekday 6) from week start
+            days_to_wed = (2 - start_weekday) % 7
+            days_to_sun = (6 - start_weekday) % 7
+            if days_to_sun == 0:
+                days_to_sun = 7  # If start is Sunday, next Sunday is 7 days away
+            
+            wed_deadline = week_start + timedelta(days=days_to_wed)
+            sun_deadline = week_start + timedelta(days=days_to_sun)
+            
+            # Check if deadlines have passed
+            wed_deadline_passed = target_date >= wed_deadline
+            sun_deadline_passed = target_date >= sun_deadline
+            
+            # Categorize students
+            at_risk = []
+            flagged = []
+            on_track = []
+            missing_students = []
+            
+            for member_id, student in enrolled_students.items():
+                subs = student['submissions']
+                
+                # Check for current week submissions
+                current_week_subs = [s for s in subs if s['week'] == current_week]
+                has_wed = any(s['wed'] for s in current_week_subs)
+                has_sun = any(s['sun'] for s in current_week_subs)
+                
+                issues = []
+                
+                if not subs:
+                    # No submissions at all - only flag as at risk if at least one deadline passed
+                    if wed_deadline_passed or sun_deadline_passed:
+                        issues.append("No submissions")
+                        at_risk.append({**student, 'issues': issues, 'status': 'AT RISK'})
+                    else:
+                        # No deadlines passed yet, they're still on track
+                        on_track.append({**student, 'issues': [], 'status': 'ON TRACK'})
+                elif not current_week_subs:
+                    # No submissions for current week - check what deadlines have passed
+                    if wed_deadline_passed and sun_deadline_passed:
+                        issues.append(f"Missing Week {current_week} submissions")
+                        flagged.append({**student, 'issues': issues, 'status': 'FLAGGED'})
+                    elif wed_deadline_passed and not has_wed:
+                        issues.append(f"Missing Wednesday submission (Week {current_week})")
+                        flagged.append({**student, 'issues': issues, 'status': 'FLAGGED'})
+                    else:
+                        # No deadlines passed yet
+                        on_track.append({**student, 'issues': [], 'status': 'ON TRACK'})
+                elif not has_wed and wed_deadline_passed:
+                    issues.append(f"Missing Wednesday submission (Week {current_week})")
+                    if not has_sun and sun_deadline_passed:
+                        issues.append(f"Missing Sunday submission (Week {current_week})")
+                    flagged.append({**student, 'issues': issues, 'status': 'FLAGGED'})
+                elif not has_sun and sun_deadline_passed:
+                    issues.append(f"Missing Sunday submission (Week {current_week})")
+                    flagged.append({**student, 'issues': issues, 'status': 'FLAGGED'})
+                else:
+                    on_track.append({**student, 'issues': [], 'status': 'ON TRACK'})
+            
+            # Create summary embed
+            embed = discord.Embed(
+                title="📊 Submission Status Report",
+                description=f"**Week {current_week}** (as of {target_date.strftime('%m/%d/%Y')})",
+                color=discord.Color.blue()
+            )
+            
+            # Show deadline status
+            wed_status = "✅ Passed" if wed_deadline_passed else "⏳ Not yet"
+            sun_status = "✅ Passed" if sun_deadline_passed else "⏳ Not yet"
+            
+            embed.add_field(
+                name="📅 Deadlines",
+                value=(
+                    f"**Wednesday ({wed_deadline.strftime('%m/%d')}):** {wed_status}\n"
+                    f"**Sunday ({sun_deadline.strftime('%m/%d')}):** {sun_status}"
+                ),
+                inline=False
+            )
+            
+            total = len(enrolled_students)
+            submitted = len(on_track)
+            
+            embed.add_field(
+                name="📈 Overview",
+                value=(
+                    f"**Total Enrolled:** {total}\n"
+                    f"**On Track:** {len(on_track)} ({len(on_track)*100//total if total else 0}%)\n"
+                    f"**Flagged:** {len(flagged)}\n"
+                    f"**At Risk:** {len(at_risk)}"
+                ),
+                inline=False
+            )
+            
+            # List at-risk students (max 10)
+            if at_risk:
+                at_risk_list = "\n".join([
+                    f"• {s['name']} ({s['member_id']}): {', '.join(s['issues'])}"
+                    for s in at_risk[:10]
+                ])
+                if len(at_risk) > 10:
+                    at_risk_list += f"\n... and {len(at_risk) - 10} more"
+                embed.add_field(
+                    name="🔴 At Risk",
+                    value=at_risk_list or "None",
+                    inline=False
+                )
+            
+            # List flagged students (max 10)
+            if flagged:
+                flagged_list = "\n".join([
+                    f"• {s['name']} ({s['member_id']}): {', '.join(s['issues'])}"
+                    for s in flagged[:10]
+                ])
+                if len(flagged) > 10:
+                    flagged_list += f"\n... and {len(flagged) - 10} more"
+                embed.add_field(
+                    name="🟡 Flagged",
+                    value=flagged_list or "None",
+                    inline=False
+                )
+            
+            embed.set_footer(text=f"Use !tracker submissions_download for full report")
+            
+            return SubmissionsResult(
+                success=True,
+                summary_embed=embed,
+                total_enrolled=total,
+                submitted_count=len(on_track),
+                missing_count=len(at_risk) + len(flagged),
+                at_risk_students=at_risk,
+                flagged_students=flagged,
+                on_track_students=on_track
+            )
+            
+        except Exception as e:
+            return SubmissionsResult(
+                success=False,
+                error_message=f"Error processing submissions: {e}"
+            )
+    
     def _find_column(self, headers: List[str], possible_names: List[str]) -> Optional[str]:
         """Find a column by checking possible names (case-sensitive first, then insensitive)."""
         # Exact match first
@@ -372,6 +716,139 @@ class TrackerDataProcessor(FileProcessor):
                 return headers_lower[name.lower()]
         
         return None
+    
+    def _add_missing_students_as_at_risk(
+        self, 
+        students: List[StudentRecord], 
+        master_data: bytes, 
+        discord_lookup: Dict[str, str],
+        target_date: datetime,
+        current_week: int = 1,
+        start_date: Optional[datetime] = None
+    ) -> List[StudentRecord]:
+        """Add students from master CSV with no submissions as At Risk entries.
+        
+        Args:
+            students: Existing list of student records from typeform
+            master_data: Master roster CSV bytes
+            discord_lookup: Member ID to discord username mapping
+            target_date: Target date for filtering
+            current_week: Current week number (based on start_date and target_date)
+            start_date: Program start date (for calculating missed deadlines)
+            
+        Returns:
+            Updated list including At Risk entries for students with no submissions
+        """
+        try:
+            # Get all member_ids that already have submissions
+            submitted_member_ids = set(s.member_id for s in students if s.member_id)
+            
+            # Calculate consecutive misses (all Wed/Sun deadlines missed before target_date)
+            consecutive_misses = 0
+            if start_date:
+                consecutive_misses = self._calculate_missed_deadlines(start_date, target_date)
+            
+            # Parse master CSV
+            master_text = master_data.decode('utf-8-sig')
+            sample = master_text[:4096]
+            try:
+                dialect = csv.Sniffer().sniff(sample, delimiters=',\t;|')
+            except csv.Error:
+                dialect = 'excel'
+            
+            master_reader = csv.DictReader(io.StringIO(master_text), dialect=dialect)
+            master_rows = list(master_reader)
+            
+            if not master_rows:
+                return students
+            
+            # Find column names
+            headers = list(master_rows[0].keys())
+            member_id_col = self._find_column(headers, MASTER_CSV_COLUMNS["member_id"])
+            name_col = self._find_column(headers, MASTER_CSV_COLUMNS["full_name"])
+            discord_col = self._find_column(headers, MASTER_CSV_COLUMNS["discord_username"])
+            
+            # Add missing students as At Risk
+            for row in master_rows:
+                member_id = str(row.get(member_id_col, "")).strip() if member_id_col else ""
+                
+                if member_id and member_id not in submitted_member_ids:
+                    # This student has no submissions - add as At Risk
+                    name = str(row.get(name_col, "")).strip() if name_col else ""
+                    discord = str(row.get(discord_col, "")).strip() if discord_col else ""
+                    
+                    # Use discord lookup as fallback
+                    if not discord and member_id in discord_lookup:
+                        discord = discord_lookup[member_id]
+                    
+                    # Create an At Risk record for this student
+                    # Use current_week (based on start_date and target_date) instead of 0
+                    at_risk_record = StudentRecord(
+                        member_id=member_id,
+                        name=name,
+                        discord_username=discord,
+                        week=current_week,
+                        submission_date="",
+                        wed_submitted=False,
+                        sun_submitted=False,
+                        submission_count_cumulative=0,
+                        current_phase="",
+                        weeks_in_phase=0,
+                        contribution_num=0,
+                        contribution_start_week=0,
+                        weeks_on_contribution=0,
+                        weeks_remaining=0,
+                        timeline_type="Critical",
+                        grade_status="🔴 AT RISK",
+                        intervention_type="NO_SUBMISSIONS",
+                        consecutive_misses=consecutive_misses
+                    )
+                    
+                    students.append(at_risk_record)
+            
+            return students
+            
+        except Exception as e:
+            print(f"[TrackerProcessor] Error adding missing students: {e}")
+            return students
+    
+    def _calculate_missed_deadlines(self, start_date: datetime, target_date: datetime) -> int:
+        """Calculate the number of Wednesday and Sunday deadlines missed between dates.
+        
+        Args:
+            start_date: Program start date
+            target_date: Date to check up to
+            
+        Returns:
+            Number of missed deadlines (Wednesdays + Sundays that have passed)
+        """
+        missed = 0
+        
+        # Get the weekday of start_date (Monday=0, Sunday=6)
+        start_weekday = start_date.weekday()
+        
+        # Calculate first Wednesday and Sunday after start_date
+        days_to_wed = (2 - start_weekday) % 7  # Wednesday = 2
+        days_to_sun = (6 - start_weekday) % 7  # Sunday = 6
+        if days_to_sun == 0:
+            days_to_sun = 7  # If start is Sunday, next Sunday is 7 days
+        
+        first_wed = start_date + timedelta(days=days_to_wed)
+        first_sun = start_date + timedelta(days=days_to_sun)
+        
+        # Count all Wednesdays that have passed
+        current_wed = first_wed
+        while current_wed.date() <= target_date.date():
+            missed += 1
+            current_wed += timedelta(days=7)
+        
+        # Count all Sundays that have passed
+        current_sun = first_sun
+        while current_sun.date() <= target_date.date():
+            missed += 1
+            current_sun += timedelta(days=7)
+        
+        return missed
     
     def _build_master_discord_lookup(self, master_data: bytes) -> Dict[str, str]:
         """Build a member_id -> discord_username lookup from master roster CSV.
@@ -700,11 +1177,21 @@ class TrackerDataProcessor(FileProcessor):
                     submission_count += 1
                 submission.submission_count_cumulative = submission_count
             
-            # Calculate consecutive_misses
-            # Build a map of week -> sun_submitted for this student
+            # Calculate consecutive_misses and track which submissions are missing
+            # Build maps of week -> wed_submitted and week -> sun_submitted for this student
+            week_to_wed_submitted: Dict[int, bool] = {}
             week_to_sun_submitted: Dict[int, bool] = {}
             for submission in member_submissions:
-                week_to_sun_submitted[submission.week] = submission.sun_submitted
+                week = submission.week
+                # Track if any submission for this week has wed/sun submitted
+                if week not in week_to_wed_submitted:
+                    week_to_wed_submitted[week] = False
+                if week not in week_to_sun_submitted:
+                    week_to_sun_submitted[week] = False
+                if submission.wed_submitted:
+                    week_to_wed_submitted[week] = True
+                if submission.sun_submitted:
+                    week_to_sun_submitted[week] = True
             
             # Sort submissions: by week, then Wednesday before Sunday within same week
             def submission_sort_key(s):
@@ -723,7 +1210,18 @@ class TrackerDataProcessor(FileProcessor):
                 current_week = submission.week
                 consecutive_misses = 0
                 
-                # Only calculate if we haven't already accounted for this gap
+                # Check if previous week (current_week - 1) is missing Wed/Sun
+                prev_week = current_week - 1
+                if prev_week >= 1:
+                    # Check if Wednesday was submitted for previous week
+                    wed_submitted_prev = week_to_wed_submitted.get(prev_week, False)
+                    # Check if Sunday was submitted for previous week
+                    sun_submitted_prev = week_to_sun_submitted.get(prev_week, False)
+                    
+                    submission.last_week_wed_missing = not wed_submitted_prev
+                    submission.last_week_sun_missing = not sun_submitted_prev
+                
+                # Only calculate consecutive_misses if we haven't already accounted for this gap
                 if current_week > last_accounted_week:
                     # Count backwards from previous week
                     check_week = current_week - 1
@@ -814,6 +1312,13 @@ class TrackerDataProcessor(FileProcessor):
         for student in students:
             phase_num = self._get_phase_number(student.current_phase)
             
+            # If student has completed a previous contribution (contribution_num > 1),
+            # always classify them as On Track regardless of issues on current contribution
+            if student.contribution_num > 1:
+                student.grade_status = "🟢 ON TRACK"
+                student.intervention_type = ""
+                continue
+            
             # Check for AT RISK conditions
             at_risk = False
             intervention = ""
@@ -826,17 +1331,30 @@ class TrackerDataProcessor(FileProcessor):
             # Phase critical (stuck in early phase late in program)
             elif student.week >= 6 and phase_num <= 2:
                 at_risk = True
-                intervention = "PHASE_CRITICAL"
+                intervention = "PHASE_COMPRESSED" if student.timeline_type == "Compressed" else "PHASE_CRITICAL"
             
             # Phase critical (less than 2 weeks remaining and not yet in Phase 4)
             elif student.weeks_remaining < 2 and phase_num < 4:
                 at_risk = True
-                intervention = "PHASE_CRITICAL"
+                intervention = "PHASE_COMPRESSED" if student.timeline_type == "Compressed" else "PHASE_CRITICAL"
             
             # Stalled with blockers
             elif student.blocked and student.blocker_desc:
                 at_risk = True
                 intervention = "STALLED"
+            
+            # Missed previous submission(s) - At Risk level
+            elif student.consecutive_misses > 0:
+                at_risk = True
+                # Determine specific intervention type based on what's missing
+                if student.last_week_wed_missing and student.last_week_sun_missing:
+                    intervention = "MISSING_BOTH"
+                elif student.last_week_wed_missing:
+                    intervention = "MISSING_WEDNESDAY"
+                elif student.last_week_sun_missing:
+                    intervention = "MISSING_SUNDAY"
+                else:
+                    intervention = "MISSING_PREVIOUS_SUBMISSION"  # Fallback
             
             # Check for FLAGGED conditions
             flagged = False
@@ -859,11 +1377,6 @@ class TrackerDataProcessor(FileProcessor):
                 elif phase_num == 3 and student.mr_url and str(student.mr_url).strip():
                     flagged = True
                     intervention = "INCORRECT_PHASE_URL"
-                
-                # Missed previous submission(s)
-                elif student.consecutive_misses > 0:
-                    flagged = True
-                    intervention = "MISSING_PREVIOUS_SUBMISSION"
                 
                 # Missing deliverables for current phase
                 elif student.deliverables_complete < student.deliverables_expected:
@@ -997,21 +1510,203 @@ class TrackerDataProcessor(FileProcessor):
         self._auto_fit_columns(ws)
         ws.freeze_panes = 'A2'
     
+    def _get_student_priority_status(self, students: List[StudentRecord]) -> Dict[str, str]:
+        """Determine each student's priority status (worst status across all submissions).
+        
+        Priority order: AT RISK > FLAGGED > ON TRACK
+        A student only appears in ONE tab based on their worst status.
+        
+        Args:
+            students: List of all student records
+            
+        Returns:
+            Dict mapping member_id/name to their priority status
+        """
+        student_status: Dict[str, str] = {}
+        
+        # Status priority (higher number = worse)
+        status_priority = {
+            "🟢 ON TRACK": 1,
+            "🟡 FLAGGED": 2,
+            "🔴 AT RISK": 3
+        }
+        
+        for s in students:
+            key = s.member_id or s.name
+            current_priority = status_priority.get(s.grade_status, 0)
+            existing_priority = status_priority.get(student_status.get(key, ""), 0)
+            
+            # Update to worst (highest priority number) status
+            if current_priority > existing_priority:
+                student_status[key] = s.grade_status
+        
+        return student_status
+    
+    def _aggregate_student_issues(self, students: List[StudentRecord], status_filter: str) -> List[Dict]:
+        """Aggregate student records into unique entries with combined descriptions.
+        
+        Uses priority-based placement: a student only appears in the tab matching
+        their WORST status across all submissions.
+        
+        Priority order: AT RISK > FLAGGED > ON TRACK
+        
+        Args:
+            students: List of all student records
+            status_filter: Grade status to filter by (e.g., "🔴 AT RISK")
+            
+        Returns:
+            List of dicts with unique students and aggregated issue descriptions
+        """
+        # First, determine each student's priority status (worst across all submissions)
+        priority_status = self._get_student_priority_status(students)
+        
+        # Group by member_id, but only include students whose PRIORITY status matches the filter
+        student_map: Dict[str, Dict] = {}
+        
+        for s in students:
+            key = s.member_id or s.name
+            
+            # Skip if this student's priority status doesn't match the filter
+            if priority_status.get(key) != status_filter:
+                continue
+            
+            if key not in student_map:
+                student_map[key] = {
+                    'name': s.name,
+                    'member_id': s.member_id,
+                    'discord': s.discord_username,
+                    'latest_week': s.week,
+                    'latest_phase': s.current_phase,
+                    'weeks_in_phase': s.weeks_in_phase,
+                    'timeline': s.timeline_type,
+                    'issues': set(),
+                    'interventions': set(),
+                    'blocked': s.blocked,
+                    'blocker_desc': s.blocker_desc,
+                    'readme_link': s.readme_link,
+                    'total_submissions': 0,
+                    'deliverables': f"{s.deliverables_complete}/{s.deliverables_expected}",
+                }
+            
+            # Update to latest week data
+            if s.week > student_map[key]['latest_week']:
+                student_map[key]['latest_week'] = s.week
+                student_map[key]['latest_phase'] = s.current_phase
+                student_map[key]['weeks_in_phase'] = s.weeks_in_phase
+                student_map[key]['timeline'] = s.timeline_type
+                student_map[key]['blocked'] = s.blocked
+                student_map[key]['blocker_desc'] = s.blocker_desc
+                student_map[key]['deliverables'] = f"{s.deliverables_complete}/{s.deliverables_expected}"
+            
+            # Count submissions
+            if s.wed_submitted or s.sun_submitted:
+                student_map[key]['total_submissions'] += 1
+            
+            # Track which submissions exist per week (to avoid false "missing" reports)
+            if 'week_submissions' not in student_map[key]:
+                student_map[key]['week_submissions'] = {}
+            if s.week not in student_map[key]['week_submissions']:
+                student_map[key]['week_submissions'][s.week] = {'wed': False, 'sun': False}
+            if s.wed_submitted:
+                student_map[key]['week_submissions'][s.week]['wed'] = True
+            if s.sun_submitted:
+                student_map[key]['week_submissions'][s.week]['sun'] = True
+            
+            # Only collect issues for At Risk and Flagged students (not On Track)
+            if status_filter == "🟢 ON TRACK":
+                # For On Track students, don't collect issues - just count submissions
+                continue
+            
+            # Collect all issues/interventions for At Risk and Flagged
+            if s.intervention_type:
+                student_map[key]['interventions'].add(s.intervention_type)
+            
+            # Add non-submission-related issues
+            if s.intervention_type == "NO_SUBMISSIONS":
+                if s.consecutive_misses > 0:
+                    student_map[key]['issues'].add(f"No submissions ({s.consecutive_misses} deadlines missed)")
+                else:
+                    student_map[key]['issues'].add("No submissions")
+            
+            if s.consecutive_misses > 0:
+                student_map[key]['issues'].add(f"Week {s.week}: {s.consecutive_misses} consecutive miss(es)")
+            
+            if s.deliverables_complete < s.deliverables_expected and s.week > 0:
+                student_map[key]['issues'].add(f"Week {s.week}: Missing deliverables ({s.deliverables_complete}/{s.deliverables_expected})")
+            
+            if s.blocked:
+                student_map[key]['issues'].add(f"Week {s.week}: Blocked - {s.blocker_desc[:50] if s.blocker_desc else 'Unknown'}")
+            
+            if s.timeline_type in ["Compressed", "Critical"] and s.week > 0:
+                student_map[key]['issues'].add(f"Week {s.week}: {s.timeline_type} timeline")
+            
+            if getattr(s, '_unexpected_phase_change', False):
+                student_map[key]['issues'].add(f"Week {s.week}: Unexpected phase change")
+            
+            if getattr(s, '_missing_previous_phase', False):
+                student_map[key]['issues'].add(f"Week {s.week}: Missing previous phase")
+        
+        # Second pass: Add missing submission issues based on aggregated week data
+        if status_filter != "🟢 ON TRACK":
+            for key, data in student_map.items():
+                week_subs = data.get('week_submissions', {})
+                for week, subs in week_subs.items():
+                    if week == 0:
+                        continue  # Skip week 0 (no submissions students)
+                    if not subs['wed'] and not subs['sun']:
+                        data['issues'].add(f"Week {week}: Missing both submissions")
+                    elif not subs['wed']:
+                        data['issues'].add(f"Week {week}: Missing Wednesday submission")
+                    elif not subs['sun']:
+                        data['issues'].add(f"Week {week}: Missing Sunday submission")
+        
+        # Convert to list and build descriptions
+        result = []
+        for key, data in student_map.items():
+            # Build description from issues with chronological sorting
+            # Sort by: week number first, then Wednesday before Sunday, then other issues
+            def issue_sort_key(issue: str):
+                # Extract week number if present
+                week_match = re.search(r'Week (\d+)', issue)
+                week_num = int(week_match.group(1)) if week_match else 0
+                
+                # Determine day order (Wednesday=1, Sunday=2, others=3)
+                if 'Wednesday' in issue:
+                    day_order = 1
+                elif 'Sunday' in issue:
+                    day_order = 2
+                else:
+                    day_order = 3
+                
+                return (week_num, day_order, issue)
+            
+            issues_list = sorted(data['issues'], key=issue_sort_key)
+            # Use newline separator for interventions
+            interventions = "\n".join(sorted(data['interventions'])) if data['interventions'] else "N/A"
+            # Use newline separator for better readability
+            description = "\n".join(issues_list) if issues_list else "No specific issues identified"
+            
+            result.append({
+                **data,
+                'interventions_str': interventions,
+                'description': description
+            })
+        
+        return result
+    
     def _create_at_risk_tab(self, wb: Workbook, students: List[StudentRecord]) -> None:
-        """Create Tab 2: At Risk Students."""
+        """Create Tab 2: At Risk Students (unique per student with aggregated descriptions)."""
         ws = wb.create_sheet("P1 - At Risk")
         
-        # Filter students
-        at_risk = [s for s in students if s.grade_status == "🔴 AT RISK"]
+        # Get unique students with aggregated issues
+        at_risk = self._aggregate_student_issues(students, "🔴 AT RISK")
         
-        # Sort by intervention priority
-        priority_order = {"MISSING_BOTH": 0, "PHASE_CRITICAL": 1, "STALLED": 2}
-        at_risk.sort(key=lambda s: priority_order.get(s.intervention_type, 99))
+        # Sort by latest week
+        at_risk.sort(key=lambda s: s['latest_week'], reverse=True)
         
         # Write header
-        headers = ["Name", "Week", "Phase", "Weeks in Phase", "Timeline", 
-                   "Sun Submitted", "Consecutive Misses", "Deliverables",
-                   "Commits", "Blocked", "Intervention Type", "README Link", "Notes"]
+        headers = ["Name", "Member ID", "Discord", "Latest Week", "Phase", "Timeline",
+                   "Deliverables", "Intervention Types", "Description"]
         
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col, value=header)
@@ -1023,54 +1718,43 @@ class TrackerDataProcessor(FileProcessor):
         # Write data
         for row_idx, student in enumerate(at_risk, 2):
             data = [
-                student.name,
-                student.week,
-                student.current_phase,
-                student.weeks_in_phase,
-                student.timeline_type,
-                "Yes" if student.sun_submitted else "No",
-                student.consecutive_misses,
-                f"{student.deliverables_complete}/{student.deliverables_expected}",
-                student.commits_this_week,
-                "Yes - " + student.blocker_desc[:30] if student.blocked else "No",
-                student.intervention_type,
-                student.readme_link,
-                student.cam_notes
+                student['name'],
+                student['member_id'],
+                student['discord'],
+                student['latest_week'],
+                student['latest_phase'],
+                student['timeline'],
+                student['deliverables'],
+                student['interventions_str'],
+                student['description']
             ]
             
-            # Determine row color
-            if student.intervention_type == "MISSING_BOTH":
-                row_fill = Styles.RED_FILL
-            elif student.intervention_type == "PHASE_CRITICAL":
-                row_fill = Styles.ORANGE_FILL
-            elif student.timeline_type in ["Compressed", "Critical"]:
-                row_fill = Styles.YELLOW_FILL
-            else:
-                row_fill = Styles.RED_FILL
+            row_fill = Styles.RED_FILL
             
             for col, value in enumerate(data, 1):
                 cell = ws.cell(row=row_idx, column=col, value=value)
                 cell.fill = row_fill
                 cell.border = Styles.THIN_BORDER
                 cell.alignment = Styles.LEFT_ALIGN
+                if col == len(headers):  # Description column - wrap text
+                    cell.alignment = Alignment(wrap_text=True, vertical='top')
         
         self._auto_fit_columns(ws)
         ws.freeze_panes = 'A2'
     
     def _create_flagged_tab(self, wb: Workbook, students: List[StudentRecord]) -> None:
-        """Create Tab 3: Flagged Students."""
+        """Create Tab 3: Flagged Students (unique per student with aggregated descriptions)."""
         ws = wb.create_sheet("P2 - Flagged")
         
-        # Filter students
-        flagged = [s for s in students if s.grade_status == "🟡 FLAGGED"]
+        # Get unique students with aggregated issues
+        flagged = self._aggregate_student_issues(students, "🟡 FLAGGED")
         
-        # Sort by weeks in phase (descending)
-        flagged.sort(key=lambda s: s.weeks_in_phase, reverse=True)
+        # Sort by latest week
+        flagged.sort(key=lambda s: s['latest_week'], reverse=True)
         
         # Write header
-        headers = ["Name", "Week", "Phase", "Weeks in Phase", "Timeline",
-                   "Deliverables", "Commits This Week", "Days Since Commit",
-                   "Blocked", "Intervention Type", "README Link"]
+        headers = ["Name", "Member ID", "Discord", "Latest Week", "Phase", "Timeline",
+                   "Deliverables", "Intervention Types", "Description"]
         
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col, value=header)
@@ -1082,44 +1766,43 @@ class TrackerDataProcessor(FileProcessor):
         # Write data
         for row_idx, student in enumerate(flagged, 2):
             data = [
-                student.name,
-                student.week,
-                student.current_phase,
-                student.weeks_in_phase,
-                student.timeline_type,
-                f"{student.deliverables_complete}/{student.deliverables_expected}",
-                student.commits_this_week,
-                student.days_since_commit,
-                "Yes" if student.blocked else "No",
-                student.intervention_type,
-                student.readme_link
+                student['name'],
+                student['member_id'],
+                student['discord'],
+                student['latest_week'],
+                student['latest_phase'],
+                student['timeline'],
+                student['deliverables'],
+                student['interventions_str'],
+                student['description']
             ]
             
-            # Determine row color
-            row_fill = Styles.ORANGE_FILL if student.blocked else Styles.LIGHT_YELLOW_FILL
+            row_fill = Styles.LIGHT_YELLOW_FILL
             
             for col, value in enumerate(data, 1):
                 cell = ws.cell(row=row_idx, column=col, value=value)
                 cell.fill = row_fill
                 cell.border = Styles.THIN_BORDER
                 cell.alignment = Styles.LEFT_ALIGN
+                if col == len(headers):  # Description column - wrap text
+                    cell.alignment = Alignment(wrap_text=True, vertical='top')
         
         self._auto_fit_columns(ws)
         ws.freeze_panes = 'A2'
     
     def _create_on_track_tab(self, wb: Workbook, students: List[StudentRecord]) -> None:
-        """Create Tab 4: On Track Students."""
+        """Create Tab 4: On Track Students (unique per student with summary)."""
         ws = wb.create_sheet("P3 - On Track")
         
-        # Filter students
-        on_track = [s for s in students if s.grade_status == "🟢 ON TRACK"]
+        # Get unique students with aggregated info
+        on_track = self._aggregate_student_issues(students, "🟢 ON TRACK")
         
-        # Sort by week (descending)
-        on_track.sort(key=lambda s: s.week, reverse=True)
+        # Sort by latest week
+        on_track.sort(key=lambda s: s['latest_week'], reverse=True)
         
         # Write header
-        headers = ["Name", "Week", "Phase", "Weeks in Phase", "Submission Count",
-                   "MR Status", "Progress Summary", "Notes"]
+        headers = ["Name", "Member ID", "Discord", "Latest Week", "Phase", 
+                   "Total Submissions", "Deliverables", "Description"]
         
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col, value=header)
@@ -1130,24 +1813,18 @@ class TrackerDataProcessor(FileProcessor):
         
         # Write data
         for row_idx, student in enumerate(on_track, 2):
-            # Add icons for achievements
-            mr_display = student.mr_status
-            if "merged" in student.mr_status.lower():
-                mr_display = "⭐ " + mr_display
-            
-            notes = student.cam_notes
-            if student.contribution_num >= 2:
-                notes = "🏆 2nd Contribution! " + notes
+            # For on-track students, show positive status
+            description = student['description'] if student['description'] != "No specific issues identified" else "Progressing normally"
             
             data = [
-                student.name,
-                student.week,
-                student.current_phase,
-                student.weeks_in_phase,
-                student.submission_count_cumulative,
-                mr_display,
-                student.progress_summary[:100] + "..." if len(student.progress_summary) > 100 else student.progress_summary,
-                notes
+                student['name'],
+                student['member_id'],
+                student['discord'],
+                student['latest_week'],
+                student['latest_phase'],
+                student['total_submissions'],
+                student['deliverables'],
+                description
             ]
             
             for col, value in enumerate(data, 1):
@@ -1155,6 +1832,8 @@ class TrackerDataProcessor(FileProcessor):
                 cell.fill = Styles.LIGHT_GREEN_FILL
                 cell.border = Styles.THIN_BORDER
                 cell.alignment = Styles.LEFT_ALIGN
+                if col == len(headers):  # Description column - wrap text
+                    cell.alignment = Alignment(wrap_text=True, vertical='top')
         
         self._auto_fit_columns(ws)
         ws.freeze_panes = 'A2'
