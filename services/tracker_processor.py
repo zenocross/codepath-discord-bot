@@ -1038,27 +1038,43 @@ class TrackerDataProcessor(FileProcessor):
         self._calculate_weeks_in_phase(students)
         
         for student in students:
-            # Calculate deliverables expected based on phase
+            # Calculate deliverables expected and complete based on current phase only
             phase_num = self._get_phase_number(student.current_phase)
             
-            if phase_num >= 1:
-                student.deliverables_expected = 1  # Why chosen
-            if phase_num >= 2:
-                student.deliverables_expected += 2  # Reproduction + Solution
-            if phase_num >= 3:
-                student.deliverables_expected += 2  # Implementation + Testing
-            if phase_num >= 4:
-                student.deliverables_expected += 1  # Feedback
+            # Phase-specific deliverable requirements (not cumulative):
+            # Phase 1 - 2 expected: issue_url, why_chosen_complete
+            # Phase 2 - 3 expected: fork_url, reproduction_complete, solution_complete
+            # Phase 3 - 2 expected: implementation_complete, testing_complete
+            # Phase 4 - 2 expected: mr_url, feedback_complete
             
-            # Calculate deliverables complete
-            student.deliverables_complete = sum([
-                student.why_chosen_complete,
-                student.reproduction_complete,
-                student.solution_complete,
-                student.implementation_complete,
-                student.testing_complete,
-                student.feedback_complete
-            ])
+            if phase_num == 1:
+                student.deliverables_expected = 2
+                student.deliverables_complete = sum([
+                    bool(student.issue_url and str(student.issue_url).strip()),
+                    student.why_chosen_complete
+                ])
+            elif phase_num == 2:
+                student.deliverables_expected = 3
+                student.deliverables_complete = sum([
+                    bool(student.fork_url and str(student.fork_url).strip()),
+                    student.reproduction_complete,
+                    student.solution_complete
+                ])
+            elif phase_num == 3:
+                student.deliverables_expected = 2
+                student.deliverables_complete = sum([
+                    student.implementation_complete,
+                    student.testing_complete
+                ])
+            elif phase_num == 4:
+                student.deliverables_expected = 2
+                student.deliverables_complete = sum([
+                    bool(student.mr_url and str(student.mr_url).strip()),
+                    student.feedback_complete
+                ])
+            else:
+                student.deliverables_expected = 0
+                student.deliverables_complete = 0
             
             # Calculate weeks remaining (assuming 8-week program)
             student.weeks_remaining = max(0, 8 - student.week)
@@ -1372,6 +1388,11 @@ class TrackerDataProcessor(FileProcessor):
                 elif getattr(student, '_unexpected_phase_change', False):
                     flagged = True
                     intervention = "UNEXPECTED_PHASE_CHANGE"
+                
+                # Check for issue change (student switched to a different issue)
+                elif student.issue_changed:
+                    flagged = True
+                    intervention = "ISSUE_CHANGED"
                 
                 # Check for MR URL added in wrong phase (should only be in Phase 4)
                 elif phase_num == 3 and student.mr_url and str(student.mr_url).strip():
@@ -1842,25 +1863,33 @@ class TrackerDataProcessor(FileProcessor):
         """Create Tab 5: Weekly Summary Dashboard."""
         ws = wb.create_sheet("Weekly Summary")
         
-        # Calculate statistics
-        total = len(students)
-        on_track = len([s for s in students if s.grade_status == "🟢 ON TRACK"])
-        flagged = len([s for s in students if s.grade_status == "🟡 FLAGGED"])
-        at_risk = len([s for s in students if s.grade_status == "🔴 AT RISK"])
+        # Get unique students by member_id (use most recent week's record for each student)
+        unique_students: Dict[str, StudentRecord] = {}
+        for s in students:
+            if s.member_id not in unique_students or s.week > unique_students[s.member_id].week:
+                unique_students[s.member_id] = s
         
-        sun_submitted = len([s for s in students if s.sun_submitted])
-        wed_submitted = len([s for s in students if s.wed_submitted])
+        latest_records = list(unique_students.values())
+        
+        # Calculate statistics based on unique students
+        total = len(latest_records)
+        on_track = len([s for s in latest_records if s.grade_status == "🟢 ON TRACK"])
+        flagged = len([s for s in latest_records if s.grade_status == "🟡 FLAGGED"])
+        at_risk = len([s for s in latest_records if s.grade_status == "🔴 AT RISK"])
+        
+        sun_submitted = len([s for s in latest_records if s.sun_submitted])
+        wed_submitted = len([s for s in latest_records if s.wed_submitted])
         
         phase_dist = {1: 0, 2: 0, 3: 0, 4: 0}
-        for s in students:
+        for s in latest_records:
             phase_num = self._get_phase_number(s.current_phase)
             if phase_num in phase_dist:
                 phase_dist[phase_num] += 1
         
-        mr_submitted = len([s for s in students if s.mr_url])
-        mr_merged = len([s for s in students if "merged" in s.mr_status.lower()])
+        mr_submitted = len([s for s in latest_records if s.mr_url])
+        mr_merged = len([s for s in latest_records if "merged" in s.mr_status.lower()])
         
-        interventions_sent = len([s for s in students if s.intervention_type])
+        interventions_sent = len([s for s in latest_records if s.intervention_type])
         
         # Get current week from data
         current_week = max(s.week for s in students) if students else 0
