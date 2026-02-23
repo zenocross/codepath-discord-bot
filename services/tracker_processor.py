@@ -395,6 +395,10 @@ class TrackerDataProcessor(FileProcessor):
                 # Determine grade status and interventions
                 self._calculate_grade_status(students)
                 
+                # Mark typeform-only students (not in master CSV) as MISSING_ADMISSION_INFO
+                if master_data:
+                    self._mark_typeform_only_students(students, master_data)
+                
                 # If filtering by date, add students with NO submissions as "At Risk"
                 if options.get('filter_by_date') and options.get('target_date') and master_data:
                     current_week = options.get('current_week', 1)
@@ -422,11 +426,14 @@ class TrackerDataProcessor(FileProcessor):
             wb.save(output)
             output.seek(0)
             
+            # Count unique students by member_id (or name as fallback)
+            unique_students = len(set(s.member_id or s.name for s in students))
+            
             return ProcessingResult(
                 success=True,
                 output_data=output.read(),
                 output_filename="tracker_report.xlsx",
-                rows_processed=len(students)
+                rows_processed=unique_students
             )
             
         except Exception as e:
@@ -811,6 +818,65 @@ class TrackerDataProcessor(FileProcessor):
         except Exception as e:
             print(f"[TrackerProcessor] Error adding missing students: {e}")
             return students
+    
+    def _mark_typeform_only_students(
+        self,
+        students: List[StudentRecord],
+        master_data: bytes
+    ) -> None:
+        """Mark students who submitted typeform but are NOT in the master CSV as At Risk.
+        
+        These students have submitted progress updates but their member_id doesn't
+        appear in the master roster, indicating missing admission information.
+        
+        Args:
+            students: List of student records from typeform
+            master_data: Master roster CSV bytes
+        """
+        try:
+            # Parse master CSV to get all enrolled member_ids
+            master_text = master_data.decode('utf-8-sig')
+            sample = master_text[:4096]
+            try:
+                dialect = csv.Sniffer().sniff(sample, delimiters=',\t;|')
+            except csv.Error:
+                dialect = 'excel'
+            
+            master_reader = csv.DictReader(io.StringIO(master_text), dialect=dialect)
+            master_rows = list(master_reader)
+            
+            if not master_rows:
+                return
+            
+            # Find member_id column
+            headers = list(master_rows[0].keys())
+            member_id_col = self._find_column(headers, MASTER_CSV_COLUMNS["member_id"])
+            
+            if not member_id_col:
+                print("[TrackerProcessor] Master CSV: Member ID column not found for typeform-only check")
+                return
+            
+            # Build set of all member_ids in master CSV
+            master_member_ids = set()
+            for row in master_rows:
+                member_id = str(row.get(member_id_col, "")).strip()
+                if member_id:
+                    master_member_ids.add(member_id)
+            
+            # Check each typeform student and mark those not in master as MISSING_ADMISSION_INFO
+            marked_count = 0
+            for student in students:
+                member_id = str(student.member_id).strip()
+                if member_id and member_id not in master_member_ids:
+                    student.grade_status = "🔴 AT RISK"
+                    student.intervention_type = "MISSING_ADMISSION_INFO"
+                    marked_count += 1
+            
+            if marked_count > 0:
+                print(f"[TrackerProcessor] Marked {marked_count} typeform-only students as MISSING_ADMISSION_INFO")
+            
+        except Exception as e:
+            print(f"[TrackerProcessor] Error checking typeform-only students: {e}")
     
     def _calculate_missed_deadlines(self, start_date: datetime, target_date: datetime) -> int:
         """Calculate the number of Wednesday and Sunday deadlines missed between dates.

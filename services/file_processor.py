@@ -333,7 +333,19 @@ class FileStorageService:
             data: File data bytes
             user_id: Discord user ID who uploaded
             category: File category (master, typeform, zoom). If None, stores as generic.
+        
+        Note: If a file already exists for the category, it will be deleted first.
         """
+        # Delete previous file for this category if it exists
+        if category and category in VALID_FILE_CATEGORIES:
+            previous = self._files.get(category)
+            if previous and previous.filepath.exists():
+                try:
+                    previous.filepath.unlink()
+                    print(f"[FileStorage] Deleted previous {category} file: {previous.filename}")
+                except Exception as e:
+                    print(f"[FileStorage] Error deleting previous {category} file: {e}")
+        
         # Generate unique filename with timestamp and category prefix
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_filename = "".join(c for c in filename if c.isalnum() or c in "._-")
