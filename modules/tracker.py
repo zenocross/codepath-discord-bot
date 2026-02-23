@@ -11,7 +11,8 @@ Commands:
     !tracker clearall         - Clear all uploaded CSV files
     !tracker start_date       - Set or view program start date
     !tracker submissions      - Real-time submission checking
-    !tracker submissions_download - Download report filtered by submissions date
+    !tracker submissions_download [options] - Download report filtered by submissions date
+        Options: nofilter, validate_commits, validate_all
     !tracker help             - Show help (handled by bot/events.py)
 """
 
@@ -25,6 +26,7 @@ from discord.ext import commands
 
 from services.file_processor import FileStorageService, VALID_FILE_CATEGORIES
 from services.tracker_processor import TrackerDataProcessor
+from services.gitlab_service import GitLabService
 
 
 # File category descriptions
@@ -48,6 +50,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
         self.bot = bot
         self.storage = FileStorageService()
         self.processor = TrackerDataProcessor()
+        self.gitlab = GitLabService()
         # Track users in upload wizard to prevent conflicts
         self._upload_sessions: dict[int, str] = {}
     
@@ -447,10 +450,21 @@ class TrackerCog(commands.Cog, name="Tracker"):
             await ctx.send(f"❌ Error processing submissions: {e}")
     
     @commands.command(name='submissions_download')
-    async def submissions_download(self, ctx: commands.Context):
+    async def submissions_download(self, ctx: commands.Context, *, options: str = ""):
         """Download tracker report filtered by the last used submissions date.
         
         Uses the date from the most recent !tracker submissions command.
+        
+        GitLab Options (space-separated):
+            nofilter         - Fetch GitLab data for all commit/MR links in README
+            validate_commits - Validate commits found in student READMEs
+            validate_all     - Validate commits AND MRs found in student READMEs
+        
+        Examples:
+            !tracker submissions_download                  - Basic report (no GitLab)
+            !tracker submissions_download nofilter         - GitLab data, all links
+            !tracker submissions_download validate_commits - Validate commits only
+            !tracker submissions_download validate_all     - Validate commits + MRs
         """
         # Check for required files
         typeform_file = self.storage.get_file("typeform")
@@ -462,6 +476,15 @@ class TrackerCog(commands.Cog, name="Tracker"):
                 "Upload it using `!tracker upload typeform`."
             )
             return
+        
+        # Parse options
+        opts = options.lower().split()
+        use_nofilter = "nofilter" in opts
+        validate_commits = "validate_commits" in opts
+        validate_all = "validate_all" in opts
+        
+        # Any of these options enables GitLab enrichment
+        use_gitlab = use_nofilter or validate_commits or validate_all
         
         # Check for start date and last submissions date
         start_date = self.storage.get_start_date()
@@ -485,13 +508,28 @@ class TrackerCog(commands.Cog, name="Tracker"):
         days_since_start = (target_date - start_date).days
         current_week = max(1, (days_since_start // 7) + 1)
         
-        await ctx.send(
-            f"📂 **Generating Filtered Report**\n"
-            f"• Start Date: {start_date.strftime('%m/%d/%Y')}\n"
-            f"• Target Date: {target_date.strftime('%m/%d/%Y')}\n"
-            f"• Week: {current_week}\n\n"
-            f"⏳ Creating report..."
-        )
+        # Build status message
+        status_lines = [
+            f"📂 **Generating Filtered Report**",
+            f"• Start Date: {start_date.strftime('%m/%d/%Y')}",
+            f"• Target Date: {target_date.strftime('%m/%d/%Y')}",
+            f"• Week: {current_week}",
+        ]
+        
+        if use_gitlab:
+            if validate_all:
+                status_lines.append("• GitLab: Validating commits + MRs")
+            elif validate_commits:
+                status_lines.append("• GitLab: Validating commits")
+            else:
+                status_lines.append("• GitLab: Fetching all data (nofilter)")
+            status_lines.append("")
+            status_lines.append("⏳ Fetching GitLab data (this may take a while)...")
+        else:
+            status_lines.append("")
+            status_lines.append("⏳ Creating report...")
+        
+        await ctx.send("\n".join(status_lines))
         
         try:
             # Read files
@@ -499,18 +537,25 @@ class TrackerCog(commands.Cog, name="Tracker"):
             master_data = self.storage.read_file(master_file) if master_file else None
             zoom_data = self.storage.read_file_by_category("zoom")
             
+            # Build options dict
+            process_options = {
+                'master_data': master_data,
+                'zoom_data': zoom_data,
+                'start_date': start_date,
+                'target_date': target_date,
+                'current_week': current_week,
+                'filter_by_date': True
+            }
+            
+            # Add GitLab options if enabled
+            if use_gitlab:
+                process_options['gitlab_service'] = self.gitlab
+                process_options['nofilter'] = use_nofilter
+                process_options['validate_commits'] = validate_commits or validate_all
+                process_options['validate_mrs'] = validate_all
+            
             # Process with date filter
-            result = self.processor.process(
-                typeform_data,
-                options={
-                    'master_data': master_data,
-                    'zoom_data': zoom_data,
-                    'start_date': start_date,
-                    'target_date': target_date,
-                    'current_week': current_week,
-                    'filter_by_date': True
-                }
-            )
+            result = self.processor.process(typeform_data, options=process_options)
             
             if not result.success:
                 await ctx.send(f"❌ Processing failed: {result.error_message}")
@@ -518,7 +563,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
             
             # Generate output filename
             date_suffix = target_date.strftime("%Y%m%d")
-            output_filename = f"submissions_report_week{current_week}_{date_suffix}.xlsx"
+            gitlab_suffix = "_gitlab" if use_gitlab else ""
+            output_filename = f"submissions_report_week{current_week}_{date_suffix}{gitlab_suffix}.xlsx"
             
             # Create file and send
             file = discord.File(
@@ -526,13 +572,17 @@ class TrackerCog(commands.Cog, name="Tracker"):
                 filename=output_filename
             )
             
-            await ctx.send(
-                f"✅ **Filtered Report Generated!**\n"
-                f"• Students processed: {result.rows_processed}\n"
-                f"• Filtered through: {target_date.strftime('%m/%d/%Y')}\n"
+            # Build success message
+            success_lines = [
+                f"✅ **Filtered Report Generated!**",
+                f"• Students processed: {result.rows_processed}",
+                f"• Filtered through: {target_date.strftime('%m/%d/%Y')}",
                 f"• Week: {current_week}",
-                file=file
-            )
+            ]
+            if use_gitlab:
+                success_lines.append("• GitLab data: Included")
+            
+            await ctx.send("\n".join(success_lines), file=file)
             
         except Exception as e:
             await ctx.send(f"❌ Error generating report: {e}")

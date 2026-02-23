@@ -407,6 +407,27 @@ class TrackerDataProcessor(FileProcessor):
                         students, master_data, discord_lookup, options['target_date'], 
                         current_week, start_date
                     )
+                
+                # Enrich with GitLab data if service is provided
+                gitlab_service = options.get('gitlab_service')
+                if gitlab_service:
+                    target_date = options.get('target_date')
+                    validate_commits = options.get('validate_commits', False)
+                    validate_mrs = options.get('validate_mrs', False)
+                    nofilter = options.get('nofilter', False)
+                    
+                    # Build github username lookup from master CSV
+                    github_lookup = {}
+                    if master_data:
+                        github_lookup = self._build_github_lookup(master_data)
+                    
+                    self._enrich_with_gitlab(
+                        students, gitlab_service, target_date,
+                        validate_commits=validate_commits,
+                        validate_mrs=validate_mrs,
+                        nofilter=nofilter,
+                        github_lookup=github_lookup
+                    )
             
             # Create workbook
             wb = Workbook()
@@ -877,6 +898,235 @@ class TrackerDataProcessor(FileProcessor):
             
         except Exception as e:
             print(f"[TrackerProcessor] Error checking typeform-only students: {e}")
+    
+    def _build_github_lookup(self, master_data: bytes) -> Dict[str, str]:
+        """Build a member_id -> github_username lookup from master roster CSV.
+        
+        Args:
+            master_data: Raw bytes of master CSV file
+            
+        Returns:
+            Dict mapping member_id to github_username
+        """
+        github_lookup: Dict[str, str] = {}
+        
+        try:
+            text_data = master_data.decode('utf-8-sig')
+            sample = text_data[:4096]
+            try:
+                dialect = csv.Sniffer().sniff(sample, delimiters=',\t;|')
+            except csv.Error:
+                dialect = 'excel'
+            
+            csv_reader = csv.DictReader(io.StringIO(text_data), dialect=dialect)
+            rows = list(csv_reader)
+            
+            if not rows:
+                return github_lookup
+            
+            headers = list(rows[0].keys())
+            
+            # Find member_id column
+            member_id_col = self._find_column(headers, MASTER_CSV_COLUMNS["member_id"])
+            if not member_id_col:
+                print("[TrackerProcessor] Master CSV: Member ID column not found for GitHub lookup")
+                return github_lookup
+            
+            # Find github username column
+            github_col = self._find_column(headers, MASTER_CSV_COLUMNS["github"])
+            if not github_col:
+                print("[TrackerProcessor] Master CSV: Github column not found")
+                return github_lookup
+            
+            # Build lookup
+            for row in rows:
+                member_id = str(row.get(member_id_col, "")).strip()
+                github_username = str(row.get(github_col, "")).strip()
+                
+                if member_id and github_username:
+                    github_lookup[member_id] = github_username.lower()
+            
+            print(f"[TrackerProcessor] Master CSV: Built GitHub lookup with {len(github_lookup)} entries")
+            
+        except Exception as e:
+            print(f"[TrackerProcessor] Error parsing master CSV for GitHub lookup: {e}")
+        
+        return github_lookup
+    
+    def _enrich_with_gitlab(
+        self,
+        students: List[StudentRecord],
+        gitlab_service,
+        target_date: Optional[datetime],
+        validate_commits: bool = False,
+        validate_mrs: bool = False,
+        nofilter: bool = False,
+        github_lookup: Optional[Dict[str, str]] = None
+    ) -> None:
+        """Enrich student records with GitLab API data.
+        
+        Modes:
+        - nofilter: Just checks existence of commits/MRs, no ownership validation
+        - validate_commits: Flags AT_RISK if commits are on repos student doesn't own
+        - validate_all (validate_commits + validate_mrs): Also validates README location
+        
+        Args:
+            students: List of student records to enrich
+            gitlab_service: GitLabService instance
+            target_date: Current date for calculating "this week"
+            validate_commits: Whether to validate commit ownership
+            validate_mrs: Whether to validate MRs and README ownership
+            nofilter: Just check existence without ownership validation
+            github_lookup: Dict mapping member_id to github username for ownership checks
+        """
+        from datetime import timezone
+        
+        current_date = target_date or datetime.now(timezone.utc)
+        if not hasattr(current_date, 'tzinfo') or current_date.tzinfo is None:
+            current_date = current_date.replace(tzinfo=timezone.utc)
+        
+        github_lookup = github_lookup or {}
+        
+        # Group students by readme_link to avoid duplicate API calls
+        readme_to_students: Dict[str, List[StudentRecord]] = {}
+        for student in students:
+            readme_link = str(student.readme_link).strip() if student.readme_link else ""
+            if readme_link:
+                if readme_link not in readme_to_students:
+                    readme_to_students[readme_link] = []
+                readme_to_students[readme_link].append(student)
+        
+        enriched_count = 0
+        ownership_flagged_count = 0
+        readme_flagged_count = 0
+        readme_nonexistent_count = 0
+        readme_link_missing_count = 0
+        mr_mismatch_count = 0
+        
+        # Determine mode string for logging
+        if nofilter:
+            mode_str = "nofilter (existence only)"
+        elif validate_commits and validate_mrs:
+            mode_str = "validate_all (ownership + README location)"
+        elif validate_commits:
+            mode_str = "validate_commits (ownership)"
+        else:
+            mode_str = "basic"
+        
+        print(f"[TrackerProcessor] Enriching {len(readme_to_students)} unique README links with GitLab data (mode: {mode_str})...")
+        
+        for readme_link, student_list in readme_to_students.items():
+            # Get the mr_url and github username for ownership checks
+            mr_url = ""
+            student_github = ""
+            student_member_id = ""
+            for s in student_list:
+                if s.mr_url and str(s.mr_url).strip():
+                    mr_url = str(s.mr_url).strip()
+                if s.member_id:
+                    student_member_id = str(s.member_id).strip()
+                    student_github = github_lookup.get(student_member_id, "").lower()
+            
+            # Fetch GitLab data with ownership info
+            result = gitlab_service.enrich_student_data(
+                readme_link=readme_link,
+                mr_url=mr_url,
+                owner_repo=None,
+                current_date=current_date,
+                validate_commits=True,  # Always fetch commit data
+                validate_mrs=True,  # Always fetch MR data
+                expected_owner=student_github if (validate_commits or validate_mrs) else None
+            )
+            
+            if result.success:
+                enriched_count += 1
+                
+                # Apply data to all students with this README link
+                for student in student_list:
+                    phase_num = self._get_phase_number(student.current_phase)
+                    
+                    # Only populate commit/MR fields if student is in Phase 3 or 4
+                    if phase_num >= 3:
+                        student.total_commits = result.commit_links_found
+                        student.commits_this_week = result.commits_this_week
+                        student.last_commit_date = result.last_commit_date
+                        student.days_since_commit = result.days_since_commit
+                    
+                    # Only populate MR fields if student is in Phase 4
+                    if phase_num >= 4:
+                        student.mr_status = result.mr_status
+                        student.mr_created_date = result.mr_created_date
+                        student.comment_count = result.mr_comment_count
+                        
+                        # Check if MR URL matches what's in README (validation modes only)
+                        if (validate_commits or validate_mrs) and not nofilter:
+                            student_mr = str(student.mr_url).strip() if student.mr_url else ""
+                            if student_mr and not result.mr_in_readme:
+                                student.grade_status = "🔴 AT RISK"
+                                if student.intervention_type:
+                                    student.intervention_type += "\nMR_URL_MISMATCH"
+                                else:
+                                    student.intervention_type = "MR_URL_MISMATCH"
+                                mr_mismatch_count += 1
+                    
+                    # Get this student's github username
+                    s_member_id = str(student.member_id).strip() if student.member_id else ""
+                    s_github = github_lookup.get(s_member_id, "").lower()
+                    
+                    # Ownership validation (validate_commits or validate_all)
+                    if (validate_commits or validate_mrs) and s_github:
+                        # Check if commits are on repos the student owns
+                        if result.commits_not_owned > 0:
+                            student.grade_status = "🔴 AT RISK"
+                            if student.intervention_type:
+                                student.intervention_type += "\nCOMMITS_NOT_OWNED"
+                            else:
+                                student.intervention_type = "COMMITS_NOT_OWNED"
+                            ownership_flagged_count += 1
+                    
+                    # README location validation (validate_all only)
+                    if validate_mrs and s_github:
+                        # Check if README is on student's own repo
+                        if not result.readme_owned_by_student:
+                            student.grade_status = "🔴 AT RISK"
+                            if student.intervention_type:
+                                student.intervention_type += "\nREADME_NOT_OWNED"
+                            else:
+                                student.intervention_type = "README_NOT_OWNED"
+                            readme_flagged_count += 1
+            else:
+                # README exists in link but file not found/accessible - flag as nonexistent
+                print(f"[TrackerProcessor] Could not enrich {readme_link}: {result.error_message}")
+                for student in student_list:
+                    student.grade_status = "🔴 AT RISK"
+                    if student.intervention_type:
+                        student.intervention_type += "\nREADME_NONEXISTENT"
+                    else:
+                        student.intervention_type = "README_NONEXISTENT"
+                    readme_nonexistent_count += 1
+        
+        # Flag students who have no readme_link at all
+        for student in students:
+            readme_link = str(student.readme_link).strip() if student.readme_link else ""
+            if not readme_link:
+                student.grade_status = "🔴 AT RISK"
+                if student.intervention_type:
+                    student.intervention_type += "\nREADME_LINK_MISSING"
+                else:
+                    student.intervention_type = "README_LINK_MISSING"
+                readme_link_missing_count += 1
+        
+        print(f"[TrackerProcessor] GitLab enrichment complete: {enriched_count} READMEs processed")
+        if readme_link_missing_count > 0:
+            print(f"[TrackerProcessor] Flagged {readme_link_missing_count} students with README_LINK_MISSING (no link provided)")
+        if readme_nonexistent_count > 0:
+            print(f"[TrackerProcessor] Flagged {readme_nonexistent_count} students with README_NONEXISTENT (link invalid/inaccessible)")
+        if mr_mismatch_count > 0:
+            print(f"[TrackerProcessor] Flagged {mr_mismatch_count} students with MR_URL_MISMATCH")
+        if ownership_flagged_count > 0:
+            print(f"[TrackerProcessor] Flagged {ownership_flagged_count} students with COMMITS_NOT_OWNED")
+        if readme_flagged_count > 0:
+            print(f"[TrackerProcessor] Flagged {readme_flagged_count} students with README_NOT_OWNED")
     
     def _calculate_missed_deadlines(self, start_date: datetime, target_date: datetime) -> int:
         """Calculate the number of Wednesday and Sunday deadlines missed between dates.

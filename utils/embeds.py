@@ -488,8 +488,7 @@ class EmbedBuilder:
             name="📅 Real-Time Submissions",
             value=(
                 "`!tracker start_date [MM/DD/YYYY]` - Set/view program start date\n"
-                "`!tracker submissions [MM/DD/YYYY]` - Check submissions up to date\n"
-                "`!tracker submissions_download` - Download filtered report"
+                "`!tracker submissions [MM/DD/YYYY]` - Check submissions up to date"
             ),
             inline=False
         )
@@ -498,7 +497,11 @@ class EmbedBuilder:
             name="📥 Download Commands",
             value=(
                 "`!tracker download` - Generate full tracker report\n"
-                "`!tracker submissions_download` - Report filtered by last submissions date"
+                "`!tracker submissions_download` - Report filtered by submissions date\n"
+                "**GitLab Options:**\n"
+                "`!tracker submissions_download nofilter` - Include GitLab data\n"
+                "`!tracker submissions_download validate_commits` - Validate commit ownership\n"
+                "`!tracker submissions_download validate_all` - Validate commits + README"
             ),
             inline=False
         )
