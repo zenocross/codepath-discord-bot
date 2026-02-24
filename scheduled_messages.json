@@ -6,11 +6,11 @@
       "hours": 2
     },
     "message": "This message will be sent every 2 hours... Please ignore",
-    "next_run": "2026-02-24T18:00:00+00:00",
+    "next_run": "2026-02-24T20:00:00+00:00",
     "active": true,
     "created_by": 432551600100474881,
     "target_type": "dm",
-    "last_sent": "2026-02-24T16:32:00.000311+00:00"
+    "last_sent": "2026-02-24T18:00:01.880149+00:00"
   },
   "c4360965": {
     "group": "failures",
@@ -21,10 +21,10 @@
       "minute": 20
     },
     "message": "Hello, Testing Weekly",
-    "next_run": "2026-02-24T18:20:00+00:00",
+    "next_run": "2026-03-03T18:20:00+00:00",
     "active": true,
     "created_by": 432551600100474881,
     "target_type": "dm",
-    "last_sent": "2026-02-17T18:20:01.659525+00:00"
+    "last_sent": "2026-02-24T18:20:01.652836+00:00"
   }
 }

@@ -24,7 +24,7 @@ class GitLabRSSBot(commands.Bot):
         intents.members = True  # Required for username lookup across servers
         
         super().__init__(
-            command_prefix=['!gitlab ', '!announce ', '!tracker ', '!game ', '!app ', '!trivia '],
+            command_prefix=['!gitlab ', '!announce ', '!tracker ', '!game ', '!app '],
             intents=intents,
             help_command=None
         )

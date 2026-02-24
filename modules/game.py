@@ -70,11 +70,14 @@ class GameCog(commands.Cog, name="Game"):
             question_number = self.bot.trivia_state.get('question_number', 1)
             now = datetime.now(timezone.utc)
             timeout_time = now + timedelta(seconds=seconds_until)
-            await channel.send(
-                f"🔄 **Trivia Resumed!**\n"
-                f"Question #{question_number} is still active.\n"
-                f"⏱️ Will timeout at **{timeout_time.hour:02d}:{timeout_time.minute:02d} UTC** (~{int(seconds_until/60)} min)"
-            )
+            try:
+                await channel.send(
+                    f"🔄 **Trivia Resumed!**\n"
+                    f"Question #{question_number} is still active.\n"
+                    f"⏱️ Will timeout at **{timeout_time.hour:02d}:{timeout_time.minute:02d} UTC** (~{int(seconds_until/60)} min)"
+                )
+            except Exception as e:
+                print(f"[Trivia] Failed to announce resume: {e}")
     
     def _check_permission(self, ctx: commands.Context) -> bool:
         """Check if user is allowed to use game admin commands."""
@@ -705,7 +708,10 @@ class GameCog(commands.Cog, name="Game"):
             self.bot.trivia_state['used_questions'] = []
             self.bot.trivia_state['question_number'] = 0
             available = self.trivia_questions.copy()
-            await channel.send("🔄 All questions exhausted! Starting fresh round...")
+            try:
+                await channel.send("🔄 All questions exhausted! Starting fresh round...")
+            except Exception as e:
+                print(f"[Trivia] Failed to send reset message: {e}")
         
         if not available:
             return
@@ -730,7 +736,11 @@ class GameCog(commands.Cog, name="Game"):
         )
         embed.set_footer(text=f"First correct answer wins {trivia_pts} points! ? Question #{question_number}")
         
-        await channel.send(embed=embed)
+        try:
+            await channel.send(embed=embed)
+        except Exception as e:
+            print(f"[Trivia] Failed to send question: {e}")
+            return
         
         # Start timeout aligned to clock boundaries
         interval = self.bot.trivia_state.get('interval_minutes', 5)
@@ -765,11 +775,17 @@ class GameCog(commands.Cog, name="Game"):
         self.bot.trivia_state['current_question'] = None
         self.bot.save_trivia_state()
         
-        await channel.send(f"⏱️ Time's up! The correct answer was: **{current_q['answer']}**")
+        try:
+            await channel.send(f"⏱️ Time's up! The correct answer was: **{current_q['answer']}**")
+        except Exception as e:
+            print(f"[Trivia] Failed to send timeout message: {e}")
         
         # Post the next question after a short delay
         await asyncio.sleep(3)
-        await self._post_trivia_question()
+        try:
+            await self._post_trivia_question()
+        except Exception as e:
+            print(f"[Trivia] Failed to post next question: {e}")
     
     async def _check_question_timeout_seconds(self, question_id: str, timeout_seconds: float):
         """Check if question timed out (seconds version for precise timing)."""
@@ -782,7 +798,10 @@ class GameCog(commands.Cog, name="Game"):
         if self.bot.trivia_state.get('answered_by'):
             return
         
-        await self._timeout_current_question()
+        try:
+            await self._timeout_current_question()
+        except Exception as e:
+            print(f"[Trivia] Error during timeout: {e}")
     
     async def _timeout_current_question(self):
         """Immediately timeout the current question."""
@@ -801,11 +820,17 @@ class GameCog(commands.Cog, name="Game"):
         self.bot.trivia_state['current_question'] = None
         self.bot.save_trivia_state()
         
-        await channel.send(f"⏱️ Time's up! The correct answer was: **{current_q['answer']}**")
+        try:
+            await channel.send(f"⏱️ Time's up! The correct answer was: **{current_q['answer']}**")
+        except Exception as e:
+            print(f"[Trivia] Failed to send timeout message: {e}")
         
         # Post the next question after a short delay
         await asyncio.sleep(3)
-        await self._post_trivia_question()
+        try:
+            await self._post_trivia_question()
+        except Exception as e:
+            print(f"[Trivia] Failed to post next question: {e}")
     
     async def _handle_trivia_points(self, message: discord.Message, cmd: str):
         """Handle !trivia points command."""
@@ -961,22 +986,23 @@ class GameCog(commands.Cog, name="Game"):
             trivia_pts = PersistenceService.get_trivia_points()
             
             if matching_user:
-                old_game_pts = self.bot.game_points[matching_user]
-                self.bot.game_points[matching_user] = old_game_pts + trivia_pts
-                self.bot.save_game_points()
-                new_game_pts = self.bot.game_points[matching_user]
-                
-                # Also track trivia-specific points
+                # Track trivia-specific points first (for display)
                 if 'trivia_points' not in self.bot.trivia_state:
                     self.bot.trivia_state['trivia_points'] = {}
                 old_trivia_pts = self.bot.trivia_state['trivia_points'].get(matching_user, 0)
-                self.bot.trivia_state['trivia_points'][matching_user] = old_trivia_pts + trivia_pts
+                new_trivia_pts = old_trivia_pts + trivia_pts
+                self.bot.trivia_state['trivia_points'][matching_user] = new_trivia_pts
                 self.bot.save_trivia_state()
+                
+                # Also add to overall game points
+                old_game_pts = self.bot.game_points[matching_user]
+                self.bot.game_points[matching_user] = old_game_pts + trivia_pts
+                self.bot.save_game_points()
                 
                 await message.channel.send(
                     f"🎉 **Correct!** {message.author.mention} got it!\n"
                     f"✅ Answer: `{current_q['answer']}`\n"
-                    f"🏆 +{trivia_pts} points ({old_game_pts} → {new_game_pts})"
+                    f"🏆 +{trivia_pts} trivia points ({old_trivia_pts} → {new_trivia_pts})"
                 )
             else:
                 await message.channel.send(

@@ -1,18 +1,18 @@
 {
   "channel_id": 1475587228460908675,
   "used_questions": [
-    8,
-    4,
     6,
     3,
-    7,
+    5,
+    1,
+    8,
     9,
-    10
+    4
   ],
   "current_question": {
-    "id": 10,
-    "question": "What Git command links your local repository to a remote repository link <url>?",
-    "answer": "git remote add origin <url>"
+    "id": 4,
+    "question": "What Git command stages ALL modified and new files in the current directory for commit?",
+    "answer": "git add ."
   },
   "answered_by": null,
   "interval_minutes": 2,
@@ -21,5 +21,5 @@
     "ZenoCross#0205": 20,
     "camino#4979": 20
   },
-  "question_posted_at": "2026-02-24T17:26:07.208441+00:00"
+  "question_posted_at": "2026-02-24T18:26:06.465124+00:00"
 }
