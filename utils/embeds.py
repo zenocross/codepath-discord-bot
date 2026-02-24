@@ -542,4 +542,123 @@ class EmbedBuilder:
         embed.set_footer(text="Run !tracker upload to get started!")
         
         return embed
+    
+    @staticmethod
+    def game_help_embed() -> discord.Embed:
+        """Create help embed for game commands.
+        
+        Returns:
+            Configured Discord embed
+        """
+        embed = discord.Embed(
+            title="🎮 Game Bot - Help",
+            description="Track points and standings for gamification activities",
+            color=discord.Color.purple()
+        )
+        
+        embed.add_field(
+            name="📊 View Commands",
+            value=(
+                "`!game standing` - View the points leaderboard\n"
+                "`!game points` - Check your own points\n"
+                "`!game points <user>` - Check another user's points"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="⚙️ Admin Commands",
+            value=(
+                "`!game grant_points <user> <pts>` - Award points to a user\n"
+                "`!game grant_points <user> -<pts>` - Deduct points\n"
+                "`!game reset confirm` - Reset all points to zero"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="❓ Trivia Admin Commands",
+            value=(
+                "`!game trivia <channel_id>` - Set trivia channel\n"
+                "`!game trivia stop` - Stop trivia\n"
+                "`!game trivia` - View trivia status\n"
+                "`!game trivia_next` - Post next question now\n"
+                "`!game trivia_reset` - Reset question pool\n"
+                "`!game trivia_set_minutes <n>` - Set question duration (minutes)\n"
+                "`!game trivia_scores` - View trivia-only leaderboard"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🎯 Trivia Channel Commands",
+            value=(
+                "These only work in the trivia channel:\n"
+                "`!trivia points` - Check your trivia points\n"
+                "`!trivia leaderboard` - View trivia-only leaderboard"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="ℹ️ How It Works",
+            value=(
+                "• Points are tracked for Discord usernames in the master roster\n"
+                "• Use `!tracker upload master` to set up the roster first\n"
+                "• Questions stay active until answered or timeout expires\n"
+                "• Next question posts automatically after answer or timeout"
+            ),
+            inline=False
+        )
+        
+        embed.set_footer(text="Start earning points! 🏆")
+        
+        return embed
+    
+    @staticmethod
+    def app_help_embed() -> discord.Embed:
+        """Create overview help embed showing all available modules.
+        
+        Returns:
+            Configured Discord embed
+        """
+        embed = discord.Embed(
+            title="🤖 Bot Help - All Modules",
+            description="This bot has multiple modules. Use the specific prefix to access each.",
+            color=discord.Color.blurple()
+        )
+        
+        embed.add_field(
+            name="📡 !gitlab",
+            value="GitLab RSS feed monitoring and issue tracking\n`!gitlab help` for details",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📊 !tracker",
+            value="Student progress tracking and report generation\n`!tracker help` for details",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🎮 !game",
+            value="Points and gamification system\n`!game help` for details",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🎯 !trivia",
+            value="Trivia channel commands (points, leaderboard)\nOnly works in the configured trivia channel",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📢 !announce",
+            value="Scheduled announcements and messaging (DM only)\n`!announce help` for details",
+            inline=False
+        )
+        
+        embed.set_footer(text="Use !app help to see all modules at once")
+        
+        return embed
 

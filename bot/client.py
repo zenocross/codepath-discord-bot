@@ -24,7 +24,7 @@ class GitLabRSSBot(commands.Bot):
         intents.members = True  # Required for username lookup across servers
         
         super().__init__(
-            command_prefix=['!gitlab ', '!announce ', '!tracker '],
+            command_prefix=['!gitlab ', '!announce ', '!tracker ', '!game ', '!app ', '!trivia '],
             intents=intents,
             help_command=None
         )
@@ -40,6 +40,20 @@ class GitLabRSSBot(commands.Bot):
         self.allowed_users: Set[int] = set()  # User IDs allowed to use announce commands
         self.dm_conversations: Dict[int, Dict] = {}  # {user_id: {state, data}} for multi-step DM commands
         
+        # Game/Points system
+        self.game_points: Dict[str, int] = {}  # {discord_username: points}
+        
+        # Trivia system
+        self.trivia_state: Dict = {
+            'channel_id': None,
+            'used_questions': [],
+            'current_question': None,
+            'answered_by': None,
+            'interval_minutes': 5,
+            'question_number': 0,
+            'trivia_points': {}
+        }
+        
         # Load all data from files
         self._load_all_data()
     
@@ -50,6 +64,19 @@ class GitLabRSSBot(commands.Bot):
         self.dm_groups = PersistenceService.load_dm_groups()
         self.scheduled_messages = PersistenceService.load_scheduled_messages()
         self.allowed_users = PersistenceService.load_allowed_users()
+        self.game_points = PersistenceService.load_game_points()
+        self.trivia_state = PersistenceService.load_trivia_state()
+        
+        # Ensure trivia_points dict exists
+        if 'trivia_points' not in self.trivia_state:
+            self.trivia_state['trivia_points'] = {}
+        
+        # Migrate old timeout_minutes to interval_minutes if needed
+        if 'timeout_minutes' in self.trivia_state and self.trivia_state['timeout_minutes'] > 0:
+            if self.trivia_state.get('interval_minutes', 5) == 5:
+                self.trivia_state['interval_minutes'] = self.trivia_state['timeout_minutes']
+            del self.trivia_state['timeout_minutes']
+            PersistenceService.save_trivia_state(self.trivia_state)
     
     # ==================== Persistence Helpers ====================
     
@@ -72,6 +99,14 @@ class GitLabRSSBot(commands.Bot):
     def save_allowed_users(self) -> None:
         """Save allowed users to JSON file."""
         PersistenceService.save_allowed_users(self.allowed_users)
+    
+    def save_game_points(self) -> None:
+        """Save game points to JSON file."""
+        PersistenceService.save_game_points(self.game_points)
+    
+    def save_trivia_state(self) -> None:
+        """Save trivia state to JSON file."""
+        PersistenceService.save_trivia_state(self.trivia_state)
     
     # ==================== Permission Checks ====================
     
@@ -168,6 +203,7 @@ class GitLabRSSBot(commands.Bot):
         await self.load_extension('modules.gitlab_rss')
         await self.load_extension('modules.announcements')
         await self.load_extension('modules.tracker')
+        await self.load_extension('modules.game')
         await self.load_extension('bot.events')
         
         # Start background tasks

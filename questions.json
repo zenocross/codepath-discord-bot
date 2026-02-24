@@ -1,0 +1,55 @@
+{
+  "questions": [
+    {
+      "id": 1,
+      "question": "What Git command is used to create a new branch named feature-a AND switch to it at the same time?",
+      "answer": "git checkout -b feature-a"
+    },
+    {
+      "id": 2,
+      "question": "What Git command shows the current status of your working directory and staging area?",
+      "answer": "git status"
+    },
+    {
+      "id": 3,
+      "question": "What file do you create in a repository to tell Git which files to ignore?",
+      "answer": ".gitignore"
+    },
+    {
+      "id": 4,
+      "question": "What Git command stages ALL modified and new files in the current directory for commit?",
+      "answer": "git add ."
+    },
+    {
+      "id": 5,
+      "question": "What Git command lets you view the full commit history of a repository?",
+      "answer": "git log"
+    },
+    {
+      "id": 6,
+      "question": "What Git command downloads a remote repository link named <url> to your local machine for the first time?",
+      "answer": "git clone <url>"
+    },
+    {
+      "id": 7,
+      "question": "What Git command is used to send your local commits to a remote repository?",
+      "answer": "git push"
+    },
+    {
+      "id": 8,
+      "question": "After staging your changes, what command do you use to save them with the message \"first commit\"?",
+      "answer": "git commit -m \"first commit\""
+    },
+    {
+      "id": 9,
+      "question": "What Git command is used to initialize a new local Git repository in the current folder?",
+      "answer": "git init"
+    },
+    {
+      "id": 10,
+      "question": "What Git command links your local repository to a remote repository link <url>?",
+      "answer": "git remote add origin <url>"
+    }
+  ],
+  "points_per_correct": 10
+}

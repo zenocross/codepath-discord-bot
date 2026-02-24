@@ -1,0 +1,25 @@
+{
+  "channel_id": 1475587228460908675,
+  "used_questions": [
+    8,
+    4,
+    6,
+    3,
+    7,
+    9,
+    10
+  ],
+  "current_question": {
+    "id": 10,
+    "question": "What Git command links your local repository to a remote repository link <url>?",
+    "answer": "git remote add origin <url>"
+  },
+  "answered_by": null,
+  "interval_minutes": 2,
+  "question_number": 7,
+  "trivia_points": {
+    "ZenoCross#0205": 20,
+    "camino#4979": 20
+  },
+  "question_posted_at": "2026-02-24T17:26:07.208441+00:00"
+}

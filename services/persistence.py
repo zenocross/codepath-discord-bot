@@ -182,4 +182,103 @@ class PersistenceService:
                 json.dump(list(allowed_users), f, indent=2)
         except Exception as e:
             print(f"Error saving allowed users: {e}")
+    
+    @staticmethod
+    def load_game_points() -> Dict[str, int]:
+        """Load game points from JSON file.
+        
+        Returns:
+            Dict mapping discord_username to points
+        """
+        game_points: Dict[str, int] = {}
+        
+        try:
+            if os.path.exists(Config.GAME_POINTS_FILE):
+                with open(Config.GAME_POINTS_FILE, 'r') as f:
+                    game_points = json.load(f)
+        except Exception as e:
+            print(f"Error loading game points: {e}")
+        
+        return game_points
+    
+    @staticmethod
+    def save_game_points(game_points: Dict[str, int]) -> None:
+        """Save game points to JSON file."""
+        try:
+            with open(Config.GAME_POINTS_FILE, 'w') as f:
+                json.dump(game_points, f, indent=2)
+        except Exception as e:
+            print(f"Error saving game points: {e}")
+    
+    @staticmethod
+    def load_trivia_state() -> Dict[str, Any]:
+        """Load trivia state from JSON file.
+        
+        Returns:
+            Dict with trivia state (channel_id, used_questions, current_question, answered_by, interval_minutes)
+        """
+        defaults: Dict[str, Any] = {
+            'channel_id': None,
+            'used_questions': [],
+            'current_question': None,
+            'answered_by': None,
+            'interval_minutes': 5,
+            'question_number': 0,
+            'trivia_points': {}
+        }
+        
+        try:
+            if os.path.exists(Config.TRIVIA_STATE_FILE):
+                with open(Config.TRIVIA_STATE_FILE, 'r') as f:
+                    loaded = json.load(f)
+                    # Merge with defaults to ensure new fields exist
+                    defaults.update(loaded)
+        except Exception as e:
+            print(f"Error loading trivia state: {e}")
+        
+        return defaults
+    
+    @staticmethod
+    def save_trivia_state(trivia_state: Dict[str, Any]) -> None:
+        """Save trivia state to JSON file."""
+        try:
+            with open(Config.TRIVIA_STATE_FILE, 'w') as f:
+                json.dump(trivia_state, f, indent=2)
+        except Exception as e:
+            print(f"Error saving trivia state: {e}")
+    
+    @staticmethod
+    def load_trivia_questions() -> List[Dict[str, Any]]:
+        """Load trivia questions from JSON file.
+        
+        Returns:
+            List of question dicts with id, question, answer
+        """
+        questions: List[Dict[str, Any]] = []
+        
+        try:
+            if os.path.exists(Config.TRIVIA_QUESTIONS_FILE):
+                with open(Config.TRIVIA_QUESTIONS_FILE, 'r') as f:
+                    data = json.load(f)
+                    questions = data.get('questions', [])
+        except Exception as e:
+            print(f"Error loading trivia questions: {e}")
+        
+        return questions
+    
+    @staticmethod
+    def get_trivia_points() -> int:
+        """Get points awarded per correct trivia answer.
+        
+        Returns:
+            Points per correct answer (default 10)
+        """
+        try:
+            if os.path.exists(Config.TRIVIA_QUESTIONS_FILE):
+                with open(Config.TRIVIA_QUESTIONS_FILE, 'r') as f:
+                    data = json.load(f)
+                    return data.get('points_per_correct', 10)
+        except Exception:
+            pass
+        return 10
 

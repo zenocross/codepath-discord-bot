@@ -61,18 +61,31 @@ class EventsCog(commands.Cog, name="Events"):
         # Check which prefix was used to determine which help to show
         if ctx.prefix == '!announce ':
             embed = EmbedBuilder.announcement_help_embed()
+            await ctx.send(embed=embed)
         elif ctx.prefix == '!gitlab ':
             embed = EmbedBuilder.gitlab_help_embed()
+            await ctx.send(embed=embed)
         elif ctx.prefix == '!tracker ':
             embed = EmbedBuilder.tracker_help_embed()
+            await ctx.send(embed=embed)
+        elif ctx.prefix == '!game ':
+            embed = EmbedBuilder.game_help_embed()
+            await ctx.send(embed=embed)
+        elif ctx.prefix == '!trivia ':
+            await ctx.send("🎯 **Trivia Commands** (only work in trivia channel):\n"
+                          "`!trivia points` - Check your trivia points\n"
+                          "`!trivia leaderboard` - View trivia-only leaderboard\n\n"
+                          "For trivia admin commands, use `!game help`")
+        elif ctx.prefix == '!app ':
+            # Show only the app-level overview
+            await ctx.send(embed=EmbedBuilder.app_help_embed())
         else:
             # Fallback: DMs default to announce, channels default to gitlab
             if isinstance(ctx.channel, discord.DMChannel):
                 embed = EmbedBuilder.announcement_help_embed()
             else:
                 embed = EmbedBuilder.gitlab_help_embed()
-        
-        await ctx.send(embed=embed)
+            await ctx.send(embed=embed)
 
 
 async def setup(bot: 'GitLabRSSBot') -> None:

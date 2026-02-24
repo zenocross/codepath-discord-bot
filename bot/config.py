@@ -51,6 +51,9 @@ class Config:
     DM_GROUPS_FILE: str = 'dm_groups.json'
     SCHEDULED_MESSAGES_FILE: str = 'scheduled_messages.json'
     ALLOWED_USERS_FILE: str = 'allowed_users.json'
+    GAME_POINTS_FILE: str = 'game_points.json'
+    TRIVIA_QUESTIONS_FILE: str = 'questions.json'
+    TRIVIA_STATE_FILE: str = 'trivia_state.json'
     
     @classmethod
     def validate(cls) -> bool:
