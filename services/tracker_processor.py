@@ -130,11 +130,14 @@ CSV_COLUMN_MAP = {
     "#": "student_id",
     "What's your name?": "name",
     "What's your Member ID?": "member_id",
+    "Member ID": "member_id",
     "What is your Discord username?": "discord_username",
     "Which week is this?": "week",
+    "Week": "week",
     "Which contribution are you reporting on?": "contribution_num",
     "Link to your contribution README": "readme_link",
     "Which submission are you completing?": "_submission_type",
+    "Submission for": "_submission_day",
     "What phase are you currently in?": "current_phase",
     "Direct link to your GitLab issue": "issue_url",
     "Have you completed the \"Why I chose this issue\" section in your README?": "why_chosen_complete",
@@ -151,6 +154,7 @@ CSV_COLUMN_MAP = {
     "Describe what you're blocked on": "blocker_desc",
     "What kind of support would help you most right now?": "support_requested",
     "Submitted At": "submission_date",
+    "Date Submitted": "submission_date",
     "Tags": "_tags",
 }
 
@@ -168,11 +172,13 @@ MASTER_CSV_COLUMNS = {
     "member_id": ["Member ID", "member_id", "MemberID"],
     "discord_username": ["Discord Username", "Discord", "discord_username"],
     "full_name": ["Full Name", "Name", "full_name"],
-    "email": ["Email", "email"],
+    "email": ["Email", "email", "Secondary Email"],
     "slack_username": ["Slack Username", "Slack", "slack_username"],
     "status": ["Status", "status"],
     "university": ["University", "university"],
-    "github": ["Github", "GitHub", "github"],
+    "github": ["GitLab Username", "Github", "GitHub", "github", "gitlab_username"],
+    "cohort": ["Cohort Name", "Cohort", "cohort"],
+    "location": ["Location", "Section", "location"],
 }
 
 
@@ -197,6 +203,101 @@ def _get_value_flexible(row: Dict[str, str], target_col: str) -> Optional[str]:
             return value
     
     return None
+
+
+def _preprocess_master_csv(master_text: str) -> str:
+    """Preprocess master CSV to find actual header row and strip metadata.
+    
+    The master CSV may have metadata rows at the top (dates, week info, etc.)
+    before the actual header row. This function finds the header row
+    (containing "Member ID") and returns the CSV starting from that row.
+    
+    Also handles leading empty columns by stripping them.
+    
+    Args:
+        master_text: Raw CSV text
+        
+    Returns:
+        Cleaned CSV text starting from the header row
+    """
+    lines = master_text.splitlines()
+    header_row_idx = None
+    
+    # Find the row containing "Member ID" (the actual header)
+    for idx, line in enumerate(lines):
+        if "Member ID" in line or "member_id" in line.lower():
+            header_row_idx = idx
+            break
+    
+    if header_row_idx is None:
+        # No header found, return original text
+        return master_text
+    
+    # Get lines from header onwards
+    data_lines = lines[header_row_idx:]
+    
+    # Check if first column is empty (line starts with comma)
+    # and strip it from all rows
+    if data_lines and data_lines[0].startswith(','):
+        cleaned_lines = []
+        for line in data_lines:
+            if line.startswith(','):
+                line = line[1:]  # Remove leading comma
+            cleaned_lines.append(line)
+        data_lines = cleaned_lines
+    
+    return '\n'.join(data_lines)
+
+
+def _preprocess_typeform_csv(typeform_text: str) -> str:
+    """Preprocess typeform CSV to find actual header row and strip metadata.
+    
+    The typeform CSV may have metadata rows at the top before the actual header.
+    This function finds the header row (containing key columns like "Member ID",
+    "Week", "Submitted At") and returns the CSV starting from that row.
+    
+    Args:
+        typeform_text: Raw CSV text
+        
+    Returns:
+        Cleaned CSV text starting from the header row
+    """
+    lines = typeform_text.splitlines()
+    header_row_idx = None
+    
+    # Find the row containing typeform header columns
+    # Look for rows with "Member ID" AND other typeform-specific columns
+    for idx, line in enumerate(lines):
+        line_lower = line.lower()
+        # Check for typeform-specific header indicators
+        has_member_id = "member id" in line_lower or "member_id" in line_lower
+        has_week = "week" in line_lower
+        has_submitted = "submitted" in line_lower or "date" in line_lower
+        
+        # Typeform header should have multiple of these
+        if has_member_id and (has_week or has_submitted):
+            header_row_idx = idx
+            break
+    
+    if header_row_idx is None:
+        # No header found, return original text
+        return typeform_text
+    
+    # Get lines from header onwards
+    data_lines = lines[header_row_idx:]
+    
+    # Check if first column is empty (line starts with comma) and strip it
+    # But be careful - typeform may have legitimate empty first cells
+    # Only strip if the header row itself starts with comma
+    if data_lines and data_lines[0].startswith(','):
+        cleaned_lines = []
+        for line in data_lines:
+            if line.startswith(','):
+                line = line[1:]  # Remove leading comma
+            cleaned_lines.append(line)
+        data_lines = cleaned_lines
+    
+    return '\n'.join(data_lines)
 
 
 # ==================== Style Definitions ====================
@@ -305,6 +406,7 @@ class TrackerDataProcessor(FileProcessor):
         try:
             # Parse typeform CSV
             text_data = data.decode('utf-8-sig')
+            text_data = _preprocess_typeform_csv(text_data)
             
             # Auto-detect delimiter (handles both CSV and TSV)
             sample = text_data[:4096]  # Sample first 4KB for sniffing
@@ -326,7 +428,7 @@ class TrackerDataProcessor(FileProcessor):
                 if raw_rows:
                     headers = list(raw_rows[0].keys())
                     date_col = None
-                    for col in ["Submitted At", "submission_date", "Submit Date", "Submit Date (UTC)"]:
+                    for col in ["Submitted At", "Date Submitted", "submission_date", "Submit Date", "Submit Date (UTC)"]:
                         if col in headers:
                             date_col = col
                             break
@@ -337,7 +439,8 @@ class TrackerDataProcessor(FileProcessor):
                             submission_dt = None
                             if date_str:
                                 for fmt in ["%m/%d/%Y %H:%M:%S", "%m/%d/%Y %H:%M", "%Y-%m-%d %H:%M:%S", 
-                                           "%Y-%m-%dT%H:%M:%S", "%m/%d/%Y", "%Y-%m-%d"]:
+                                           "%Y-%m-%dT%H:%M:%S", "%m/%d/%Y", "%Y-%m-%d",
+                                           "%d-%b-%y", "%d-%b-%Y"]:
                                     try:
                                         submission_dt = datetime.strptime(date_str.strip(), fmt)
                                         break
@@ -481,6 +584,7 @@ class TrackerDataProcessor(FileProcessor):
         try:
             # Parse master CSV to get all enrolled students
             master_text = master_data.decode('utf-8-sig')
+            master_text = _preprocess_master_csv(master_text)
             sample = master_text[:4096]
             try:
                 dialect = csv.Sniffer().sniff(sample, delimiters=',\t;|')
@@ -516,6 +620,7 @@ class TrackerDataProcessor(FileProcessor):
             
             # Parse typeform CSV and filter by date
             typeform_text = typeform_data.decode('utf-8-sig')
+            typeform_text = _preprocess_typeform_csv(typeform_text)
             sample = typeform_text[:4096]
             try:
                 dialect = csv.Sniffer().sniff(sample, delimiters=',\t;|')
@@ -529,7 +634,7 @@ class TrackerDataProcessor(FileProcessor):
             submission_date_col = None
             if typeform_rows:
                 tf_headers = list(typeform_rows[0].keys())
-                for col in ["Submitted At", "submission_date", "Submit Date", "Submit Date (UTC)"]:
+                for col in ["Submitted At", "Date Submitted", "submission_date", "Submit Date", "Submit Date (UTC)"]:
                     if col in tf_headers:
                         submission_date_col = col
                         break
@@ -542,7 +647,8 @@ class TrackerDataProcessor(FileProcessor):
                 submission_dt = None
                 if date_str:
                     for fmt in ["%m/%d/%Y %H:%M:%S", "%m/%d/%Y %H:%M", "%Y-%m-%d %H:%M:%S", 
-                               "%Y-%m-%dT%H:%M:%S", "%m/%d/%Y"]:
+                               "%Y-%m-%dT%H:%M:%S", "%m/%d/%Y", "%Y-%m-%d",
+                               "%d-%b-%y", "%d-%b-%Y"]:
                         try:
                             submission_dt = datetime.strptime(date_str.strip(), fmt)
                             break
@@ -778,6 +884,7 @@ class TrackerDataProcessor(FileProcessor):
             
             # Parse master CSV
             master_text = master_data.decode('utf-8-sig')
+            master_text = _preprocess_master_csv(master_text)
             sample = master_text[:4096]
             try:
                 dialect = csv.Sniffer().sniff(sample, delimiters=',\t;|')
@@ -857,6 +964,7 @@ class TrackerDataProcessor(FileProcessor):
         try:
             # Parse master CSV to get all enrolled member_ids
             master_text = master_data.decode('utf-8-sig')
+            master_text = _preprocess_master_csv(master_text)
             sample = master_text[:4096]
             try:
                 dialect = csv.Sniffer().sniff(sample, delimiters=',\t;|')
@@ -912,6 +1020,7 @@ class TrackerDataProcessor(FileProcessor):
         
         try:
             text_data = master_data.decode('utf-8-sig')
+            text_data = _preprocess_master_csv(text_data)
             sample = text_data[:4096]
             try:
                 dialect = csv.Sniffer().sniff(sample, delimiters=',\t;|')
@@ -1179,6 +1288,7 @@ class TrackerDataProcessor(FileProcessor):
         
         try:
             text_data = master_data.decode('utf-8-sig')
+            text_data = _preprocess_master_csv(text_data)
             
             # Auto-detect delimiter (handles both CSV and TSV)
             sample = text_data[:4096]

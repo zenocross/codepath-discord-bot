@@ -205,6 +205,32 @@ class GameCog(commands.Cog, name="Game"):
         
         return None
     
+    def _preprocess_master_csv(self, master_text: str) -> str:
+        """Preprocess master CSV to find actual header row and strip metadata.
+        
+        The master CSV may have metadata rows at the top before the actual header.
+        This function finds the header row (containing "Member ID") and returns
+        the CSV starting from that row.
+        """
+        lines = master_text.splitlines()
+        header_row_idx = None
+        
+        for idx, line in enumerate(lines):
+            if "Member ID" in line or "member_id" in line.lower():
+                header_row_idx = idx
+                break
+        
+        if header_row_idx is None:
+            return master_text
+        
+        data_lines = lines[header_row_idx:]
+        
+        # Strip leading empty column if present
+        if data_lines and data_lines[0].startswith(','):
+            data_lines = [line[1:] if line.startswith(',') else line for line in data_lines]
+        
+        return '\n'.join(data_lines)
+    
     def _get_master_discord_usernames(self) -> List[str]:
         """Get all Discord usernames from the master roster CSV.
         
@@ -217,6 +243,7 @@ class GameCog(commands.Cog, name="Game"):
         
         try:
             content = master_data.decode("utf-8-sig")
+            content = self._preprocess_master_csv(content)
             reader = csv.DictReader(io.StringIO(content))
             headers = reader.fieldnames or []
             

@@ -1,12 +1,11 @@
 {
   "channel_id": 1475587228460908675,
   "used_questions": [
-    6,
-    3,
-    5,
-    1,
-    8,
     9,
+    10,
+    5,
+    3,
+    7,
     4
   ],
   "current_question": {
@@ -16,10 +15,10 @@
   },
   "answered_by": null,
   "interval_minutes": 2,
-  "question_number": 7,
+  "question_number": 6,
   "trivia_points": {
     "ZenoCross#0205": 20,
     "camino#4979": 20
   },
-  "question_posted_at": "2026-02-24T18:26:06.465124+00:00"
+  "question_posted_at": "2026-02-24T21:30:07.103197+00:00"
 }
