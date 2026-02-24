@@ -57,7 +57,7 @@ class StudentRecord:
     contribution_num: int = 1
     contribution_start_week: int = 1
     weeks_on_contribution: int = 1
-    weeks_remaining: int = 8
+    weeks_remaining: int = 10
     timeline_type: str = "Standard"
     phase_changed_this_week: bool = False
     
@@ -126,19 +126,20 @@ class StudentRecord:
 # ==================== Column Mappings ====================
 
 # Maps CSV column headers to StudentRecord fields
+# Note: "Week" is computed from start_date, not read from typeform
 CSV_COLUMN_MAP = {
     "#": "student_id",
     "What's your name?": "name",
     "What's your Member ID?": "member_id",
     "Member ID": "member_id",
     "What is your Discord username?": "discord_username",
-    "Which week is this?": "week",
-    "Week": "week",
+    "Which week is this?": "_week_input",  # Not used for actual week calculation
     "Which contribution are you reporting on?": "contribution_num",
     "Link to your contribution README": "readme_link",
     "Which submission are you completing?": "_submission_type",
     "Submission for": "_submission_day",
     "What phase are you currently in?": "current_phase",
+    "What phase are you currently in?_2": "current_phase",  # Duplicate column
     "Direct link to your GitLab issue": "issue_url",
     "Have you completed the \"Why I chose this issue\" section in your README?": "why_chosen_complete",
     "Direct link to your GitLab fork": "fork_url",
@@ -256,6 +257,8 @@ def _preprocess_typeform_csv(typeform_text: str) -> str:
     This function finds the header row (containing key columns like "Member ID",
     "Week", "Submitted At") and returns the CSV starting from that row.
     
+    Also handles duplicate column names by making them unique (appending _2, _3, etc.)
+    
     Args:
         typeform_text: Raw CSV text
         
@@ -296,6 +299,44 @@ def _preprocess_typeform_csv(typeform_text: str) -> str:
                 line = line[1:]  # Remove leading comma
             cleaned_lines.append(line)
         data_lines = cleaned_lines
+    
+    # Handle duplicate column names in header row
+    # Parse header carefully (respecting quoted fields)
+    if data_lines:
+        header_line = data_lines[0]
+        # Simple CSV parsing for header (handles basic quoting)
+        import re
+        # Split by comma but respect quoted fields
+        header_parts = []
+        current = ""
+        in_quotes = False
+        for char in header_line:
+            if char == '"':
+                in_quotes = not in_quotes
+                current += char
+            elif char == ',' and not in_quotes:
+                header_parts.append(current)
+                current = ""
+            else:
+                current += char
+        header_parts.append(current)  # Don't forget the last field
+        
+        # Make duplicate column names unique
+        seen_cols = {}
+        unique_parts = []
+        for col in header_parts:
+            col_stripped = col.strip().strip('"')
+            if col_stripped in seen_cols:
+                seen_cols[col_stripped] += 1
+                # Create unique name by appending suffix
+                new_col = f"{col_stripped}_{seen_cols[col_stripped]}"
+                unique_parts.append(new_col)
+            else:
+                seen_cols[col_stripped] = 1
+                unique_parts.append(col_stripped)
+        
+        # Reconstruct header line
+        data_lines[0] = ','.join(unique_parts)
     
     return '\n'.join(data_lines)
 
@@ -491,6 +532,11 @@ class TrackerDataProcessor(FileProcessor):
                 
                 # Transform to StudentRecord objects
                 students = self._transform_records(raw_rows, discord_lookup)
+                
+                # Set week for all students based on computed current_week (from start_date and target_date)
+                current_week = options.get('current_week', 1)
+                for student in students:
+                    student.week = current_week
                 
                 # Calculate derived fields
                 self._calculate_derived_fields(students)
@@ -1399,13 +1445,10 @@ class TrackerDataProcessor(FileProcessor):
                         # Check for AI Generated tag
                         if "AI Generated" in str(value):
                             student.cam_notes = "[AI Generated Response]"
-                    elif field_name == "week":
-                        # Extract week number
-                        try:
-                            week_str = value.replace("Week ", "").strip()
-                            student.week = int(week_str)
-                        except:
-                            student.week = 0
+                    elif field_name == "_week_input":
+                        # Week is computed from start_date, not from typeform input
+                        # This field is ignored
+                        pass
                     elif field_name == "contribution_num":
                         # Extract contribution number
                         try:
@@ -1417,8 +1460,9 @@ class TrackerDataProcessor(FileProcessor):
                         except:
                             student.contribution_num = 1
                     elif field_name == "current_phase":
-                        # Normalize phase names
-                        student.current_phase = self._normalize_phase(value)
+                        # Normalize phase names - only set if not already set (handles duplicate columns)
+                        if not student.current_phase:
+                            student.current_phase = self._normalize_phase(value)
                     elif field_name in ["why_chosen_complete", "reproduction_complete", 
                                        "solution_complete", "implementation_complete",
                                        "testing_complete", "feedback_complete"]:
@@ -1502,8 +1546,8 @@ class TrackerDataProcessor(FileProcessor):
                 student.deliverables_expected = 0
                 student.deliverables_complete = 0
             
-            # Calculate weeks remaining (assuming 8-week program)
-            student.weeks_remaining = max(0, 8 - student.week)
+            # Calculate weeks remaining (assuming 10-week program)
+            student.weeks_remaining = max(0, 10 - student.week)
             
             # Determine timeline type
             if student.weeks_remaining < 3 and phase_num < 3:
