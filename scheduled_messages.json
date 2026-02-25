@@ -6,11 +6,11 @@
       "hours": 2
     },
     "message": "This message will be sent every 2 hours... Please ignore",
-    "next_run": "2026-02-25T08:00:00+00:00",
+    "next_run": "2026-02-25T10:00:00+00:00",
     "active": true,
     "created_by": 432551600100474881,
     "target_type": "dm",
-    "last_sent": "2026-02-25T06:00:00.006147+00:00"
+    "last_sent": "2026-02-25T08:00:00.004033+00:00"
   },
   "c4360965": {
     "group": "failures",

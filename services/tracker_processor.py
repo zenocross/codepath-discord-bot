@@ -9,7 +9,7 @@ import io
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
@@ -110,6 +110,7 @@ class StudentRecord:
     consecutive_misses: int = 0
     last_week_wed_missing: bool = False  # Missing Wednesday from previous week
     last_week_sun_missing: bool = False  # Missing Sunday from previous week
+    member_id_mismatch: bool = False  # Member ID column doesn't match "What's your Member ID?" column
     
     # Office hours
     tue_office_hours: bool = False
@@ -427,6 +428,77 @@ class TrackerDataProcessor(FileProcessor):
     def output_type(self) -> str:
         return "xlsx"
     
+    def _get_week_deadlines(self, start_date: datetime, week_num: int) -> Tuple[datetime, datetime]:
+        """Calculate Wednesday and Sunday deadlines for a given week.
+        
+        Args:
+            start_date: Program start date (assumed to be a Monday)
+            week_num: Week number (1-based)
+            
+        Returns:
+            Tuple of (wednesday_deadline, sunday_deadline) as datetime objects
+        """
+        # Week N starts at: start_date + (N-1) * 7 days
+        week_start = start_date + timedelta(days=(week_num - 1) * 7)
+        
+        # Calculate days to Wednesday (weekday 2) and Sunday (weekday 6)
+        start_weekday = start_date.weekday()  # Monday=0, Sunday=6
+        days_to_wed = (2 - start_weekday) % 7
+        days_to_sun = (6 - start_weekday) % 7
+        if days_to_sun == 0:
+            days_to_sun = 7  # If start is Sunday, next Sunday is 7 days away
+        
+        wed_deadline = week_start + timedelta(days=days_to_wed)
+        sun_deadline = week_start + timedelta(days=days_to_sun)
+        
+        return wed_deadline, sun_deadline
+    
+    def _map_early_submission_week(
+        self, 
+        submission_date: Optional[datetime], 
+        typeform_week: int,
+        is_sunday: bool,
+        start_date: datetime,
+        target_date: datetime,
+        current_week: int
+    ) -> Tuple[int, bool]:
+        """Map an early submission to its effective week and check visibility.
+        
+        Early submissions (before start_date) are mapped to Week 1.
+        Visibility is based on whether the deadline has passed for that submission type.
+        
+        Args:
+            submission_date: When the typeform was actually submitted
+            typeform_week: Week value from typeform input
+            is_sunday: Whether this is a Sunday submission (vs Wednesday)
+            start_date: Program start date
+            target_date: Date the report is being run
+            current_week: Computed current week based on target_date
+            
+        Returns:
+            Tuple of (effective_week, is_visible)
+            - effective_week: The week this submission should be counted for
+            - is_visible: Whether this submission should be included in the report
+        """
+        # Determine effective week
+        effective_week = typeform_week if typeform_week > 0 else current_week
+        
+        if submission_date and submission_date.date() < start_date.date():
+            # Early submission - map to Week 1
+            effective_week = 1
+        
+        # Check visibility based on deadline
+        wed_deadline, sun_deadline = self._get_week_deadlines(start_date, effective_week)
+        
+        if is_sunday:
+            # Sunday submissions visible after Sunday deadline
+            is_visible = target_date.date() >= sun_deadline.date()
+        else:
+            # Wednesday submissions visible after Wednesday deadline
+            is_visible = target_date.date() >= wed_deadline.date()
+        
+        return effective_week, is_visible
+    
     def process(self, data: bytes, options: Optional[Dict[str, Any]] = None) -> ProcessingResult:
         """Process CSV data into multi-tab Excel workbook.
         
@@ -454,12 +526,20 @@ class TrackerDataProcessor(FileProcessor):
             csv_reader = csv.DictReader(io.StringIO(text_data), dialect=dialect)
             raw_rows = list(csv_reader)
             
-            # Filter by date if specified
+            # Filter by date and apply early submission visibility logic
             if options.get('filter_by_date') and options.get('target_date'):
                 target_date = options['target_date']
+                start_date = options.get('start_date')
+                current_week = options.get('current_week', 1)
                 filtered_rows = []
                 
-                # Find submission date column
+                # Log deadline info for current week
+                if start_date:
+                    wed_dl, sun_dl = self._get_week_deadlines(start_date, current_week)
+                    print(f"[TrackerProcessor] Week {current_week} deadlines: Wed {wed_dl.strftime('%m/%d/%Y')}, Sun {sun_dl.strftime('%m/%d/%Y')}")
+                    print(f"[TrackerProcessor] Running report as of: {target_date.strftime('%m/%d/%Y')}")
+                
+                # Find submission date column and submission type column
                 if raw_rows:
                     headers = list(raw_rows[0].keys())
                     date_col = None
@@ -468,7 +548,25 @@ class TrackerDataProcessor(FileProcessor):
                             date_col = col
                             break
                     
+                    # Find submission type column
+                    submission_type_col = None
+                    for col in ["Which submission are you completing?", "Submission for"]:
+                        if col in headers:
+                            submission_type_col = col
+                            break
+                    
+                    # Find week column
+                    week_col = None
+                    for col in ["Which week is this?", "Week"]:
+                        if col in headers:
+                            week_col = col
+                            break
+                    
                     if date_col:
+                        early_mapped = 0
+                        hidden_sun = 0
+                        hidden_wed = 0
+                        
                         for row in raw_rows:
                             date_str = row.get(date_col, "")
                             submission_dt = None
@@ -482,12 +580,52 @@ class TrackerDataProcessor(FileProcessor):
                                     except ValueError:
                                         continue
                             
-                            # Include if submission is on or before target date
-                            if submission_dt is None or submission_dt.date() <= target_date.date():
+                            # Determine if this is a Sunday submission
+                            is_sunday = False
+                            if submission_type_col:
+                                sub_type = str(row.get(submission_type_col, "")).lower()
+                                is_sunday = "sunday" in sub_type or sub_type == "sun"
+                            
+                            # Get typeform week
+                            typeform_week = 0
+                            if week_col:
+                                try:
+                                    week_str = str(row.get(week_col, "")).replace("Week ", "").strip()
+                                    typeform_week = int(week_str)
+                                except:
+                                    pass
+                            
+                            # Apply early submission mapping and visibility check
+                            if start_date and submission_dt:
+                                effective_week, is_visible = self._map_early_submission_week(
+                                    submission_dt, typeform_week, is_sunday,
+                                    start_date, target_date, current_week
+                                )
+                                
+                                # Track early submissions mapped to Week 1
+                                if submission_dt.date() < start_date.date():
+                                    early_mapped += 1
+                                
+                                if is_visible:
+                                    # Store effective week for later use
+                                    row['_effective_week'] = effective_week
+                                    filtered_rows.append(row)
+                                else:
+                                    # Track why it was hidden
+                                    if is_sunday:
+                                        hidden_sun += 1
+                                    else:
+                                        hidden_wed += 1
+                            elif submission_dt is None or submission_dt.date() <= target_date.date():
+                                # Fallback: include if on or before target date
                                 filtered_rows.append(row)
                         
                         raw_rows = filtered_rows
-                        print(f"[TrackerProcessor] Filtered to {len(raw_rows)} rows (on or before {target_date.strftime('%m/%d/%Y')})")
+                        print(f"[TrackerProcessor] Filtered to {len(raw_rows)} rows (visible as of {target_date.strftime('%m/%d/%Y')})")
+                        if early_mapped > 0:
+                            print(f"[TrackerProcessor] {early_mapped} early submissions mapped to Week 1")
+                        if hidden_sun > 0 or hidden_wed > 0:
+                            print(f"[TrackerProcessor] Hidden (deadline not passed): {hidden_wed} Wed, {hidden_sun} Sun")
             
             # Build discord username lookup from master CSV (primary source)
             discord_lookup: Dict[str, str] = {}
@@ -527,13 +665,17 @@ class TrackerDataProcessor(FileProcessor):
                 # Transform to StudentRecord objects
                 students = self._transform_records(raw_rows, discord_lookup)
                 
-                # Reconcile week: use computed current_week unless typeform week differs
-                # This handles early submissions where user indicates a specific week
+                # Apply effective week from early submission mapping
+                # The _effective_week was calculated during filtering based on:
+                # - Early submissions (before start_date) → mapped to Week 1
+                # - Visibility filtering based on Wed/Sun deadlines
                 current_week = options.get('current_week', 1)
-                for student in students:
-                    typeform_week = student.week  # Week from typeform input
-                    if typeform_week and typeform_week != current_week:
-                        # User indicated a different week (e.g., early submission)
+                for i, student in enumerate(students):
+                    if i < len(raw_rows) and '_effective_week' in raw_rows[i]:
+                        # Use the pre-calculated effective week from visibility filtering
+                        student.week = raw_rows[i]['_effective_week']
+                    elif student.week and student.week != current_week:
+                        # User indicated a different week in typeform
                         # Keep their indicated week
                         pass
                     else:
@@ -544,7 +686,11 @@ class TrackerDataProcessor(FileProcessor):
                 self._calculate_derived_fields(students)
                 
                 # Determine grade status and interventions
-                self._calculate_grade_status(students)
+                # Pass start_date and target_date so we can check per-student deadlines
+                start_date = options.get('start_date')
+                target_date = options.get('target_date')
+                
+                self._calculate_grade_status(students, start_date=start_date, target_date=target_date)
                 
                 # Mark typeform-only students (not in master CSV) as MISSING_ADMISSION_INFO
                 if master_data:
@@ -687,7 +833,16 @@ class TrackerDataProcessor(FileProcessor):
                         submission_date_col = col
                         break
             
-            # Process typeform submissions
+            # Find submission type column
+            submission_type_col = None
+            if typeform_rows:
+                tf_headers = list(typeform_rows[0].keys())
+                for col in ["Which submission are you completing?", "Submission for"]:
+                    if col in tf_headers:
+                        submission_type_col = col
+                        break
+            
+            # Process typeform submissions with early submission mapping
             submitted_member_ids = set()
             for row in typeform_rows:
                 # Parse submission date
@@ -703,61 +858,66 @@ class TrackerDataProcessor(FileProcessor):
                         except ValueError:
                             continue
                 
-                # Filter by target date
-                if submission_dt and submission_dt > target_date:
-                    continue
-                
-                # Get member ID
+                # Get member ID (prefer "Member ID" column over "What's your Member ID?")
                 member_id = None
-                for col in ["What's your Member ID?", "Member ID", "member_id"]:
+                for col in ["Member ID", "member_id", "What's your Member ID?"]:
                     if col in row:
                         member_id = str(row[col]).strip()
                         break
                 
-                if member_id and member_id in enrolled_students:
-                    submitted_member_ids.add(member_id)
-                    
-                    # Get week number from submission
-                    week_str = row.get("Which week is this?", "")
-                    week_num = 0
-                    if week_str:
-                        try:
-                            week_num = int(week_str.replace("Week ", "").strip())
-                        except:
-                            pass
-                    
-                    # Track submission info
-                    enrolled_students[member_id]['submissions'].append({
-                        'week': week_num,
-                        'date': submission_dt,
-                        'phase': row.get("What phase are you currently in?", ""),
-                        'wed': "Wednesday" in row.get("Which submission are you completing?", ""),
-                        'sun': "Sunday" in row.get("Which submission are you completing?", "")
-                    })
+                if not member_id or member_id not in enrolled_students:
+                    continue
+                
+                # Determine submission type (Wed/Sun)
+                is_sunday = False
+                if submission_type_col:
+                    sub_type = str(row.get(submission_type_col, "")).lower()
+                    is_sunday = "sunday" in sub_type or sub_type == "sun"
+                
+                # Get week number from submission
+                week_str = row.get("Which week is this?", "") or row.get("Week", "")
+                typeform_week = 0
+                if week_str:
+                    try:
+                        typeform_week = int(str(week_str).replace("Week ", "").strip())
+                    except:
+                        pass
+                
+                # Apply early submission mapping and visibility check
+                effective_week, is_visible = self._map_early_submission_week(
+                    submission_dt, typeform_week, is_sunday,
+                    start_date, target_date, current_week
+                )
+                
+                if not is_visible:
+                    continue
+                
+                submitted_member_ids.add(member_id)
+                
+                # Check for Member ID mismatch
+                member_id_col_value = row.get("Member ID", "")
+                whats_member_id_value = row.get("What's your Member ID?", "")
+                if member_id_col_value and whats_member_id_value:
+                    if str(member_id_col_value).strip() != str(whats_member_id_value).strip():
+                        enrolled_students[member_id]['member_id_mismatch'] = True
+                
+                # Track submission info with effective week
+                enrolled_students[member_id]['submissions'].append({
+                    'week': effective_week,
+                    'date': submission_dt,
+                    'phase': row.get("What phase are you currently in?", ""),
+                    'wed': not is_sunday,
+                    'sun': is_sunday
+                })
             
-            # Calculate deadline dates for current week
-            # Week N starts at: start_date + (N-1) * 7 days
-            week_start = start_date + timedelta(days=(current_week - 1) * 7)
-            
-            # Wednesday deadline: 3 days after week start (if start is Monday)
-            # Sunday deadline: 6 days after week start
-            # Adjust based on what day start_date is
-            start_weekday = start_date.weekday()  # Monday=0, Sunday=6
-            
-            # Calculate days until Wednesday (weekday 2) and Sunday (weekday 6) from week start
-            days_to_wed = (2 - start_weekday) % 7
-            days_to_sun = (6 - start_weekday) % 7
-            if days_to_sun == 0:
-                days_to_sun = 7  # If start is Sunday, next Sunday is 7 days away
-            
-            wed_deadline = week_start + timedelta(days=days_to_wed)
-            sun_deadline = week_start + timedelta(days=days_to_sun)
-            
-            # Check if deadlines have passed
-            wed_deadline_passed = target_date >= wed_deadline
-            sun_deadline_passed = target_date >= sun_deadline
+            # Calculate deadline dates for display (current week)
+            wed_deadline, sun_deadline = self._get_week_deadlines(start_date, current_week)
+            wed_deadline_passed = target_date.date() >= wed_deadline.date()
+            sun_deadline_passed = target_date.date() >= sun_deadline.date()
             
             # Categorize students
+            # Sunday is the official weekly submission (required)
+            # Wednesday is a mid-week check-in (optional)
             at_risk = []
             flagged = []
             on_track = []
@@ -765,41 +925,44 @@ class TrackerDataProcessor(FileProcessor):
             
             for member_id, student in enrolled_students.items():
                 subs = student['submissions']
-                
-                # Check for current week submissions
-                current_week_subs = [s for s in subs if s['week'] == current_week]
-                has_wed = any(s['wed'] for s in current_week_subs)
-                has_sun = any(s['sun'] for s in current_week_subs)
-                
                 issues = []
                 
                 if not subs:
-                    # No submissions at all - only flag as at risk if at least one deadline passed
-                    if wed_deadline_passed or sun_deadline_passed:
+                    # No submissions at all - AT RISK if any deadline has passed
+                    week1_wed, week1_sun = self._get_week_deadlines(start_date, 1)
+                    if target_date.date() >= week1_wed.date():
+                        # Wednesday or Sunday deadline passed - AT RISK
                         issues.append("No submissions")
                         at_risk.append({**student, 'issues': issues, 'status': 'AT RISK'})
                     else:
-                        # No deadlines passed yet, they're still on track
-                        on_track.append({**student, 'issues': [], 'status': 'ON TRACK'})
-                elif not current_week_subs:
-                    # No submissions for current week - check what deadlines have passed
-                    if wed_deadline_passed and sun_deadline_passed:
-                        issues.append(f"Missing Week {current_week} submissions")
-                        flagged.append({**student, 'issues': issues, 'status': 'FLAGGED'})
-                    elif wed_deadline_passed and not has_wed:
-                        issues.append(f"Missing Wednesday submission (Week {current_week})")
-                        flagged.append({**student, 'issues': issues, 'status': 'FLAGGED'})
-                    else:
                         # No deadlines passed yet
                         on_track.append({**student, 'issues': [], 'status': 'ON TRACK'})
-                elif not has_wed and wed_deadline_passed:
-                    issues.append(f"Missing Wednesday submission (Week {current_week})")
-                    if not has_sun and sun_deadline_passed:
-                        issues.append(f"Missing Sunday submission (Week {current_week})")
-                    flagged.append({**student, 'issues': issues, 'status': 'FLAGGED'})
-                elif not has_sun and sun_deadline_passed:
-                    issues.append(f"Missing Sunday submission (Week {current_week})")
-                    flagged.append({**student, 'issues': issues, 'status': 'FLAGGED'})
+                    continue
+                
+                # Find the weeks this student has submissions for
+                weeks_with_subs = set(s['week'] for s in subs if s['week'] > 0)
+                
+                # Check each week's Sunday submissions (Wednesday is optional if they have any submission)
+                missing_sunday = False
+                
+                for week in weeks_with_subs:
+                    week_wed_dl, week_sun_dl = self._get_week_deadlines(start_date, week)
+                    week_subs = [s for s in subs if s['week'] == week]
+                    has_sun = any(s['sun'] for s in week_subs)
+                    
+                    # Check if Sunday deadline passed but no Sunday submission
+                    # Only flag missing Sunday - Wednesday is optional if they have any submission
+                    if target_date.date() >= week_sun_dl.date() and not has_sun:
+                        issues.append(f"Missing Sunday submission (Week {week})")
+                        missing_sunday = True
+                
+                # Check for member ID mismatch
+                if student.get('member_id_mismatch', False):
+                    issues.append("Member ID mismatch")
+                
+                # Categorize based on issues
+                if missing_sunday or student.get('member_id_mismatch', False):
+                    at_risk.append({**student, 'issues': issues, 'status': 'AT RISK'})
                 else:
                     on_track.append({**student, 'issues': [], 'status': 'ON TRACK'})
             
@@ -838,10 +1001,20 @@ class TrackerDataProcessor(FileProcessor):
             )
             
             # List at-risk students (max 10)
+            # Sort to show more important issues first, "No submissions" last
             if at_risk:
+                def at_risk_sort_key(s):
+                    issues_str = ', '.join(s['issues'])
+                    # "No submissions" goes last (high number)
+                    if "No submissions" in issues_str:
+                        return 2
+                    # Other issues go first (low number)
+                    return 1
+                
+                sorted_at_risk = sorted(at_risk, key=at_risk_sort_key)
                 at_risk_list = "\n".join([
                     f"• {s['name']} ({s['member_id']}): {', '.join(s['issues'])}"
-                    for s in at_risk[:10]
+                    for s in sorted_at_risk[:10]
                 ])
                 if len(at_risk) > 10:
                     at_risk_list += f"\n... and {len(at_risk) - 10} more"
@@ -1490,6 +1663,14 @@ class TrackerDataProcessor(FileProcessor):
                     elif hasattr(student, field_name):
                         setattr(student, field_name, value)
             
+            # Check for Member ID mismatch between columns
+            member_id_col_value = _get_value_flexible(row, "Member ID")
+            whats_member_id_value = _get_value_flexible(row, "What's your Member ID?")
+            if member_id_col_value and whats_member_id_value:
+                member_id_clean = str(member_id_col_value).strip()
+                whats_clean = str(whats_member_id_value).strip()
+                if member_id_clean and whats_clean and member_id_clean != whats_clean:
+                    student.member_id_mismatch = True
             
             # Lookup discord username from the lookup table if not already set
             if not student.discord_username and student.member_id:
@@ -1843,8 +2024,27 @@ class TrackerDataProcessor(FileProcessor):
             return 4
         return 0
     
-    def _calculate_grade_status(self, students: List[StudentRecord]) -> None:
-        """Calculate grade status and intervention type for each student."""
+    def _calculate_grade_status(self, students: List[StudentRecord], 
+                                start_date: Optional[datetime] = None,
+                                target_date: Optional[datetime] = None) -> None:
+        """Calculate grade status and intervention type for each student.
+        
+        Args:
+            students: List of student records to evaluate
+            start_date: Program start date (for calculating per-week deadlines)
+            target_date: Date the report is being run (for checking if deadlines passed)
+        """
+        # First pass: Build lookup of which students have Sunday submissions for each week
+        # Key: (member_id, week) -> has_sunday
+        student_week_has_sunday: Dict[Tuple[str, int], bool] = {}
+        for s in students:
+            key = (s.member_id or s.name, s.week)
+            if s.sun_submitted:
+                student_week_has_sunday[key] = True
+            elif key not in student_week_has_sunday:
+                student_week_has_sunday[key] = False
+        
+        # Second pass: Evaluate each student record
         for student in students:
             phase_num = self._get_phase_number(student.current_phase)
             
@@ -1855,14 +2055,30 @@ class TrackerDataProcessor(FileProcessor):
                 student.intervention_type = ""
                 continue
             
+            # Check if THIS student's week's Sunday deadline has passed
+            sun_deadline_passed = False
+            if start_date and target_date and student.week > 0:
+                _, sun_deadline = self._get_week_deadlines(start_date, student.week)
+                sun_deadline_passed = target_date.date() >= sun_deadline.date()
+            
             # Check for AT RISK conditions
             at_risk = False
             intervention = ""
             
-            # Missing both submissions
-            if not student.wed_submitted and not student.sun_submitted:
+            # Check if this student has a Sunday submission for this week (across all rows)
+            student_key = (student.member_id or student.name, student.week)
+            student_has_sunday_for_week = student_week_has_sunday.get(student_key, False)
+            
+            # Missing both submissions (and no Sunday in another row for this week)
+            if not student.wed_submitted and not student.sun_submitted and not student_has_sunday_for_week:
                 at_risk = True
                 intervention = "MISSING_BOTH"
+            
+            # Has Wednesday but missing Sunday after Sunday deadline passed
+            # Only flag if the student doesn't have a Sunday submission in another row
+            elif student.wed_submitted and not student.sun_submitted and sun_deadline_passed and not student_has_sunday_for_week:
+                at_risk = True
+                intervention = "MISSING_SUNDAY"
             
             # Phase critical (stuck in early phase late in program)
             elif student.week >= 6 and phase_num <= 2:
@@ -1879,18 +2095,11 @@ class TrackerDataProcessor(FileProcessor):
                 at_risk = True
                 intervention = "STALLED"
             
-            # Missed previous submission(s) - At Risk level
-            elif student.consecutive_misses > 0:
+            # Missed previous Sunday submission(s) - At Risk level
+            # Wednesday is optional, only Sunday counts for consecutive misses
+            elif student.consecutive_misses > 0 and student.last_week_sun_missing:
                 at_risk = True
-                # Determine specific intervention type based on what's missing
-                if student.last_week_wed_missing and student.last_week_sun_missing:
-                    intervention = "MISSING_BOTH"
-                elif student.last_week_wed_missing:
-                    intervention = "MISSING_WEDNESDAY"
-                elif student.last_week_sun_missing:
-                    intervention = "MISSING_SUNDAY"
-                else:
-                    intervention = "MISSING_PREVIOUS_SUBMISSION"  # Fallback
+                intervention = "MISSING_SUNDAY"
             
             # Check for FLAGGED conditions
             flagged = False
@@ -1898,9 +2107,7 @@ class TrackerDataProcessor(FileProcessor):
             if not at_risk:
                 # Check for missing immediate previous phase submission
                 # Only flag if the phase directly before current has no submission record
-                missing_previous = getattr(student, '_missing_previous_phase', False)
-                
-                if missing_previous:
+                if getattr(student, '_missing_previous_phase', False):
                     flagged = True
                     intervention = "MISSING_PREVIOUS_PHASE"
                 
@@ -1919,8 +2126,9 @@ class TrackerDataProcessor(FileProcessor):
                     flagged = True
                     intervention = "INCORRECT_PHASE_URL"
                 
-                # Missing deliverables for current phase
-                elif student.deliverables_complete < student.deliverables_expected:
+                # Missing deliverables for current phase (only check Sunday submissions)
+                # Wednesday check-ins don't require complete deliverables
+                elif student.sun_submitted and student.deliverables_complete < student.deliverables_expected:
                     flagged = True
                     missing_items = self._get_missing_deliverables(student, phase_num)
                     if missing_items:
@@ -1938,6 +2146,16 @@ class TrackerDataProcessor(FileProcessor):
                 elif student.timeline_type == "Compressed":
                     flagged = True
                     intervention = "TIMELINE_COMPRESSED"
+            
+            # Always append MEMBER_ID_MISMATCH if detected (data quality issue)
+            if student.member_id_mismatch:
+                if intervention:
+                    intervention += "\nMEMBER_ID_MISMATCH"
+                else:
+                    intervention = "MEMBER_ID_MISMATCH"
+                # Ensure at least flagged if only mismatch issue
+                if not at_risk and not flagged:
+                    flagged = True
             
             # Set status
             if at_risk:
@@ -2201,7 +2419,8 @@ class TrackerDataProcessor(FileProcessor):
             if s.consecutive_misses > 0:
                 student_map[key]['issues'].add(f"Week {s.week}: {s.consecutive_misses} consecutive miss(es)")
             
-            if s.deliverables_complete < s.deliverables_expected and s.week > 0:
+            # Only flag missing deliverables for Sunday submissions
+            if s.sun_submitted and s.deliverables_complete < s.deliverables_expected and s.week > 0:
                 student_map[key]['issues'].add(f"Week {s.week}: Missing deliverables ({s.deliverables_complete}/{s.deliverables_expected})")
             
             if s.blocked:
@@ -2216,18 +2435,16 @@ class TrackerDataProcessor(FileProcessor):
             if getattr(s, '_missing_previous_phase', False):
                 student_map[key]['issues'].add(f"Week {s.week}: Missing previous phase")
         
-        # Second pass: Add missing submission issues based on aggregated week data
+        # Second pass: Add missing Sunday submission issues based on aggregated week data
+        # Wednesday is optional (mid-week check-in), only Sunday is required
         if status_filter != "🟢 ON TRACK":
             for key, data in student_map.items():
                 week_subs = data.get('week_submissions', {})
                 for week, subs in week_subs.items():
                     if week == 0:
                         continue  # Skip week 0 (no submissions students)
-                    if not subs['wed'] and not subs['sun']:
-                        data['issues'].add(f"Week {week}: Missing both submissions")
-                    elif not subs['wed']:
-                        data['issues'].add(f"Week {week}: Missing Wednesday submission")
-                    elif not subs['sun']:
+                    # Only flag missing Sunday - Wednesday is optional
+                    if not subs['sun']:
                         data['issues'].add(f"Week {week}: Missing Sunday submission")
         
         # Convert to list and build descriptions
