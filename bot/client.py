@@ -204,6 +204,7 @@ class GitLabRSSBot(commands.Bot):
         await self.load_extension('modules.announcements')
         await self.load_extension('modules.tracker')
         await self.load_extension('modules.game')
+        await self.load_extension('modules.app')
         await self.load_extension('bot.events')
         
         # Start background tasks

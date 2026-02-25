@@ -391,14 +391,6 @@ class EmbedBuilder:
         )
         
         embed.add_field(
-            name="👥 User Management (Owner only)",
-            value="`!announce users` - List allowed users\n"
-                  "`!announce users add <id>` - Add user\n"
-                  "`!announce users remove <id>` - Remove user",
-            inline=False
-        )
-        
-        embed.add_field(
             name="📁 Channel Groups",
             value="`!announce groups` - List all channel groups\n"
                   "`!announce group create <name>` - Create group\n"
@@ -694,7 +686,15 @@ class EmbedBuilder:
             inline=False
         )
         
-        embed.set_footer(text="Use !app help to see all modules at once")
+        embed.add_field(
+            name="👥 !app users (Owner only, DM)",
+            value="`!app users` - List allowed users\n"
+                  "`!app users add <id>` - Add user\n"
+                  "`!app users remove <id>` - Remove user",
+            inline=False
+        )
+        
+        embed.set_footer(text="Use !app help to see this overview")
         
         return embed
 

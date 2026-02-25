@@ -25,65 +25,6 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
         """Check if user is allowed to use announce commands."""
         return self.bot.is_user_allowed(ctx.author.id)
     
-    # ==================== User Management ====================
-    
-    @commands.command(name='users')
-    async def manage_users(self, ctx: commands.Context, action: str = None, user_id: str = None) -> None:
-        """Manage allowed users (owner only).
-        
-        Usage:
-        !announce users - List allowed users
-        !announce users add <user_id> - Add a user
-        !announce users remove <user_id> - Remove a user
-        """
-        if not isinstance(ctx.channel, discord.DMChannel):
-            await ctx.send("⚠️ This command only works in DMs for security.")
-            return
-        
-        # Only bot owner can manage users
-        if ctx.author.id != Config.BOT_OWNER_ID:
-            await ctx.send("❌ Only the bot owner can manage allowed users.")
-            return
-        
-        if action is None:
-            # List users
-            if not self.bot.allowed_users:
-                await ctx.send("📋 **Allowed Users:** None configured")
-                return
-            
-            user_list = []
-            for uid in self.bot.allowed_users:
-                try:
-                    user = await self.bot.fetch_user(uid)
-                    user_list.append(f"• {user.name} (`{uid}`)")
-                except:
-                    user_list.append(f"• Unknown (`{uid}`)")
-            
-            await ctx.send(f"📋 **Allowed Users:**\n" + "\n".join(user_list))
-        
-        elif action == 'add' and user_id:
-            try:
-                uid = int(user_id)
-                self.bot.allowed_users.add(uid)
-                self.bot.save_allowed_users()
-                await ctx.send(f"✅ Added user `{uid}` to allowed users.")
-            except ValueError:
-                await ctx.send("❌ Invalid user ID. Must be a number.")
-        
-        elif action == 'remove' and user_id:
-            try:
-                uid = int(user_id)
-                if uid == Config.BOT_OWNER_ID:
-                    await ctx.send("❌ Cannot remove the bot owner.")
-                    return
-                self.bot.allowed_users.discard(uid)
-                self.bot.save_allowed_users()
-                await ctx.send(f"✅ Removed user `{uid}` from allowed users.")
-            except ValueError:
-                await ctx.send("❌ Invalid user ID. Must be a number.")
-        else:
-            await ctx.send("Usage: `!announce users [add|remove] [user_id]`")
-    
     # ==================== Channel Group Management ====================
     
     @commands.command(name='group')
