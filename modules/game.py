@@ -27,6 +27,9 @@ class GameCog(commands.Cog, name="Game"):
         self.trivia_points = PersistenceService.get_trivia_points()
         self.current_timeout_task = None
         
+        # Lock to prevent race conditions in timeout handling
+        self._timeout_lock = asyncio.Lock()
+        
         # Resume trivia if channel is configured
         if self.bot.trivia_state.get('channel_id'):
             current_q = self.bot.trivia_state.get('current_question')
@@ -35,6 +38,9 @@ class GameCog(commands.Cog, name="Game"):
                 interval = self.bot.trivia_state.get('interval_minutes', 5)
                 if interval > 0:
                     seconds_until = self._get_seconds_until_next_boundary(interval)
+                    # Cancel any existing task before creating new one
+                    if self.current_timeout_task and not self.current_timeout_task.done():
+                        self.current_timeout_task.cancel()
                     self.current_timeout_task = self.bot.loop.create_task(
                         self._check_question_timeout_seconds(current_q['id'], seconds_until)
                     )
@@ -772,6 +778,9 @@ class GameCog(commands.Cog, name="Game"):
         # Start timeout aligned to clock boundaries
         interval = self.bot.trivia_state.get('interval_minutes', 5)
         if interval > 0:
+            # Cancel any existing timeout task before creating new one
+            if self.current_timeout_task and not self.current_timeout_task.done():
+                self.current_timeout_task.cancel()
             seconds_until_timeout = self._get_seconds_until_next_boundary(interval)
             self.current_timeout_task = self.bot.loop.create_task(
                 self._check_question_timeout_seconds(question['id'], seconds_until_timeout)
@@ -818,17 +827,19 @@ class GameCog(commands.Cog, name="Game"):
         """Check if question timed out (seconds version for precise timing)."""
         await asyncio.sleep(timeout_seconds)
         
-        current_q = self.bot.trivia_state.get('current_question')
-        if not current_q or current_q['id'] != question_id:
-            return
-        
-        if self.bot.trivia_state.get('answered_by'):
-            return
-        
-        try:
-            await self._timeout_current_question()
-        except Exception as e:
-            print(f"[Trivia] Error during timeout: {e}")
+        # Use lock to prevent race condition with duplicate timeout tasks
+        async with self._timeout_lock:
+            current_q = self.bot.trivia_state.get('current_question')
+            if not current_q or current_q['id'] != question_id:
+                return
+            
+            if self.bot.trivia_state.get('answered_by'):
+                return
+            
+            try:
+                await self._timeout_current_question()
+            except Exception as e:
+                print(f"[Trivia] Error during timeout: {e}")
     
     async def _timeout_current_question(self):
         """Immediately timeout the current question."""
@@ -976,73 +987,84 @@ class GameCog(commands.Cog, name="Game"):
                 )
                 return
         
-        current_q = self.bot.trivia_state.get('current_question')
-        if not current_q:
-            return
-        
-        if self.bot.trivia_state.get('answered_by'):
-            return
-        
-        user_answer = content.lower()
-        correct_answer = current_q['answer'].strip().lower()
-        
-        if user_answer == correct_answer:
-            self._sync_points_with_master()
+        # Use lock to prevent race condition with timeout
+        async with self._timeout_lock:
+            current_q = self.bot.trivia_state.get('current_question')
+            if not current_q:
+                return
             
-            author_name = message.author.name
-            matching_user = self._find_matching_user(author_name)
+            if self.bot.trivia_state.get('answered_by'):
+                return
             
-            # Also try display_name (nickname) if no match
-            if not matching_user and hasattr(message.author, 'display_name'):
-                matching_user = self._find_matching_user(message.author.display_name)
+            user_answer = content.lower()
+            correct_answer = current_q['answer'].strip().lower()
             
-            # Try normalized matching against all roster entries
-            if not matching_user:
-                author_norm = self._normalize_name(author_name)
-                display_norm = self._normalize_name(message.author.display_name) if hasattr(message.author, 'display_name') else ""
-                for roster_name in self.bot.game_points.keys():
-                    roster_norm = self._normalize_name(roster_name)
-                    if roster_norm == author_norm or roster_norm == display_norm:
-                        matching_user = roster_name
-                        break
+            if user_answer != correct_answer:
+                return
             
+            # Mark as answered immediately to prevent race with timeout
             self.bot.trivia_state['answered_by'] = message.author.id
             self.bot.trivia_state['current_question'] = None
             self.bot.save_trivia_state()
             
-            trivia_pts = PersistenceService.get_trivia_points()
+            # Cancel any pending timeout task
+            if self.current_timeout_task and not self.current_timeout_task.done():
+                self.current_timeout_task.cancel()
+        
+        # Rest of processing can happen outside the lock
+        self._sync_points_with_master()
+        
+        author_name = message.author.name
+        matching_user = self._find_matching_user(author_name)
+        
+        # Also try display_name (nickname) if no match
+        if not matching_user and hasattr(message.author, 'display_name'):
+            matching_user = self._find_matching_user(message.author.display_name)
+        
+        # Try normalized matching against all roster entries
+        if not matching_user:
+            author_norm = self._normalize_name(author_name)
+            display_norm = self._normalize_name(message.author.display_name) if hasattr(message.author, 'display_name') else ""
+            for roster_name in self.bot.game_points.keys():
+                roster_norm = self._normalize_name(roster_name)
+                if roster_norm == author_norm or roster_norm == display_norm:
+                    matching_user = roster_name
+                    break
+        
+        trivia_pts = PersistenceService.get_trivia_points()
+        
+        if matching_user:
+            # Track trivia-specific points first (for display)
+            if 'trivia_points' not in self.bot.trivia_state:
+                self.bot.trivia_state['trivia_points'] = {}
+            old_trivia_pts = self.bot.trivia_state['trivia_points'].get(matching_user, 0)
+            new_trivia_pts = old_trivia_pts + trivia_pts
+            self.bot.trivia_state['trivia_points'][matching_user] = new_trivia_pts
+            self.bot.save_trivia_state()
             
-            if matching_user:
-                # Track trivia-specific points first (for display)
-                if 'trivia_points' not in self.bot.trivia_state:
-                    self.bot.trivia_state['trivia_points'] = {}
-                old_trivia_pts = self.bot.trivia_state['trivia_points'].get(matching_user, 0)
-                new_trivia_pts = old_trivia_pts + trivia_pts
-                self.bot.trivia_state['trivia_points'][matching_user] = new_trivia_pts
-                self.bot.save_trivia_state()
-                
-                # Also add to overall game points
-                old_game_pts = self.bot.game_points[matching_user]
-                self.bot.game_points[matching_user] = old_game_pts + trivia_pts
-                self.bot.save_game_points()
-                
-                await message.channel.send(
-                    f"🎉 **Correct!** {message.author.mention} got it!\n"
-                    f"✅ Answer: `{current_q['answer']}`\n"
-                    f"🏆 +{trivia_pts} trivia points ({old_trivia_pts} → {new_trivia_pts})"
-                )
-            else:
-                await message.channel.send(
-                    f"🎉 **Correct!** {message.author.mention} got it!\n"
-                    f"✅ Answer: `{current_q['answer']}`\n"
-                    f"⚠️ But your Discord username isn't in the roster, no points awarded."
-                )
+            # Also add to overall game points
+            old_game_pts = self.bot.game_points[matching_user]
+            self.bot.game_points[matching_user] = old_game_pts + trivia_pts
+            self.bot.save_game_points()
             
-            # Post the next question after a short delay
-            await asyncio.sleep(5)
-            await self._post_trivia_question()
+            await message.channel.send(
+                f"🎉 **Correct!** {message.author.mention} got it!\n"
+                f"✅ Answer: `{current_q['answer']}`\n"
+                f"🏆 +{trivia_pts} trivia points ({old_trivia_pts} → {new_trivia_pts})"
+            )
+        else:
+            await message.channel.send(
+                f"🎉 **Correct!** {message.author.mention} got it!\n"
+                f"✅ Answer: `{current_q['answer']}`\n"
+                f"⚠️ But your Discord username isn't in the roster, no points awarded."
+            )
+        
+        # Post the next question after a short delay
+        await asyncio.sleep(5)
+        await self._post_trivia_question()
 
 
 async def setup(bot: 'GitLabRSSBot') -> None:
     """Setup function for loading the cog."""
     await bot.add_cog(GameCog(bot))
+

@@ -476,3 +476,4 @@ class GitLabService:
             mr_links_found=len(links["merge_requests"]),
             commits_not_owned=commits_not_owned
         )
+

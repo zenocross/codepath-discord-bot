@@ -1,27 +1,28 @@
 {
   "channel_id": 1475587228460908675,
   "used_questions": [
-    8,
     5,
-    9,
     6,
-    4,
+    2,
+    9,
     1,
-    10,
+    4,
+    3,
     7,
-    3
+    8,
+    10
   ],
   "current_question": {
-    "id": 3,
-    "question": "What file do you create in a repository to tell Git which files to ignore?",
-    "answer": ".gitignore"
+    "id": 10,
+    "question": "What Git command links your local repository to a remote repository link <url>?",
+    "answer": "git remote add origin <url>"
   },
   "answered_by": null,
   "interval_minutes": 2,
-  "question_number": 9,
+  "question_number": 10,
   "trivia_points": {
     "ZenoCross#0205": 20,
     "camino#4979": 20
   },
-  "question_posted_at": "2026-02-25T08:40:06.208405+00:00"
+  "question_posted_at": "2026-02-25T16:02:05.672894+00:00"
 }
