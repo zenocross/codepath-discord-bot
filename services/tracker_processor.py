@@ -133,7 +133,7 @@ CSV_COLUMN_MAP = {
     "What's your Member ID?": "member_id",
     "Member ID": "member_id",
     "What is your Discord username?": "discord_username",
-    "Which week is this?": "_week_input",  # Not used for actual week calculation
+    "Which week is this?": "week",
     "Which contribution are you reporting on?": "contribution_num",
     "Link to your contribution README": "readme_link",
     "Which submission are you completing?": "_submission_type",
@@ -301,31 +301,20 @@ def _preprocess_typeform_csv(typeform_text: str) -> str:
         data_lines = cleaned_lines
     
     # Handle duplicate column names in header row
-    # Parse header carefully (respecting quoted fields)
+    # Use csv module to properly parse header (handles escaped quotes like "")
     if data_lines:
         header_line = data_lines[0]
-        # Simple CSV parsing for header (handles basic quoting)
-        import re
-        # Split by comma but respect quoted fields
-        header_parts = []
-        current = ""
-        in_quotes = False
-        for char in header_line:
-            if char == '"':
-                in_quotes = not in_quotes
-                current += char
-            elif char == ',' and not in_quotes:
-                header_parts.append(current)
-                current = ""
-            else:
-                current += char
-        header_parts.append(current)  # Don't forget the last field
+        
+        # Parse header using csv module for proper quote handling
+        import csv as csv_module
+        reader = csv_module.reader([header_line])
+        header_parts = next(reader)
         
         # Make duplicate column names unique
         seen_cols = {}
         unique_parts = []
         for col in header_parts:
-            col_stripped = col.strip().strip('"')
+            col_stripped = col.strip()
             if col_stripped in seen_cols:
                 seen_cols[col_stripped] += 1
                 # Create unique name by appending suffix
@@ -335,8 +324,13 @@ def _preprocess_typeform_csv(typeform_text: str) -> str:
                 seen_cols[col_stripped] = 1
                 unique_parts.append(col_stripped)
         
-        # Reconstruct header line
-        data_lines[0] = ','.join(unique_parts)
+        # Reconstruct header line - quote fields that contain commas or quotes
+        def quote_field(field):
+            if ',' in field or '"' in field:
+                return '"' + field.replace('"', '""') + '"'
+            return field
+        
+        data_lines[0] = ','.join(quote_field(f) for f in unique_parts)
     
     return '\n'.join(data_lines)
 
@@ -533,10 +527,18 @@ class TrackerDataProcessor(FileProcessor):
                 # Transform to StudentRecord objects
                 students = self._transform_records(raw_rows, discord_lookup)
                 
-                # Set week for all students based on computed current_week (from start_date and target_date)
+                # Reconcile week: use computed current_week unless typeform week differs
+                # This handles early submissions where user indicates a specific week
                 current_week = options.get('current_week', 1)
                 for student in students:
-                    student.week = current_week
+                    typeform_week = student.week  # Week from typeform input
+                    if typeform_week and typeform_week != current_week:
+                        # User indicated a different week (e.g., early submission)
+                        # Keep their indicated week
+                        pass
+                    else:
+                        # Use computed week
+                        student.week = current_week
                 
                 # Calculate derived fields
                 self._calculate_derived_fields(students)
@@ -1441,14 +1443,24 @@ class TrackerDataProcessor(FileProcessor):
                             student.wed_submitted = True
                         elif "Sunday" in value:
                             student.sun_submitted = True
+                    elif field_name == "_submission_day":
+                        # Handle "Submission for" column with values like "Wed", "Sun"
+                        val_lower = str(value).strip().lower()
+                        if val_lower in ["wed", "wednesday"]:
+                            student.wed_submitted = True
+                        elif val_lower in ["sun", "sunday"]:
+                            student.sun_submitted = True
                     elif field_name == "_tags":
                         # Check for AI Generated tag
                         if "AI Generated" in str(value):
                             student.cam_notes = "[AI Generated Response]"
-                    elif field_name == "_week_input":
-                        # Week is computed from start_date, not from typeform input
-                        # This field is ignored
-                        pass
+                    elif field_name == "week":
+                        # Extract week number from typeform input
+                        try:
+                            week_str = str(value).replace("Week ", "").strip()
+                            student.week = int(week_str)
+                        except:
+                            student.week = 0
                     elif field_name == "contribution_num":
                         # Extract contribution number
                         try:
@@ -1460,8 +1472,9 @@ class TrackerDataProcessor(FileProcessor):
                         except:
                             student.contribution_num = 1
                     elif field_name == "current_phase":
-                        # Normalize phase names - only set if not already set (handles duplicate columns)
-                        if not student.current_phase:
+                        # Normalize phase names - only set if not already set AND value is not empty
+                        # (handles duplicate columns where one may be empty)
+                        if value and str(value).strip() and not student.current_phase:
                             student.current_phase = self._normalize_phase(value)
                     elif field_name in ["why_chosen_complete", "reproduction_complete", 
                                        "solution_complete", "implementation_complete",
@@ -1501,6 +1514,43 @@ class TrackerDataProcessor(FileProcessor):
         elif "4" in phase_str or "submission" in phase_str:
             return "Phase 4"
         return phase_str
+    
+    def _get_missing_deliverables(self, student: StudentRecord, phase_num: int) -> List[str]:
+        """Get list of missing deliverables for a student's current phase.
+        
+        Args:
+            student: The student record
+            phase_num: The phase number (1-4)
+            
+        Returns:
+            List of missing deliverable names
+        """
+        missing = []
+        
+        if phase_num == 1:
+            if not (student.issue_url and str(student.issue_url).strip()):
+                missing.append("issue_url")
+            if not student.why_chosen_complete:
+                missing.append("why_chosen_complete")
+        elif phase_num == 2:
+            if not (student.fork_url and str(student.fork_url).strip()):
+                missing.append("fork_url")
+            if not student.reproduction_complete:
+                missing.append("reproduction_complete")
+            if not student.solution_complete:
+                missing.append("solution_complete")
+        elif phase_num == 3:
+            if not student.implementation_complete:
+                missing.append("implementation_complete")
+            if not student.testing_complete:
+                missing.append("testing_complete")
+        elif phase_num == 4:
+            if not (student.mr_url and str(student.mr_url).strip()):
+                missing.append("mr_url")
+            if not student.feedback_complete:
+                missing.append("feedback_complete")
+        
+        return missing
     
     def _calculate_derived_fields(self, students: List[StudentRecord]) -> None:
         """Calculate derived fields for each student."""
@@ -1872,7 +1922,12 @@ class TrackerDataProcessor(FileProcessor):
                 # Missing deliverables for current phase
                 elif student.deliverables_complete < student.deliverables_expected:
                     flagged = True
-                    intervention = "MISSING_DELIVERABLES"
+                    missing_items = self._get_missing_deliverables(student, phase_num)
+                    if missing_items:
+                        items_list = "\n".join(f"-{item}" for item in missing_items)
+                        intervention = f"MISSING_DELIVERABLES:\n{items_list}"
+                    else:
+                        intervention = "MISSING_DELIVERABLES"
                 
                 # No recent commits
                 elif student.days_since_commit > 7:
@@ -2002,10 +2057,13 @@ class TrackerDataProcessor(FileProcessor):
         ws.freeze_panes = 'A2'
     
     def _get_student_priority_status(self, students: List[StudentRecord]) -> Dict[str, str]:
-        """Determine each student's priority status (worst status across all submissions).
+        """Determine each student's priority status across all their submissions.
         
-        Priority order: AT RISK > FLAGGED > ON TRACK
-        A student only appears in ONE tab based on their worst status.
+        Logic: If a student has a Sunday submission (official weekly submission) 
+        that is ON TRACK, they are considered ON TRACK for the week, regardless 
+        of Wednesday check-in status.
+        
+        Otherwise, use the worst status across all submissions.
         
         Args:
             students: List of all student records
@@ -2014,6 +2072,7 @@ class TrackerDataProcessor(FileProcessor):
             Dict mapping member_id/name to their priority status
         """
         student_status: Dict[str, str] = {}
+        student_has_on_track_sunday: Dict[str, bool] = {}
         
         # Status priority (higher number = worse)
         status_priority = {
@@ -2022,8 +2081,21 @@ class TrackerDataProcessor(FileProcessor):
             "🔴 AT RISK": 3
         }
         
+        # First pass: check if student has any ON TRACK Sunday submission
         for s in students:
             key = s.member_id or s.name
+            if s.sun_submitted and s.grade_status == "🟢 ON TRACK":
+                student_has_on_track_sunday[key] = True
+        
+        # Second pass: determine status
+        for s in students:
+            key = s.member_id or s.name
+            
+            # If student has an ON TRACK Sunday submission, they're ON TRACK
+            if student_has_on_track_sunday.get(key, False):
+                student_status[key] = "🟢 ON TRACK"
+                continue
+            
             current_priority = status_priority.get(s.grade_status, 0)
             existing_priority = status_priority.get(student_status.get(key, ""), 0)
             
@@ -2079,8 +2151,15 @@ class TrackerDataProcessor(FileProcessor):
                     'deliverables': f"{s.deliverables_complete}/{s.deliverables_expected}",
                 }
             
-            # Update to latest week data
-            if s.week > student_map[key]['latest_week']:
+            # Update to latest week data, preferring Sunday submissions over Wednesday
+            current_is_sunday = s.sun_submitted
+            stored_week = student_map[key]['latest_week']
+            should_update = (
+                s.week > stored_week or  # Newer week always wins
+                (s.week == stored_week and current_is_sunday)  # Same week: Sunday overrides Wednesday
+            )
+            
+            if should_update:
                 student_map[key]['latest_week'] = s.week
                 student_map[key]['latest_phase'] = s.current_phase
                 student_map[key]['weeks_in_phase'] = s.weeks_in_phase
@@ -2192,8 +2271,14 @@ class TrackerDataProcessor(FileProcessor):
         # Get unique students with aggregated issues
         at_risk = self._aggregate_student_issues(students, "🔴 AT RISK")
         
-        # Sort by latest week
-        at_risk.sort(key=lambda s: s['latest_week'], reverse=True)
+        # Sort: NO_SUBMISSIONS at the end, then by latest week (descending)
+        def at_risk_sort_key(s):
+            is_no_submission = "NO_SUBMISSION" in s.get('interventions_str', '')
+            # Return tuple: (is_no_submission, -latest_week)
+            # False (0) sorts before True (1), so non-NO_SUBMISSION comes first
+            return (is_no_submission, -s['latest_week'])
+        
+        at_risk.sort(key=at_risk_sort_key)
         
         # Write header
         headers = ["Name", "Member ID", "Discord", "Latest Week", "Phase", "Timeline",
