@@ -5,19 +5,20 @@
     10,
     4,
     2,
-    7
+    7,
+    9
   ],
   "current_question": {
-    "id": 7,
-    "question": "What Git command is used to send your local commits to a remote repository?",
-    "answer": "git push"
+    "id": 9,
+    "question": "What Git command is used to initialize a new local Git repository in the current folder?",
+    "answer": "git init"
   },
   "answered_by": null,
   "interval_minutes": 2,
-  "question_number": 5,
+  "question_number": 6,
   "trivia_points": {
     "ZenoCross#0205": 20,
     "camino#4979": 20
   },
-  "question_posted_at": "2026-02-25T21:12:08.188427+00:00"
+  "question_posted_at": "2026-02-25T21:14:07.096430+00:00"
 }

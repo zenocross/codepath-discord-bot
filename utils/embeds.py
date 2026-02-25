@@ -436,7 +436,7 @@ class EmbedBuilder:
             inline=False
         )
         
-        embed.set_footer(text="All times are in GMT/UTC | For GitLab help, use !gitlab help in a channel")
+        embed.set_footer(text="All times are in GMT/UTC | Use !app help for all modules")
         
         return embed
     
@@ -648,12 +648,6 @@ class EmbedBuilder:
             title="🤖 Bot Help - All Modules",
             description="This bot has multiple modules. Use the specific prefix to access each.",
             color=discord.Color.blurple()
-        )
-        
-        embed.add_field(
-            name="📡 !gitlab",
-            value="GitLab RSS feed monitoring and issue tracking\n`!gitlab help` for details",
-            inline=False
         )
         
         embed.add_field(

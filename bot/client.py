@@ -24,7 +24,7 @@ class GitLabRSSBot(commands.Bot):
         intents.members = True  # Required for username lookup across servers
         
         super().__init__(
-            command_prefix=['!gitlab ', '!announce ', '!tracker ', '!game ', '!app '],
+            command_prefix=['!announce ', '!tracker ', '!game ', '!app '],
             intents=intents,
             help_command=None
         )
@@ -200,7 +200,6 @@ class GitLabRSSBot(commands.Bot):
     async def setup_hook(self) -> None:
         """Called when the bot is starting up - load cogs and start tasks."""
         # Load modules (cogs)
-        await self.load_extension('modules.gitlab_rss')
         await self.load_extension('modules.announcements')
         await self.load_extension('modules.tracker')
         await self.load_extension('modules.game')
