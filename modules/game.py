@@ -277,6 +277,51 @@ class GameCog(commands.Cog, name="Game"):
             print(f"[Game] Error reading master CSV: {e}")
             return []
     
+    def _get_master_discord_to_name_map(self) -> Dict[str, str]:
+        """Get mapping of Discord username to Full Name from master roster.
+        
+        Returns:
+            Dict mapping discord_username -> full_name
+        """
+        master_data = self.file_storage.read_file_by_category("master")
+        if not master_data:
+            return {}
+        
+        try:
+            content = master_data.decode("utf-8-sig")
+            content = self._preprocess_master_csv(content)
+            reader = csv.DictReader(io.StringIO(content))
+            headers = reader.fieldnames or []
+            
+            discord_col = None
+            discord_variants = ["Discord Username", "Discord", "discord_username"]
+            for variant in discord_variants:
+                if variant in headers:
+                    discord_col = variant
+                    break
+            
+            name_col = None
+            name_variants = ["Full Name", "Name", "full_name", "name", "Student Name"]
+            for variant in name_variants:
+                if variant in headers:
+                    name_col = variant
+                    break
+            
+            if not discord_col:
+                return {}
+            
+            mapping = {}
+            for row in reader:
+                username = str(row.get(discord_col, "")).strip()
+                name = str(row.get(name_col, "")).strip() if name_col else ""
+                if username:
+                    mapping[username] = name
+            
+            return mapping
+        except Exception as e:
+            print(f"[Game] Error reading master CSV for name mapping: {e}")
+            return {}
+    
     def _sync_points_with_master(self) -> Dict[str, int]:
         """Sync points dictionary with master roster.
         
@@ -722,6 +767,32 @@ class GameCog(commands.Cog, name="Game"):
         """Save community state to JSON file."""
         PersistenceService.save_community_state(self.community_state)
     
+    def _find_matching_user_in_master(self, search_name: str, master_users: set) -> Optional[str]:
+        """Find a matching username in the master roster set.
+        
+        Similar to _find_matching_user but checks against master CSV users only.
+        """
+        search_lower = search_name.lower().strip()
+        search_normalized = self._normalize_name(search_name)
+        
+        for roster_name in master_users:
+            roster_lower = roster_name.lower()
+            roster_base = roster_name.rsplit('#', 1)[0].lower() if '#' in roster_name else roster_lower
+            roster_normalized = self._normalize_name(roster_name)
+            
+            if roster_lower == search_lower:
+                return roster_name
+            if roster_base == search_lower:
+                return roster_name
+            if roster_normalized == search_normalized:
+                return roster_name
+            if '#' in search_name:
+                search_base = search_name.rsplit('#', 1)[0].lower()
+                if roster_lower == search_base or roster_base == search_base:
+                    return roster_name
+        
+        return None
+    
     async def _score_community_message(self, message: discord.Message) -> None:
         """Score a message in real-time if it's in a tracked community channel.
         
@@ -740,15 +811,20 @@ class GameCog(commands.Cog, name="Game"):
         if message.content.startswith('!'):
             return
         
-        # Find matching user in roster
+        # Get master roster users
+        master_users = set(self._get_master_discord_usernames())
+        if not master_users:
+            return
+        
+        # Find matching user in master roster (not game_points)
         author_name = message.author.name
-        matching_user = self._find_matching_user(author_name)
+        matching_user = self._find_matching_user_in_master(author_name, master_users)
         
         if not matching_user and hasattr(message.author, 'display_name'):
-            matching_user = self._find_matching_user(message.author.display_name)
+            matching_user = self._find_matching_user_in_master(message.author.display_name, master_users)
         
         if not matching_user:
-            # User not in roster, skip scoring
+            # User not in master roster, skip scoring
             return
         
         points_config = self._get_channel_points(message.channel.id)
@@ -1026,10 +1102,10 @@ class GameCog(commands.Cog, name="Game"):
                     total_messages += 1
                     
                     author_name = message.author.name
-                    matching_user = self._find_matching_user(author_name)
+                    matching_user = self._find_matching_user_in_master(author_name, master_users)
                     
                     if not matching_user and hasattr(message.author, 'display_name'):
-                        matching_user = self._find_matching_user(message.author.display_name)
+                        matching_user = self._find_matching_user_in_master(message.author.display_name, master_users)
                     
                     if not matching_user:
                         skipped_users.add(author_name)
@@ -1116,13 +1192,20 @@ class GameCog(commands.Cog, name="Game"):
         
         Usage: !game community leaderboard
         """
-        community_points = self.community_state.get('community_points', {})
-        
-        if not community_points:
-            await ctx.send("📊 No community scores yet. Run `!game community process_scores` first!")
+        # Get all users from master roster
+        master_users = self._get_master_discord_usernames()
+        if not master_users:
+            await ctx.send("❌ No master roster uploaded. Use `!tracker upload master` first.")
             return
         
-        sorted_scores = sorted(community_points.items(), key=lambda x: (-x[1], x[0].lower()))
+        community_points = self.community_state.get('community_points', {})
+        
+        # Build full list with all master users (0 points if not scored)
+        all_scores = {}
+        for username in master_users:
+            all_scores[username] = community_points.get(username, 0)
+        
+        sorted_scores = sorted(all_scores.items(), key=lambda x: (-x[1], x[0].lower()))
         
         embed = discord.Embed(
             title="🏘️ Community Points Leaderboard",
@@ -1131,12 +1214,12 @@ class GameCog(commands.Cog, name="Game"):
         
         lines = []
         for rank, (username, pts) in enumerate(sorted_scores, 1):
-            if pts == 0:
-                continue
-            if rank <= 3:
+            if rank <= 3 and pts > 0:
                 medal = ["🥇", "🥈", "🥉"][rank - 1]
-            else:
+            elif pts > 0:
                 medal = f"`{rank}.`"
+            else:
+                medal = "`-`"
             
             display = self._display_name(username)
             roster_normalized = self._normalize_name(username)
@@ -1155,7 +1238,7 @@ class GameCog(commands.Cog, name="Game"):
             lines.append(f"{medal} **{display}** — {pts} pts")
             
             if rank >= 25:
-                remaining = len([s for s in sorted_scores[25:] if s[1] > 0])
+                remaining = len(sorted_scores) - 25
                 if remaining > 0:
                     lines.append(f"... and {remaining} more")
                 break
@@ -1163,12 +1246,73 @@ class GameCog(commands.Cog, name="Game"):
         if lines:
             embed.description = "\n".join(lines)
         else:
-            embed.description = "No scores yet!"
+            embed.description = "No users in roster!"
         
         total_points = sum(pts for pts in community_points.values())
-        embed.set_footer(text=f"Total points awarded: {total_points}")
+        embed.set_footer(text=f"Total members: {len(master_users)} | Total points: {total_points}")
         
         await ctx.send(embed=embed)
+    
+    @community_group.command(name='download')
+    async def community_download(self, ctx: commands.Context) -> None:
+        """Download community points leaderboard as CSV.
+        
+        Usage: !game community download
+        """
+        if not self._check_permission(ctx):
+            await ctx.send("❌ You don't have permission to download community scores.")
+            return
+        
+        # Get all users from master roster
+        master_users = self._get_master_discord_usernames()
+        if not master_users:
+            await ctx.send("❌ No master roster uploaded. Use `!tracker upload master` first.")
+            return
+        
+        # Get Discord username to Full Name mapping
+        discord_to_name = self._get_master_discord_to_name_map()
+        
+        community_points = self.community_state.get('community_points', {})
+        
+        # Build full list with all master users (0 points if not scored)
+        all_scores = {}
+        for username in master_users:
+            all_scores[username] = community_points.get(username, 0)
+        
+        sorted_scores = sorted(all_scores.items(), key=lambda x: (-x[1], x[0].lower()))
+        
+        # Generate CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Rank', 'Full Name', 'Discord Username', 'Points'])
+        
+        current_rank = 0
+        prev_points = None
+        for idx, (username, pts) in enumerate(sorted_scores, 1):
+            # Handle ties - same points = same rank
+            if pts != prev_points:
+                current_rank = idx
+            prev_points = pts
+            
+            rank_display = current_rank if pts > 0 else "-"
+            full_name = discord_to_name.get(username, "")
+            writer.writerow([rank_display, full_name, username, pts])
+        
+        output.seek(0)
+        
+        # Create file and send
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        filename = f"community_leaderboard_{timestamp}.csv"
+        
+        file = discord.File(io.BytesIO(output.getvalue().encode('utf-8')), filename=filename)
+        
+        total_points = sum(pts for pts in community_points.values())
+        await ctx.send(
+            f"📥 **Community Leaderboard Export**\n"
+            f"• Total members: {len(master_users)}\n"
+            f"• Total points: {total_points}",
+            file=file
+        )
     
     @community_group.command(name='reset_scores')
     async def community_reset_scores(self, ctx: commands.Context, confirm: str = None) -> None:
@@ -1524,13 +1668,20 @@ class GameCog(commands.Cog, name="Game"):
     
     async def _handle_community_leaderboard(self, message: discord.Message):
         """Handle !community leaderboard command."""
-        community_points = self.community_state.get('community_points', {})
-        
-        if not community_points:
-            await message.channel.send("📊 No community scores yet.")
+        # Get all users from master roster
+        master_users = self._get_master_discord_usernames()
+        if not master_users:
+            await message.channel.send("❌ No master roster uploaded.")
             return
         
-        sorted_scores = sorted(community_points.items(), key=lambda x: (-x[1], x[0].lower()))
+        community_points = self.community_state.get('community_points', {})
+        
+        # Build full list with all master users (0 points if not scored)
+        all_scores = {}
+        for username in master_users:
+            all_scores[username] = community_points.get(username, 0)
+        
+        sorted_scores = sorted(all_scores.items(), key=lambda x: (-x[1], x[0].lower()))
         
         embed = discord.Embed(
             title="🏘️ Community Points Leaderboard",
@@ -1539,12 +1690,12 @@ class GameCog(commands.Cog, name="Game"):
         
         lines = []
         for rank, (username, pts) in enumerate(sorted_scores, 1):
-            if pts == 0:
-                continue
-            if rank <= 3:
+            if rank <= 3 and pts > 0:
                 medal = ["🥇", "🥈", "🥉"][rank - 1]
-            else:
+            elif pts > 0:
                 medal = f"`{rank}.`"
+            else:
+                medal = "`-`"
             
             display = self._display_name(username)
             roster_normalized = self._normalize_name(username)
@@ -1563,7 +1714,7 @@ class GameCog(commands.Cog, name="Game"):
             lines.append(f"{medal} **{display}** — {pts} pts")
             
             if rank >= 15:
-                remaining = len([s for s in sorted_scores[15:] if s[1] > 0])
+                remaining = len(sorted_scores) - 15
                 if remaining > 0:
                     lines.append(f"... and {remaining} more")
                 break
@@ -1571,7 +1722,10 @@ class GameCog(commands.Cog, name="Game"):
         if lines:
             embed.description = "\n".join(lines)
         else:
-            embed.description = "No scores yet!"
+            embed.description = "No users in roster!"
+        
+        total_points = sum(pts for pts in community_points.values())
+        embed.set_footer(text=f"Total members: {len(master_users)} | Total points: {total_points}")
         
         await message.channel.send(embed=embed)
     

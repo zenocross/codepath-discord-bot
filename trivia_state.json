@@ -1,22 +1,18 @@
 {
   "channel_id": 1475587228460908675,
   "used_questions": [
-    3,
-    2,
-    9,
-    4,
+    1,
+    6,
+    7,
     10,
     5,
+    9,
     8,
-    7,
-    6,
-    1
+    3,
+    4,
+    2
   ],
-  "current_question": {
-    "id": 1,
-    "question": "What Git command is used to create a new branch named feature-a AND switch to it at the same time?",
-    "answer": "git checkout -b feature-a"
-  },
+  "current_question": null,
   "answered_by": null,
   "interval_minutes": 2,
   "question_number": 10,
@@ -24,5 +20,5 @@
     "ZenoCross#0205": 20,
     "camino#4979": 20
   },
-  "question_posted_at": "2026-02-25T17:02:06.240511+00:00"
+  "question_posted_at": "2026-02-25T19:02:05.609242+00:00"
 }

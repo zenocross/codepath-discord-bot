@@ -608,6 +608,8 @@ class EmbedBuilder:
                 "`!game community remove_channel <id>` - Remove channel\n"
                 "`!game community clear_all_channels confirm` - Remove all\n"
                 "`!game community process_scores` - Recalculate all scores from history\n"
+                "`!game community leaderboard` - View leaderboard\n"
+                "`!game community download` - Download leaderboard as CSV\n"
                 "`!game community reset_scores confirm` - Reset all scores\n"
                 "`!game community set_points <type> <value>` - Set default points\n"
                 "`!game community set_points <type> <value> <channel_id>` - Set channel-specific points\n"
