@@ -54,6 +54,7 @@ class Config:
     GAME_POINTS_FILE: str = 'game_points.json'
     TRIVIA_QUESTIONS_FILE: str = 'questions.json'
     TRIVIA_STATE_FILE: str = 'trivia_state.json'
+    COMMUNITY_STATE_FILE: str = 'community_state.json'
     
     @classmethod
     def validate(cls) -> bool:

@@ -1,21 +1,21 @@
 {
   "channel_id": 1475587228460908675,
   "used_questions": [
-    5,
-    6,
+    3,
     2,
     9,
-    1,
     4,
-    3,
-    7,
+    10,
+    5,
     8,
-    10
+    7,
+    6,
+    1
   ],
   "current_question": {
-    "id": 10,
-    "question": "What Git command links your local repository to a remote repository link <url>?",
-    "answer": "git remote add origin <url>"
+    "id": 1,
+    "question": "What Git command is used to create a new branch named feature-a AND switch to it at the same time?",
+    "answer": "git checkout -b feature-a"
   },
   "answered_by": null,
   "interval_minutes": 2,
@@ -24,5 +24,5 @@
     "ZenoCross#0205": 20,
     "camino#4979": 20
   },
-  "question_posted_at": "2026-02-25T16:02:05.672894+00:00"
+  "question_posted_at": "2026-02-25T17:02:06.240511+00:00"
 }

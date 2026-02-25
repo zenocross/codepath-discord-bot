@@ -601,12 +601,40 @@ class EmbedBuilder:
         )
         
         embed.add_field(
+            name="🏘️ Community Admin Commands",
+            value=(
+                "`!game community` - View community tracking status\n"
+                "`!game community add_channel <id>` - Add channel to track\n"
+                "`!game community remove_channel <id>` - Remove channel\n"
+                "`!game community clear_all_channels confirm` - Remove all\n"
+                "`!game community process_scores` - Recalculate all scores from history\n"
+                "`!game community reset_scores confirm` - Reset all scores\n"
+                "`!game community set_points <type> <value>` - Set default points\n"
+                "`!game community set_points <type> <value> <channel_id>` - Set channel-specific points\n"
+                "• Point types: `first_post`, `first_response`, `subsequent_response`\n"
+                "• New messages are scored in real-time automatically"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🏘️ Community Public Commands",
+            value=(
+                "These work anywhere:\n"
+                "`!community points` - Check your community points\n"
+                "`!community points <user>` - Check another user's points\n"
+                "`!community leaderboard` - View community leaderboard"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
             name="ℹ️ How It Works",
             value=(
                 "• Points are tracked for Discord usernames in the master roster\n"
                 "• Use `!tracker upload master` to set up the roster first\n"
-                "• Questions stay active until answered or timeout expires\n"
-                "• Next question posts automatically after answer or timeout"
+                "• Trivia: Questions stay active until answered or timeout\n"
+                "• Community: First posts=5pts, first response=8pts, replies=2pts"
             ),
             inline=False
         )
@@ -649,6 +677,12 @@ class EmbedBuilder:
         embed.add_field(
             name="🎯 !trivia",
             value="Trivia channel commands (points, leaderboard)\nOnly works in the configured trivia channel",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🏘️ !community",
+            value="Community points commands (points, leaderboard)\nWorks anywhere in the server",
             inline=False
         )
         

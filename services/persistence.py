@@ -281,4 +281,41 @@ class PersistenceService:
         except Exception:
             pass
         return 10
+    
+    @staticmethod
+    def load_community_state() -> Dict[str, Any]:
+        """Load community tracking state from JSON file.
+        
+        Returns:
+            Dict with community state including channels, points, and settings
+        """
+        defaults: Dict[str, Any] = {
+            'channels': {},
+            'community_points': {},
+            'default_points': {
+                'first_post': 5,
+                'first_response': 8,
+                'subsequent_response': 2
+            },
+            'processed_messages': {}
+        }
+        
+        try:
+            if os.path.exists(Config.COMMUNITY_STATE_FILE):
+                with open(Config.COMMUNITY_STATE_FILE, 'r') as f:
+                    loaded = json.load(f)
+                    defaults.update(loaded)
+        except Exception as e:
+            print(f"Error loading community state: {e}")
+        
+        return defaults
+    
+    @staticmethod
+    def save_community_state(community_state: Dict[str, Any]) -> None:
+        """Save community tracking state to JSON file."""
+        try:
+            with open(Config.COMMUNITY_STATE_FILE, 'w') as f:
+                json.dump(community_state, f, indent=2)
+        except Exception as e:
+            print(f"Error saving community state: {e}")
 

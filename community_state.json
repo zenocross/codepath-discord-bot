@@ -1,0 +1,27 @@
+{
+  "channels": {
+    "1469365925387174177": {
+      "added_at": "2026-02-25T16:41:42.517593+00:00",
+      "last_processed_id": null
+    },
+    "1469367713968423048": {
+      "added_at": "2026-02-25T16:52:17.433477+00:00",
+      "last_processed_id": null
+    }
+  },
+  "community_points": {
+    "ZenoCross#0205": 18
+  },
+  "default_points": {
+    "first_post": 5,
+    "first_response": 8,
+    "subsequent_response": 2
+  },
+  "processed_messages": {},
+  "first_responders": {
+    "1469365925387174177": {},
+    "1469367713968423048": {
+      "1476262099041783858": 432551600100474881
+    }
+  }
+}
