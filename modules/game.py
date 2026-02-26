@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Dict, List, Optional
 import discord
 from discord.ext import commands, tasks
 
-from services.file_processor import FileStorageService
 from services.persistence import PersistenceService
 
 if TYPE_CHECKING:
@@ -22,7 +21,7 @@ class GameCog(commands.Cog, name="Game"):
     
     def __init__(self, bot: 'DiscordBot'):
         self.bot = bot
-        self.file_storage = FileStorageService()
+        self.file_storage = bot.file_storage  # Use shared instance
         self.trivia_questions = PersistenceService.load_trivia_questions()
         self.trivia_points = PersistenceService.get_trivia_points()
         self.current_timeout_task = None

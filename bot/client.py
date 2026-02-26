@@ -10,6 +10,7 @@ from bot.config import Config
 from services.persistence import PersistenceService
 from services.scheduler_service import SchedulerService
 from services.notion_service import NotionService
+from services.file_processor import FileStorageService
 from utils.embeds import EmbedBuilder
 
 
@@ -48,6 +49,9 @@ class DiscordBot(commands.Bot):
             'question_number': 0,
             'trivia_points': {}
         }
+        
+        # Shared file storage for tracker/game modules
+        self.file_storage = FileStorageService()
         
         # Load all data from files
         self._load_all_data()

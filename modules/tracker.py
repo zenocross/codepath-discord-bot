@@ -24,7 +24,7 @@ from typing import Optional
 import discord
 from discord.ext import commands
 
-from services.file_processor import FileStorageService, VALID_FILE_CATEGORIES
+from services.file_processor import VALID_FILE_CATEGORIES
 from services.tracker_processor import TrackerDataProcessor
 from services.gitlab_service import GitLabService
 
@@ -48,7 +48,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
     
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.storage = FileStorageService()
+        self.storage = bot.file_storage  # Use shared instance
         self.processor = TrackerDataProcessor()
         self.gitlab = GitLabService()
         # Track users in upload wizard to prevent conflicts
