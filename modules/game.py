@@ -14,13 +14,13 @@ from services.file_processor import FileStorageService
 from services.persistence import PersistenceService
 
 if TYPE_CHECKING:
-    from bot.client import GitLabRSSBot
+    from bot.client import DiscordBot
 
 
 class GameCog(commands.Cog, name="Game"):
     """Commands for managing game points and standings."""
     
-    def __init__(self, bot: 'GitLabRSSBot'):
+    def __init__(self, bot: 'DiscordBot'):
         self.bot = bot
         self.file_storage = FileStorageService()
         self.trivia_questions = PersistenceService.load_trivia_questions()
@@ -797,10 +797,20 @@ class GameCog(commands.Cog, name="Game"):
         """Score a message in real-time if it's in a tracked community channel.
         
         Called automatically for every message in tracked channels.
+        Also handles messages in threads within tracked forum channels.
         """
         # Check if this channel is being tracked
         cid_str = str(message.channel.id)
-        if cid_str not in self.community_state.get('channels', {}):
+        tracked_channels = self.community_state.get('channels', {})
+        
+        # For thread messages, check if parent forum is tracked
+        parent_id = None
+        if isinstance(message.channel, discord.Thread) and message.channel.parent:
+            parent_id = message.channel.parent_id
+            if str(parent_id) in tracked_channels:
+                cid_str = str(parent_id)  # Use parent forum's config
+        
+        if cid_str not in tracked_channels:
             return
         
         # Skip bot messages
@@ -838,8 +848,31 @@ class GameCog(commands.Cog, name="Game"):
         
         first_responders = self.community_state['first_responders'][cid_str]
         
-        if message.reference and message.reference.message_id:
-            # This is a reply
+        # Handle forum thread messages differently
+        if isinstance(message.channel, discord.Thread) and parent_id:
+            thread_id = str(message.channel.id)
+            
+            # Check if this is the thread starter message
+            if message.channel.starter_message and message.id == message.channel.starter_message.id:
+                points = points_config['first_post']
+            else:
+                # Reply within a thread - use thread_id as the "original post" key
+                if thread_id not in first_responders:
+                    # First reply in this thread (not by thread owner)
+                    if message.channel.owner_id != message.author.id:
+                        first_responders[thread_id] = message.author.id
+                        points = points_config['first_response']
+                    else:
+                        # Thread owner replying to their own thread - subsequent
+                        points = points_config['subsequent_response']
+                elif first_responders.get(thread_id) == message.author.id:
+                    # Same person who was first responder
+                    points = points_config['subsequent_response']
+                else:
+                    # Someone else replying after first response
+                    points = points_config['subsequent_response']
+        elif message.reference and message.reference.message_id:
+            # This is a reply in a regular text channel
             ref_msg_id = str(message.reference.message_id)
             try:
                 ref_msg = await message.channel.fetch_message(message.reference.message_id)
@@ -1086,65 +1119,159 @@ class GameCog(commands.Cog, name="Game"):
             try:
                 await status_msg.edit(content=f"⏳ Processing #{channel.name}...")
                 
-                # Track first responders per original message for this channel
+                # Track first responders per original message/thread for this channel
                 thread_first_responders: Dict[int, int] = {}
                 channel_messages = 0
+                points_config = self._get_channel_points(cid)
                 
-                async for message in channel.history(limit=None, oldest_first=True):
-                    if message.author.bot:
-                        continue
+                # Check if this is a ForumChannel
+                if isinstance(channel, discord.ForumChannel):
+                    # Process forum threads (both active and archived)
+                    threads_processed = 0
                     
-                    # Skip command messages
-                    if message.content.startswith('!'):
-                        continue
+                    # Get active threads
+                    active_threads = channel.threads
                     
-                    channel_messages += 1
-                    total_messages += 1
+                    # Get archived threads
+                    archived_threads = []
+                    async for thread in channel.archived_threads(limit=None):
+                        archived_threads.append(thread)
                     
-                    author_name = message.author.name
-                    matching_user = self._find_matching_user_in_master(author_name, master_users)
+                    all_threads = list(active_threads) + archived_threads
                     
-                    if not matching_user and hasattr(message.author, 'display_name'):
-                        matching_user = self._find_matching_user_in_master(message.author.display_name, master_users)
-                    
-                    if not matching_user:
-                        skipped_users.add(author_name)
-                        continue
-                    
-                    points_config = self._get_channel_points(cid)
-                    points = 0
-                    
-                    if message.reference and message.reference.message_id:
-                        ref_msg_id = message.reference.message_id
+                    for thread in all_threads:
+                        threads_processed += 1
+                        thread_id = thread.id
+                        
+                        # Process thread starter message as first_post
                         try:
-                            ref_msg = await channel.fetch_message(ref_msg_id)
-                            # Skip self-replies
-                            if ref_msg.author.id == message.author.id:
+                            starter_msg = thread.starter_message
+                            if not starter_msg:
+                                starter_msg = await thread.fetch_message(thread.id)
+                            
+                            if starter_msg and not starter_msg.author.bot:
+                                if not starter_msg.content.startswith('!'):
+                                    channel_messages += 1
+                                    total_messages += 1
+                                    
+                                    author_name = starter_msg.author.name
+                                    matching_user = self._find_matching_user_in_master(author_name, master_users)
+                                    
+                                    if not matching_user and hasattr(starter_msg.author, 'display_name'):
+                                        matching_user = self._find_matching_user_in_master(
+                                            starter_msg.author.display_name, master_users
+                                        )
+                                    
+                                    if matching_user:
+                                        old_pts = self.community_state['community_points'].get(matching_user, 0)
+                                        self.community_state['community_points'][matching_user] = (
+                                            old_pts + points_config['first_post']
+                                        )
+                                        total_points_awarded += points_config['first_post']
+                                    else:
+                                        skipped_users.add(author_name)
+                        except Exception:
+                            pass
+                        
+                        # Process replies in the thread
+                        thread_owner_id = thread.owner_id
+                        first_reply_recorded = False
+                        
+                        async for message in thread.history(limit=None, oldest_first=True):
+                            # Skip the starter message (already processed)
+                            if message.id == thread.id:
                                 continue
                             
-                            if ref_msg_id not in thread_first_responders:
-                                thread_first_responders[ref_msg_id] = message.author.id
+                            if message.author.bot:
+                                continue
+                            
+                            if message.content.startswith('!'):
+                                continue
+                            
+                            channel_messages += 1
+                            total_messages += 1
+                            
+                            author_name = message.author.name
+                            matching_user = self._find_matching_user_in_master(author_name, master_users)
+                            
+                            if not matching_user and hasattr(message.author, 'display_name'):
+                                matching_user = self._find_matching_user_in_master(
+                                    message.author.display_name, master_users
+                                )
+                            
+                            if not matching_user:
+                                skipped_users.add(author_name)
+                                continue
+                            
+                            points = 0
+                            
+                            # First non-owner reply gets first_response points
+                            if not first_reply_recorded and message.author.id != thread_owner_id:
+                                thread_first_responders[thread_id] = message.author.id
                                 points = points_config['first_response']
+                                first_reply_recorded = True
                             else:
                                 points = points_config['subsequent_response']
-                        except Exception:
-                            # If we can't fetch the referenced message, treat as subsequent
-                            points = points_config['subsequent_response']
-                    else:
-                        points = points_config['first_post']
-                    
-                    if points > 0:
-                        if 'community_points' not in self.community_state:
-                            self.community_state['community_points'] = {}
+                            
+                            if points > 0:
+                                old_pts = self.community_state['community_points'].get(matching_user, 0)
+                                self.community_state['community_points'][matching_user] = old_pts + points
+                                total_points_awarded += points
                         
-                        old_pts = self.community_state['community_points'].get(matching_user, 0)
-                        self.community_state['community_points'][matching_user] = old_pts + points
-                        total_points_awarded += points
-                    
-                    if channel_messages % 100 == 0:
-                        await status_msg.edit(
-                            content=f"⏳ Processing #{channel.name}... {channel_messages} messages"
-                        )
+                        if threads_processed % 10 == 0:
+                            await status_msg.edit(
+                                content=f"⏳ Processing #{channel.name}... {threads_processed} threads, {channel_messages} messages"
+                            )
+                else:
+                    # Regular text channel - process messages directly
+                    async for message in channel.history(limit=None, oldest_first=True):
+                        if message.author.bot:
+                            continue
+                        
+                        if message.content.startswith('!'):
+                            continue
+                        
+                        channel_messages += 1
+                        total_messages += 1
+                        
+                        author_name = message.author.name
+                        matching_user = self._find_matching_user_in_master(author_name, master_users)
+                        
+                        if not matching_user and hasattr(message.author, 'display_name'):
+                            matching_user = self._find_matching_user_in_master(message.author.display_name, master_users)
+                        
+                        if not matching_user:
+                            skipped_users.add(author_name)
+                            continue
+                        
+                        points = 0
+                        
+                        if message.reference and message.reference.message_id:
+                            ref_msg_id = message.reference.message_id
+                            try:
+                                ref_msg = await channel.fetch_message(ref_msg_id)
+                                if ref_msg.author.id == message.author.id:
+                                    continue
+                                
+                                if ref_msg_id not in thread_first_responders:
+                                    thread_first_responders[ref_msg_id] = message.author.id
+                                    points = points_config['first_response']
+                                else:
+                                    points = points_config['subsequent_response']
+                            except Exception:
+                                points = points_config['subsequent_response']
+                        else:
+                            points = points_config['first_post']
+                        
+                        if points > 0:
+                            old_pts = self.community_state['community_points'].get(matching_user, 0)
+                            self.community_state['community_points'][matching_user] = old_pts + points
+                            total_points_awarded += points
+                        
+                        if channel_messages % 100 == 0:
+                            await status_msg.edit(
+                                content=f"⏳ Processing #{channel.name}... {channel_messages} messages"
+                            )
                 
                 # Store first responders for real-time scoring
                 if 'first_responders' not in self.community_state:
@@ -1860,7 +1987,7 @@ class GameCog(commands.Cog, name="Game"):
         await self._post_trivia_question()
 
 
-async def setup(bot: 'GitLabRSSBot') -> None:
+async def setup(bot: 'DiscordBot') -> None:
     """Setup function for loading the cog."""
     await bot.add_cog(GameCog(bot))
 

@@ -8,13 +8,13 @@ from discord.ext import commands
 from bot.config import Config
 
 if TYPE_CHECKING:
-    from bot.client import GitLabRSSBot
+    from bot.client import DiscordBot
 
 
 class AppCog(commands.Cog, name="App"):
     """App-level commands including user management."""
     
-    def __init__(self, bot: 'GitLabRSSBot'):
+    def __init__(self, bot: 'DiscordBot'):
         self.bot = bot
     
     # ==================== User Management ====================
@@ -77,6 +77,6 @@ class AppCog(commands.Cog, name="App"):
             await ctx.send("Usage: `!app users [add|remove] [user_id]`")
 
 
-async def setup(bot: 'GitLabRSSBot') -> None:
+async def setup(bot: 'DiscordBot') -> None:
     """Setup function for loading the cog."""
     await bot.add_cog(AppCog(bot))

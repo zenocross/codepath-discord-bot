@@ -1,8 +1,7 @@
 """
-GitLab RSS Discord Bot
+Discord Bot
 
-A Discord bot that monitors GitLab RSS feeds for new issues and supports
-scheduled announcements to channel groups.
+A Discord bot for announcements, student tracking, and gamification.
 
 Usage:
     python app.py
@@ -17,7 +16,7 @@ Environment Variables:
 """
 
 from bot.config import Config
-from bot.client import GitLabRSSBot
+from bot.client import DiscordBot
 
 
 def main() -> None:
@@ -27,7 +26,7 @@ def main() -> None:
         exit(1)
     
     # Create and run the bot
-    bot = GitLabRSSBot()
+    bot = DiscordBot()
     bot.run(Config.DISCORD_TOKEN)
 
 

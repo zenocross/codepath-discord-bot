@@ -8,14 +8,13 @@ from discord.ext import commands, tasks
 
 from bot.config import Config
 from services.persistence import PersistenceService
-from services.rss_service import RSSService
 from services.scheduler_service import SchedulerService
 from services.notion_service import NotionService
 from utils.embeds import EmbedBuilder
 
 
-class GitLabRSSBot(commands.Bot):
-    """Main bot class handling GitLab RSS feeds and announcements."""
+class DiscordBot(commands.Bot):
+    """Main bot class for announcements, tracking, and gamification."""
     
     def __init__(self):
         intents = discord.Intents.default()
@@ -28,10 +27,6 @@ class GitLabRSSBot(commands.Bot):
             intents=intents,
             help_command=None
         )
-        
-        # GitLab RSS subscriptions: {channel_id: {'url': str, 'labels': set, 'last_checked': datetime}}
-        self.subscriptions: Dict[int, Dict] = {}
-        self.seen_issues: Dict[int, Set[str]] = {}
         
         # Announcement system
         self.channel_groups: Dict[str, List[int]] = {}  # {group_name: [channel_ids]}
@@ -59,7 +54,6 @@ class GitLabRSSBot(commands.Bot):
     
     def _load_all_data(self) -> None:
         """Load all persistent data from JSON files."""
-        self.subscriptions, self.seen_issues = PersistenceService.load_subscriptions()
         self.channel_groups = PersistenceService.load_channel_groups()
         self.dm_groups = PersistenceService.load_dm_groups()
         self.scheduled_messages = PersistenceService.load_scheduled_messages()
@@ -79,10 +73,6 @@ class GitLabRSSBot(commands.Bot):
             PersistenceService.save_trivia_state(self.trivia_state)
     
     # ==================== Persistence Helpers ====================
-    
-    def save_subscriptions(self) -> None:
-        """Save subscriptions to JSON file."""
-        PersistenceService.save_subscriptions(self.subscriptions, self.seen_issues)
     
     def save_channel_groups(self) -> None:
         """Save channel groups to JSON file."""
@@ -207,60 +197,9 @@ class GitLabRSSBot(commands.Bot):
         await self.load_extension('bot.events')
         
         # Start background tasks
-        self.check_feeds.start()
         self.check_scheduled_messages.start()
     
     # ==================== Background Tasks ====================
-    
-    @tasks.loop(minutes=Config.CHECK_INTERVAL_MINUTES)
-    async def check_feeds(self) -> None:
-        """Periodically check RSS feeds for new issues."""
-        for channel_id, sub_data in list(self.subscriptions.items()):
-            try:
-                channel = self.get_channel(channel_id)
-                if not channel:
-                    continue
-                
-                feed, labels_map = await RSSService.fetch_feed_with_labels(sub_data['url'])
-                
-                if channel_id not in self.seen_issues:
-                    self.seen_issues[channel_id] = set()
-                
-                new_issues = []
-                for entry in feed.entries:
-                    issue_id = entry.get('id', entry.get('link', ''))
-                    
-                    # Skip if we've seen this issue before
-                    if issue_id in self.seen_issues[channel_id]:
-                        continue
-                    
-                    # Get labels from our parsed map
-                    issue_labels = labels_map.get(issue_id, [])
-                    
-                    # Filter by labels if configured
-                    if sub_data['labels']:
-                        if not any(label in sub_data['labels'] for label in issue_labels):
-                            self.seen_issues[channel_id].add(issue_id)
-                            continue
-                    
-                    new_issues.append((entry, issue_labels, issue_id))
-                
-                # Post new issues
-                for entry, issue_labels, issue_id in new_issues:
-                    await self._post_issue(channel, entry, issue_labels)
-                    self.seen_issues[channel_id].add(issue_id)
-                
-                if new_issues:
-                    sub_data['last_checked'] = datetime.now()
-                    self.save_subscriptions()
-                    
-            except Exception as e:
-                print(f"Error checking feed for channel {channel_id}: {e}")
-    
-    @check_feeds.before_loop
-    async def before_check_feeds(self) -> None:
-        """Wait until the bot is ready before starting the loop."""
-        await self.wait_until_ready()
     
     @tasks.loop(count=1)  # Run once, then we manage our own loop
     async def check_scheduled_messages(self) -> None:
@@ -322,31 +261,6 @@ class GitLabRSSBot(commands.Bot):
         await self.wait_until_ready()
     
     # ==================== Internal Helpers ====================
-    
-    async def _post_issue(self, channel, entry, labels: List[str]) -> None:
-        """Post a new issue to Discord and optionally write to Notion."""
-        title = entry.get('title', 'No title')
-        link = entry.get('link', '')
-        author = entry.get('author', 'Unknown')
-        published = entry.get('published', '')
-        
-        embed = EmbedBuilder.issue_embed(title, link, author, labels, published)
-        await channel.send(embed=embed)
-        
-        # Write to Notion if enabled
-        if Config.NOTION_ENABLED:
-            try:
-                success = await NotionService.create_issue_page_from_rss_entry(
-                    entry,
-                    labels,
-                    issue_url=link
-                )
-                if success:
-                    print(f"✓ Added issue to Notion: {title[:50]}...")
-                else:
-                    print(f"⚠ Failed to add issue to Notion: {title[:50]}...")
-            except Exception as e:
-                print(f"Error writing issue to Notion: {e}")
     
     async def _send_scheduled_announcement(self, schedule_id: str, sched: Dict) -> None:
         """Send a scheduled announcement to channels or DMs based on target_type."""

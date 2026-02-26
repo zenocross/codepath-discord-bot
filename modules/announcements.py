@@ -12,13 +12,13 @@ from utils.embeds import EmbedBuilder
 from utils.time_utils import format_time_until, parse_time_string, parse_day_of_week
 
 if TYPE_CHECKING:
-    from bot.client import GitLabRSSBot
+    from bot.client import DiscordBot
 
 
 class AnnouncementsCog(commands.Cog, name="Announcements"):
     """Commands for managing announcements and scheduled messages."""
     
-    def __init__(self, bot: 'GitLabRSSBot'):
+    def __init__(self, bot: 'DiscordBot'):
         self.bot = bot
     
     def _check_dm_permission(self, ctx: commands.Context) -> bool:
@@ -699,7 +699,7 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
         await ctx.send(result_msg)
 
 
-async def setup(bot: 'GitLabRSSBot') -> None:
+async def setup(bot: 'DiscordBot') -> None:
     """Setup function for loading the cog."""
     await bot.add_cog(AnnouncementsCog(bot))
 

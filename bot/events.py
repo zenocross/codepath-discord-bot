@@ -1,6 +1,5 @@
 """Bot event handlers module."""
 
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 import discord
@@ -10,13 +9,13 @@ from bot.config import Config
 from utils.embeds import EmbedBuilder
 
 if TYPE_CHECKING:
-    from bot.client import GitLabRSSBot
+    from bot.client import DiscordBot
 
 
 class EventsCog(commands.Cog, name="Events"):
     """Handles bot events like on_ready and help command."""
     
-    def __init__(self, bot: 'GitLabRSSBot'):
+    def __init__(self, bot: 'DiscordBot'):
         self.bot = bot
     
     @commands.Cog.listener()
@@ -24,26 +23,6 @@ class EventsCog(commands.Cog, name="Events"):
         """Called when the bot is ready and connected."""
         print(f'Logged in as {self.bot.user.name} ({self.bot.user.id})')
         print('------')
-        
-        # Only auto-subscribe to issue-feed if NO subscriptions exist at all
-        # This ensures user-configured channels aren't overridden
-        if not self.bot.subscriptions:
-            for guild in self.bot.guilds:
-                channel = discord.utils.get(guild.text_channels, name=Config.AUTO_SUBSCRIBE_CHANNEL_NAME)
-                if channel:
-                    self.bot.subscriptions[channel.id] = {
-                        'url': Config.AUTO_SUBSCRIBE_RSS_URL,
-                        'labels': Config.AUTO_SUBSCRIBE_LABELS.copy(),
-                        'last_checked': datetime.now()
-                    }
-                    self.bot.seen_issues[channel.id] = set()
-                    self.bot.save_subscriptions()
-                    print(f'[GitLab] Auto-subscribed #{Config.AUTO_SUBSCRIBE_CHANNEL_NAME} in {guild.name}')
-                    print(f'[GitLab] Filtering for labels: {", ".join(sorted(Config.AUTO_SUBSCRIBE_LABELS))}')
-        else:
-            print(f'[GitLab] Existing subscriptions found, skipping auto-subscribe to #{Config.AUTO_SUBSCRIBE_CHANNEL_NAME}')
-        
-        print(f'[GitLab] Monitoring {len(self.bot.subscriptions)} RSS feed(s)')
         print(f'[Announce] {len(self.bot.channel_groups)} channel group(s)')
         print(f'[Announce] {len(self.bot.scheduled_messages)} scheduled message(s)')
         print(f'[Announce] {len(self.bot.allowed_users)} allowed user(s)')
@@ -79,6 +58,6 @@ class EventsCog(commands.Cog, name="Events"):
             await ctx.send(embed=embed)
 
 
-async def setup(bot: 'GitLabRSSBot') -> None:
+async def setup(bot: 'DiscordBot') -> None:
     """Setup function for loading the cog."""
     await bot.add_cog(EventsCog(bot))

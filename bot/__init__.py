@@ -1,7 +1,7 @@
 """Bot package - Discord bot client and configuration."""
 
 from .config import Config
-from .client import GitLabRSSBot
+from .client import DiscordBot
 
-__all__ = ['Config', 'GitLabRSSBot']
+__all__ = ['Config', 'DiscordBot']
 

@@ -11,9 +11,77 @@
     "1469365950225846404": {
       "added_at": "2026-02-25T17:33:29.546590+00:00",
       "last_processed_id": null
+    },
+    "1451043797483131000": {
+      "added_at": "2026-02-25T21:43:05.740917+00:00",
+      "last_processed_id": null
+    },
+    "1471204453368725565": {
+      "added_at": "2026-02-25T21:43:24.424424+00:00",
+      "last_processed_id": null
+    },
+    "1471205492540833813": {
+      "added_at": "2026-02-25T21:43:48.520052+00:00",
+      "last_processed_id": null
+    },
+    "1451043939737141402": {
+      "added_at": "2026-02-25T21:44:00.299078+00:00",
+      "last_processed_id": null
+    },
+    "1471205680806625434": {
+      "added_at": "2026-02-25T21:44:13.920018+00:00",
+      "last_processed_id": null
     }
   },
-  "community_points": {},
+  "community_points": {
+    "k.b5104": 8,
+    "anon0610": 5,
+    "notveks": 40,
+    "imdesigns": 35,
+    "mufasa1033": 25,
+    "matthewoscarwyatt": 10,
+    "junjulyaugustoctober": 5,
+    "lucianoscarpaci": 20,
+    "hex_salt": 5,
+    "k_noodles": 5,
+    "rlawton.cs": 10,
+    "topu9727": 33,
+    "bpathak": 5,
+    "hube2148": 5,
+    "moo4president": 5,
+    "hayate_kun01": 37,
+    "shikha_71088": 21,
+    "mgadepalli_27526": 10,
+    "duckylikesbread": 10,
+    "beast.op": 5,
+    "speedboatwillie": 5,
+    "_depressed_": 5,
+    "suzkim23": 5,
+    "chichizhang0510": 5,
+    "jc_1024": 5,
+    "sbrshkappa": 67,
+    "arjunc_21": 5,
+    "brittany.h": 5,
+    "CapEvan": 22,
+    "lmfai": 5,
+    "jewlzt": 5,
+    "vkudala_12769": 9,
+    "geniusavo": 12,
+    "queensydelle": 5,
+    "mj_sp05": 5,
+    "jhnx737": 5,
+    "andi_85004": 5,
+    "ActualJam": 10,
+    "cran14": 5,
+    "averrie": 5,
+    "atkpotato": 5,
+    "hieu_mtran": 5,
+    "lindsey3213": 26,
+    "ninjaboy21": 5,
+    "kalyaan09": 5,
+    "uzumaki3374": 14,
+    "lijunwan": 5
+  },
   "default_points": {
     "first_post": 5,
     "first_response": 8,
@@ -21,8 +89,21 @@
   },
   "processed_messages": {},
   "first_responders": {
-    "1469365925387174177": {},
-    "1469367713968423048": {},
-    "1469365950225846404": {}
+    "1451043797483131000": {
+      "1474210158178471977": 785373835783569438,
+      "1474428420367847547": 334702149596610560,
+      "1474429812402683927": 1162238751255314432,
+      "1476353991091818690": 757765166954840145,
+      "1476383094503379024": 431324804885250048,
+      "1476397443657764946": 1133549734343229551
+    },
+    "1471204453368725565": {
+      "1474580840796393582": 334702149596610560,
+      "1476333759539449936": 715691481859358911,
+      "1476299128345595954": 431324804885250048
+    },
+    "1471205492540833813": {},
+    "1451043939737141402": {},
+    "1471205680806625434": {}
   }
 }

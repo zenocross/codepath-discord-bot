@@ -606,6 +606,7 @@ class EmbedBuilder:
                 "`!game community set_points <type> <value>` - Set default points\n"
                 "`!game community set_points <type> <value> <channel_id>` - Set channel-specific points\n"
                 "• Point types: `first_post`, `first_response`, `subsequent_response`\n"
+                "• Supports text channels and forum channels\n"
                 "• New messages are scored in real-time automatically"
             ),
             inline=False
