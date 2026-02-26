@@ -111,6 +111,7 @@ class StudentRecord:
     last_week_wed_missing: bool = False  # Missing Wednesday from previous week
     last_week_sun_missing: bool = False  # Missing Sunday from previous week
     member_id_mismatch: bool = False  # Member ID column doesn't match "What's your Member ID?" column
+    invalid_member_id: bool = False  # Member ID is empty, #N/A, or otherwise invalid
     
     # Office hours
     tue_office_hours: bool = False
@@ -662,8 +663,13 @@ class TrackerDataProcessor(FileProcessor):
                     if member_id not in discord_lookup:
                         discord_lookup[member_id] = discord_name
                 
+                # Build name lookup for fallback matching when Member ID is invalid
+                name_lookup = {}
+                if master_data:
+                    name_lookup = self._build_name_lookup_from_master(master_data)
+                
                 # Transform to StudentRecord objects
-                students = self._transform_records(raw_rows, discord_lookup)
+                students = self._transform_records(raw_rows, discord_lookup, name_lookup)
                 
                 # Apply effective week from early submission mapping
                 # The _effective_week was calculated during filtering based on:
@@ -733,10 +739,12 @@ class TrackerDataProcessor(FileProcessor):
             wb.remove(wb.active)
             
             # Create tabs (Master first, then priority tabs)
+            start_date = options.get('start_date')
+            target_date = options.get('target_date')
             self._create_master_tab(wb, students)
-            self._create_at_risk_tab(wb, students)
-            self._create_flagged_tab(wb, students)
-            self._create_on_track_tab(wb, students)
+            self._create_at_risk_tab(wb, students, start_date, target_date)
+            self._create_flagged_tab(wb, students, start_date, target_date)
+            self._create_on_track_tab(wb, students, start_date, target_date)
             self._create_summary_tab(wb, students)
             
             # Save to bytes
@@ -844,6 +852,15 @@ class TrackerDataProcessor(FileProcessor):
             
             # Process typeform submissions with early submission mapping
             submitted_member_ids = set()
+            invalid_member_id_entries = []  # Track entries with invalid Member IDs
+            
+            # Build name lookup for fallback matching (name -> member_id)
+            name_to_member_id = {}
+            for mid, student in enrolled_students.items():
+                student_name = student.get('name', '').strip().lower()
+                if student_name:
+                    name_to_member_id[student_name] = mid
+            
             for row in typeform_rows:
                 # Parse submission date
                 date_str = row.get(submission_date_col, "") if submission_date_col else ""
@@ -858,15 +875,64 @@ class TrackerDataProcessor(FileProcessor):
                         except ValueError:
                             continue
                 
-                # Get member ID (prefer "Member ID" column over "What's your Member ID?")
-                member_id = None
-                for col in ["Member ID", "member_id", "What's your Member ID?"]:
-                    if col in row:
-                        member_id = str(row[col]).strip()
-                        break
+                # Get member ID - check "Member ID" column first
+                member_id_col_value = str(row.get("Member ID", "") or row.get("member_id", "")).strip()
+                whats_member_id_value = str(row.get("What's your Member ID?", "")).strip()
                 
-                if not member_id or member_id not in enrolled_students:
+                # Check if values are invalid
+                invalid_values = ['#N/A', 'N/A', 'NULL', 'NONE', '#REF!', '#VALUE!', '-', '']
+                primary_is_invalid = not member_id_col_value or member_id_col_value.upper() in invalid_values
+                secondary_is_invalid = not whats_member_id_value or whats_member_id_value.upper() in invalid_values
+                
+                # Determine which member_id to use and if there's an invalid ID issue
+                member_id = None
+                has_invalid_member_id = False
+                matched_by_name = False
+                
+                if not primary_is_invalid and member_id_col_value in enrolled_students:
+                    # Primary column is valid and matches enrolled student
+                    member_id = member_id_col_value
+                elif not secondary_is_invalid and whats_member_id_value in enrolled_students:
+                    # Try fallback to "What's your Member ID?" column
+                    member_id = whats_member_id_value
+                    # Mark as having invalid Member ID since primary column was bad
+                    if primary_is_invalid:
+                        has_invalid_member_id = True
+                else:
+                    # Both Member ID columns failed - try name matching as last resort
+                    # Try multiple possible name column variations
+                    name = None
+                    for name_col in ["What's your name?", "Name", "name", "Full Name", "full_name", "Student Name"]:
+                        name = row.get(name_col, "")
+                        if name and str(name).strip():
+                            break
+                    
+                    name_clean = str(name).strip().lower() if name else ""
+                    
+                    if name_clean:
+                        # Try to find matching enrolled student by name
+                        if name_clean in name_to_member_id:
+                            member_id = name_to_member_id[name_clean]
+                            has_invalid_member_id = True
+                            matched_by_name = True
+                
+                if not member_id:
+                    # Can't match to any enrolled student - track as invalid entry
+                    name = row.get("What's your name?", "") or row.get("Name", "")
+                    invalid_member_id_entries.append({
+                        'name': str(name).strip() if name else "Unknown",
+                        'member_id_raw': member_id_col_value or "empty",
+                        'row': row
+                    })
                     continue
+                
+                # Mark the student if they have invalid Member ID issue
+                if has_invalid_member_id:
+                    enrolled_students[member_id]['invalid_member_id'] = True
+                    if matched_by_name:
+                        enrolled_students[member_id]['invalid_member_id_value'] = f"{member_id_col_value or 'empty'} (matched by name)"
+                    else:
+                        enrolled_students[member_id]['invalid_member_id_value'] = member_id_col_value or "empty"
                 
                 # Determine submission type (Wed/Sun)
                 is_sunday = False
@@ -960,11 +1026,27 @@ class TrackerDataProcessor(FileProcessor):
                 if student.get('member_id_mismatch', False):
                     issues.append("Member ID mismatch")
                 
+                # Check for invalid Member ID in submission (primary column was #N/A, empty, etc.)
+                if student.get('invalid_member_id', False):
+                    invalid_val = student.get('invalid_member_id_value', 'invalid')
+                    issues.append(f"Invalid Member ID column: {invalid_val}")
+                
                 # Categorize based on issues
-                if missing_sunday or student.get('member_id_mismatch', False):
+                if missing_sunday or student.get('member_id_mismatch', False) or student.get('invalid_member_id', False):
                     at_risk.append({**student, 'issues': issues, 'status': 'AT RISK'})
                 else:
                     on_track.append({**student, 'issues': [], 'status': 'ON TRACK'})
+            
+            # Add entries with invalid Member IDs to at_risk
+            for entry in invalid_member_id_entries:
+                at_risk.append({
+                    'member_id': f"INVALID: {entry['member_id_raw']}",
+                    'name': entry['name'],
+                    'discord': '',
+                    'submissions': [],
+                    'issues': [f"Invalid Member ID: {entry['member_id_raw']}"],
+                    'status': 'AT RISK'
+                })
             
             # Create summary embed
             embed = discord.Embed(
@@ -1591,8 +1673,58 @@ class TrackerDataProcessor(FileProcessor):
         
         return discord_lookup
     
+    def _build_name_lookup_from_master(self, master_data: bytes) -> Dict[str, str]:
+        """Build a name -> member_id lookup from master CSV for fallback matching.
+        
+        Args:
+            master_data: Raw bytes of master CSV file
+            
+        Returns:
+            Dict mapping lowercase name to member_id
+        """
+        name_lookup: Dict[str, str] = {}
+        
+        try:
+            text_data = master_data.decode('utf-8-sig')
+            text_data = _preprocess_master_csv(text_data)
+            
+            sample = text_data[:4096]
+            try:
+                dialect = csv.Sniffer().sniff(sample, delimiters=',\t;|')
+            except csv.Error:
+                dialect = 'excel'
+            
+            csv_reader = csv.DictReader(io.StringIO(text_data), dialect=dialect)
+            rows = list(csv_reader)
+            
+            if not rows:
+                return name_lookup
+            
+            headers = list(rows[0].keys())
+            
+            # Find columns
+            member_id_col = self._find_column(headers, MASTER_CSV_COLUMNS["member_id"])
+            name_col = self._find_column(headers, MASTER_CSV_COLUMNS["full_name"])
+            
+            if not member_id_col or not name_col:
+                return name_lookup
+            
+            # Build lookup
+            for row in rows:
+                member_id = str(row.get(member_id_col, "")).strip()
+                name = str(row.get(name_col, "")).strip().lower()
+                
+                if member_id and name:
+                    name_lookup[name] = member_id
+            
+        except Exception as e:
+            print(f"[TrackerProcessor] Error building name lookup: {e}")
+        
+        return name_lookup
+    
     def _transform_records(self, raw_rows: List[Dict], 
-                          discord_lookup: Optional[Dict[str, str]] = None) -> List[StudentRecord]:
+                          discord_lookup: Optional[Dict[str, str]] = None,
+                          name_lookup: Optional[Dict[str, str]] = None) -> List[StudentRecord]:
         """Transform raw CSV rows into StudentRecord objects.
         
         Args:
@@ -1663,10 +1795,49 @@ class TrackerDataProcessor(FileProcessor):
                     elif hasattr(student, field_name):
                         setattr(student, field_name, value)
             
-            # Check for Member ID mismatch between columns
+            # Check for invalid Member ID values (#N/A, empty, etc.)
+            # And try fallback matching if primary Member ID is invalid
             member_id_col_value = _get_value_flexible(row, "Member ID")
             whats_member_id_value = _get_value_flexible(row, "What's your Member ID?")
-            if member_id_col_value and whats_member_id_value:
+            
+            invalid_values = ['#N/A', 'N/A', 'NULL', 'NONE', '#REF!', '#VALUE!', '-', '']
+            primary_is_invalid = (
+                not member_id_col_value or 
+                str(member_id_col_value).strip().upper() in invalid_values
+            )
+            secondary_is_invalid = (
+                not whats_member_id_value or 
+                str(whats_member_id_value).strip().upper() in invalid_values
+            )
+            
+            if primary_is_invalid:
+                # Primary Member ID is invalid - try fallbacks
+                if not secondary_is_invalid:
+                    # Use "What's your Member ID?" as fallback
+                    student.member_id = str(whats_member_id_value).strip()
+                    student.invalid_member_id = True
+                elif name_lookup:
+                    # Try name matching as last resort
+                    name = None
+                    for name_col in ["What's your name?", "Name", "name", "Full Name"]:
+                        name = _get_value_flexible(row, name_col)
+                        if name and str(name).strip():
+                            break
+                    
+                    if name:
+                        name_clean = str(name).strip().lower()
+                        if name_clean in name_lookup:
+                            student.member_id = name_lookup[name_clean]
+                            student.invalid_member_id = True
+                        else:
+                            student.invalid_member_id = True
+                    else:
+                        student.invalid_member_id = True
+                else:
+                    student.invalid_member_id = True
+            
+            # Check for Member ID mismatch between columns (only if primary was valid)
+            if not primary_is_invalid and member_id_col_value and whats_member_id_value:
                 member_id_clean = str(member_id_col_value).strip()
                 whats_clean = str(whats_member_id_value).strip()
                 if member_id_clean and whats_clean and member_id_clean != whats_clean:
@@ -2148,14 +2319,26 @@ class TrackerDataProcessor(FileProcessor):
                     intervention = "TIMELINE_COMPRESSED"
             
             # Always append MEMBER_ID_MISMATCH if detected (data quality issue)
+            # This is AT_RISK level since it indicates potential identity issues
             if student.member_id_mismatch:
                 if intervention:
                     intervention += "\nMEMBER_ID_MISMATCH"
                 else:
                     intervention = "MEMBER_ID_MISMATCH"
-                # Ensure at least flagged if only mismatch issue
-                if not at_risk and not flagged:
-                    flagged = True
+                # Member ID mismatch is AT_RISK level
+                if not at_risk:
+                    at_risk = True
+            
+            # Always append INVALID_MEMBER_ID if detected (data quality issue)
+            # This is AT_RISK level since we can't verify the student's identity
+            if student.invalid_member_id:
+                if intervention:
+                    intervention += "\nINVALID_MEMBER_ID"
+                else:
+                    intervention = "INVALID_MEMBER_ID"
+                # Invalid Member ID is AT_RISK level
+                if not at_risk:
+                    at_risk = True
             
             # Set status
             if at_risk:
@@ -2323,7 +2506,13 @@ class TrackerDataProcessor(FileProcessor):
         
         return student_status
     
-    def _aggregate_student_issues(self, students: List[StudentRecord], status_filter: str) -> List[Dict]:
+    def _aggregate_student_issues(
+        self, 
+        students: List[StudentRecord], 
+        status_filter: str,
+        start_date: Optional[datetime] = None,
+        target_date: Optional[datetime] = None
+    ) -> List[Dict]:
         """Aggregate student records into unique entries with combined descriptions.
         
         Uses priority-based placement: a student only appears in the tab matching
@@ -2334,6 +2523,8 @@ class TrackerDataProcessor(FileProcessor):
         Args:
             students: List of all student records
             status_filter: Grade status to filter by (e.g., "🔴 AT RISK")
+            start_date: Program start date for deadline calculations
+            target_date: Current target date to check against deadlines
             
         Returns:
             List of dicts with unique students and aggregated issue descriptions
@@ -2434,18 +2625,34 @@ class TrackerDataProcessor(FileProcessor):
             
             if getattr(s, '_missing_previous_phase', False):
                 student_map[key]['issues'].add(f"Week {s.week}: Missing previous phase")
+            
+            if s.member_id_mismatch:
+                student_map[key]['issues'].add("Member ID mismatch")
+            
+            if s.invalid_member_id:
+                student_map[key]['issues'].add(f"Invalid Member ID: {s.member_id or 'empty'}")
         
         # Second pass: Add missing Sunday submission issues based on aggregated week data
         # Wednesday is optional (mid-week check-in), only Sunday is required
+        # Only flag if the Sunday deadline has actually passed
         if status_filter != "🟢 ON TRACK":
             for key, data in student_map.items():
                 week_subs = data.get('week_submissions', {})
                 for week, subs in week_subs.items():
                     if week == 0:
                         continue  # Skip week 0 (no submissions students)
-                    # Only flag missing Sunday - Wednesday is optional
+                    
+                    # Only flag missing Sunday if we can verify the deadline has passed
                     if not subs['sun']:
-                        data['issues'].add(f"Week {week}: Missing Sunday submission")
+                        should_flag = True
+                        if start_date and target_date:
+                            _, sun_deadline = self._get_week_deadlines(start_date, week)
+                            # Only flag if Sunday deadline has passed
+                            if target_date.date() < sun_deadline.date():
+                                should_flag = False
+                        
+                        if should_flag:
+                            data['issues'].add(f"Week {week}: Missing Sunday submission")
         
         # Convert to list and build descriptions
         result = []
@@ -2481,12 +2688,18 @@ class TrackerDataProcessor(FileProcessor):
         
         return result
     
-    def _create_at_risk_tab(self, wb: Workbook, students: List[StudentRecord]) -> None:
+    def _create_at_risk_tab(
+        self, 
+        wb: Workbook, 
+        students: List[StudentRecord],
+        start_date: Optional[datetime] = None,
+        target_date: Optional[datetime] = None
+    ) -> None:
         """Create Tab 2: At Risk Students (unique per student with aggregated descriptions)."""
         ws = wb.create_sheet("P1 - At Risk")
         
         # Get unique students with aggregated issues
-        at_risk = self._aggregate_student_issues(students, "🔴 AT RISK")
+        at_risk = self._aggregate_student_issues(students, "🔴 AT RISK", start_date, target_date)
         
         # Sort: NO_SUBMISSIONS at the end, then by latest week (descending)
         def at_risk_sort_key(s):
@@ -2535,12 +2748,18 @@ class TrackerDataProcessor(FileProcessor):
         self._auto_fit_columns(ws)
         ws.freeze_panes = 'A2'
     
-    def _create_flagged_tab(self, wb: Workbook, students: List[StudentRecord]) -> None:
+    def _create_flagged_tab(
+        self, 
+        wb: Workbook, 
+        students: List[StudentRecord],
+        start_date: Optional[datetime] = None,
+        target_date: Optional[datetime] = None
+    ) -> None:
         """Create Tab 3: Flagged Students (unique per student with aggregated descriptions)."""
         ws = wb.create_sheet("P2 - Flagged")
         
         # Get unique students with aggregated issues
-        flagged = self._aggregate_student_issues(students, "🟡 FLAGGED")
+        flagged = self._aggregate_student_issues(students, "🟡 FLAGGED", start_date, target_date)
         
         # Sort by latest week
         flagged.sort(key=lambda s: s['latest_week'], reverse=True)
@@ -2583,12 +2802,18 @@ class TrackerDataProcessor(FileProcessor):
         self._auto_fit_columns(ws)
         ws.freeze_panes = 'A2'
     
-    def _create_on_track_tab(self, wb: Workbook, students: List[StudentRecord]) -> None:
+    def _create_on_track_tab(
+        self, 
+        wb: Workbook, 
+        students: List[StudentRecord],
+        start_date: Optional[datetime] = None,
+        target_date: Optional[datetime] = None
+    ) -> None:
         """Create Tab 4: On Track Students (unique per student with summary)."""
         ws = wb.create_sheet("P3 - On Track")
         
         # Get unique students with aggregated info
-        on_track = self._aggregate_student_issues(students, "🟢 ON TRACK")
+        on_track = self._aggregate_student_issues(students, "🟢 ON TRACK", start_date, target_date)
         
         # Sort by latest week
         on_track.sort(key=lambda s: s['latest_week'], reverse=True)
