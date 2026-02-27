@@ -605,9 +605,10 @@ class EmbedBuilder:
                 "`!game community reset_scores confirm` - Reset all scores\n"
                 "`!game community set_points <type> <value>` - Set default points\n"
                 "`!game community set_points <type> <value> <channel_id>` - Set channel-specific points\n"
-                "• Point types: `first_post`, `first_response`, `subsequent_response`\n"
+                "• Point types: `first_post`, `first_response`, `subsequent_response`, `emoji_reaction`\n"
+                "• Emoji reactions on others' posts earn points (default: 1)\n"
                 "• Supports text channels and forum channels\n"
-                "• New messages are scored in real-time automatically"
+                "• New messages and reactions are scored in real-time automatically"
             ),
             inline=False
         )

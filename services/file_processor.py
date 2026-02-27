@@ -223,7 +223,7 @@ class CsvToExcelProcessor(FileProcessor):
 # ==================== File Storage Service (Single Responsibility) ====================
 
 # Valid file category names
-VALID_FILE_CATEGORIES = {"master", "typeform", "zoom"}
+VALID_FILE_CATEGORIES = {"master", "typeform", "zoom", "app"}
 
 
 class FileStorageService:

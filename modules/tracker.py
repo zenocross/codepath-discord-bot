@@ -5,6 +5,7 @@ Commands:
     !tracker upload master    - Upload master roster CSV
     !tracker upload typeform  - Upload typeform responses CSV
     !tracker upload zoom      - Upload zoom attendance CSV
+    !tracker upload app       - Upload app data CSV (phone numbers)
     !tracker download         - Generate Excel report from uploaded CSVs
     !tracker files            - Show status of uploaded CSV files
     !tracker clear <type>     - Clear specific CSV file
@@ -33,7 +34,8 @@ from services.gitlab_service import GitLabService
 FILE_DESCRIPTIONS = {
     "master": "Master Roster (student list with enrollment data)",
     "typeform": "Typeform Responses (weekly progress submissions)",
-    "zoom": "Zoom Attendance (lecture/office hours attendance)"
+    "zoom": "Zoom Attendance (lecture/office hours attendance)",
+    "app": "App Data (phone numbers and additional contact info)"
 }
 
 
@@ -278,6 +280,20 @@ class TrackerCog(commands.Cog, name="Tracker"):
         
         await self._wait_for_csv(ctx, "zoom")
     
+    @upload.command(name='app')
+    async def upload_app(self, ctx: commands.Context):
+        """Upload app/phone data CSV file."""
+        existing = self.storage.get_file("app")
+        existing_info = f"\n   └─ Current: `{existing.filename}`" if existing else ""
+        
+        await ctx.send(
+            f"**📤 Upload App Data CSV**{existing_info}\n\n"
+            f"This CSV should contain Member ID and Phone Number columns.\n"
+            f"Please upload the app data CSV file, or type `cancel` to abort:"
+        )
+        
+        await self._wait_for_csv(ctx, "app")
+    
     @commands.group(name='clear', invoke_without_command=True)
     async def clear(self, ctx: commands.Context):
         """Clear uploaded CSV files. Use subcommands to specify which file."""
@@ -287,6 +303,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
             "• `!tracker clear master` - Remove master roster CSV\n"
             "• `!tracker clear typeform` - Remove typeform responses CSV\n"
             "• `!tracker clear zoom` - Remove zoom attendance CSV\n"
+            "• `!tracker clear app` - Remove app data CSV\n"
             "• `!tracker clearall` - Remove all CSV files"
         )
     
@@ -313,6 +330,14 @@ class TrackerCog(commands.Cog, name="Tracker"):
             await ctx.send("✅ **Zoom CSV cleared!**")
         else:
             await ctx.send("ℹ️ No zoom CSV file to clear.")
+    
+    @clear.command(name='app')
+    async def clear_app(self, ctx: commands.Context):
+        """Clear the app data CSV file."""
+        if self.storage.delete_file("app"):
+            await ctx.send("✅ **App data CSV cleared!**")
+        else:
+            await ctx.send("ℹ️ No app data CSV file to clear.")
     
     @commands.command(name='clearall')
     async def clearall(self, ctx: commands.Context):
@@ -429,6 +454,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
             # Read files
             typeform_data = self.storage.read_file(typeform_file)
             master_data = self.storage.read_file(master_file)
+            app_data = self.storage.read_file_by_category("app")
             
             # Process with date filter
             result = self.processor.process_submissions(
@@ -436,7 +462,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
                 master_data=master_data,
                 start_date=start_date,
                 target_date=target_date,
-                current_week=current_week
+                current_week=current_week,
+                app_data=app_data
             )
             
             if not result.success:
@@ -536,11 +563,13 @@ class TrackerCog(commands.Cog, name="Tracker"):
             typeform_data = self.storage.read_file(typeform_file)
             master_data = self.storage.read_file(master_file) if master_file else None
             zoom_data = self.storage.read_file_by_category("zoom")
+            app_data = self.storage.read_file_by_category("app")
             
             # Build options dict
             process_options = {
                 'master_data': master_data,
                 'zoom_data': zoom_data,
+                'app_data': app_data,
                 'start_date': start_date,
                 'target_date': target_date,
                 'current_week': current_week,
@@ -627,13 +656,16 @@ class TrackerCog(commands.Cog, name="Tracker"):
             typeform_data = self.storage.read_file(typeform_file)
             master_data = self.storage.read_file(master_file) if master_file else None
             zoom_data = self.storage.read_file(zoom_file) if zoom_file else None
+            app_file = self.storage.get_file("app")
+            app_data = self.storage.read_file(app_file) if app_file else None
             
             # Process with tracker processor (pass all data sources)
             result = self.processor.process(
                 typeform_data,
                 options={
                     'master_data': master_data,
-                    'zoom_data': zoom_data
+                    'zoom_data': zoom_data,
+                    'app_data': app_data
                 }
             )
             
@@ -655,7 +687,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
                 f"✅ **Tracker Report Generated!**\n"
                 f"• Students processed: {result.rows_processed}\n"
                 f"• Tabs created:\n"
-                f"  └─ Master Tracker (all fields)\n"
+                f"  └─ Intervention Tracker (all fields)\n"
                 f"  └─ P1 - At Risk (red/orange/yellow coding)\n"
                 f"  └─ P2 - Flagged (yellow coding)\n"
                 f"  └─ P3 - On Track (green coding)\n"

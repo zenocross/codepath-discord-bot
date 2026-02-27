@@ -43,6 +43,8 @@ class StudentRecord:
     name: str = ""
     member_id: str = ""
     discord_username: str = ""
+    email: str = ""
+    phone: str = ""
     
     # Time tracking
     week: int = 0
@@ -176,6 +178,7 @@ MASTER_CSV_COLUMNS = {
     "discord_username": ["Discord Username", "Discord", "discord_username"],
     "full_name": ["Full Name", "Name", "full_name"],
     "email": ["Email", "email", "Secondary Email"],
+    "phone": ["Phone", "phone", "Phone Number", "phone_number", "Mobile", "Cell"],
     "slack_username": ["Slack Username", "Slack", "slack_username"],
     "status": ["Status", "status"],
     "university": ["University", "university"],
@@ -378,7 +381,7 @@ class TrackerDataProcessor(FileProcessor):
     """Processes tracker CSV data into a comprehensive Excel workbook.
     
     Creates multiple tabs:
-    - Tab 1: Master Tracker (all fields)
+    - Tab 1: Intervention Tracker (all fields)
     - Tab 2: At Risk Students (P1 Priority)
     - Tab 3: Flagged Students (P2 Priority)  
     - Tab 4: On Track Students (P3 Spot Checks)
@@ -387,7 +390,7 @@ class TrackerDataProcessor(FileProcessor):
     
     # Output column definitions for each tab
     ALL_COLUMNS = [
-        "student_id", "name", "member_id", "discord_username", "week",
+        "student_id", "name", "member_id", "discord_username", "email", "phone", "week",
         "submission_date", "wed_submitted", "sun_submitted", "submission_count_cumulative",
         "current_phase", "weeks_in_phase", "contribution_num", "contribution_start_week",
         "weeks_on_contribution", "weeks_remaining", "timeline_type", "phase_changed_this_week",
@@ -634,6 +637,12 @@ class TrackerDataProcessor(FileProcessor):
             if master_data:
                 discord_lookup = self._build_master_discord_lookup(master_data)
             
+            # Build phone lookup from app CSV
+            phone_lookup: Dict[str, str] = {}
+            app_data = options.get('app_data')
+            if app_data:
+                phone_lookup = self._build_app_phone_lookup(app_data)
+            
             # If no rows after filtering, but we have master data, continue with just At Risk students
             if not raw_rows:
                 if options.get('filter_by_date') and master_data:
@@ -643,7 +652,7 @@ class TrackerDataProcessor(FileProcessor):
                     start_date = options.get('start_date')
                     students = self._add_missing_students_as_at_risk(
                         students, master_data, discord_lookup, options['target_date'], 
-                        current_week, start_date
+                        current_week, start_date, phone_lookup
                     )
                     
                     if not students:
@@ -668,8 +677,23 @@ class TrackerDataProcessor(FileProcessor):
                 if master_data:
                     name_lookup = self._build_name_lookup_from_master(master_data)
                 
+                # Build contact lookup for email and phone
+                contact_lookup = {}
+                if master_data:
+                    contact_lookup = self._build_master_contact_lookup(master_data)
+                
+                # Merge phone numbers from app CSV (overrides master if present)
+                app_data = options.get('app_data')
+                if app_data:
+                    phone_lookup = self._build_app_phone_lookup(app_data)
+                    for member_id, phone in phone_lookup.items():
+                        if member_id in contact_lookup:
+                            contact_lookup[member_id]['phone'] = phone
+                        else:
+                            contact_lookup[member_id] = {'discord': '', 'email': '', 'phone': phone}
+                
                 # Transform to StudentRecord objects
-                students = self._transform_records(raw_rows, discord_lookup, name_lookup)
+                students = self._transform_records(raw_rows, discord_lookup, name_lookup, contact_lookup)
                 
                 # Apply effective week from early submission mapping
                 # The _effective_week was calculated during filtering based on:
@@ -708,7 +732,7 @@ class TrackerDataProcessor(FileProcessor):
                     start_date = options.get('start_date')
                     students = self._add_missing_students_as_at_risk(
                         students, master_data, discord_lookup, options['target_date'], 
-                        current_week, start_date
+                        current_week, start_date, phone_lookup
                     )
                 
                 # Enrich with GitLab data if service is provided
@@ -770,7 +794,7 @@ class TrackerDataProcessor(FileProcessor):
     
     def process_submissions(self, typeform_data: bytes, master_data: bytes,
                            start_date: datetime, target_date: datetime,
-                           current_week: int) -> SubmissionsResult:
+                           current_week: int, app_data: Optional[bytes] = None) -> SubmissionsResult:
         """Process submissions for real-time checking.
         
         Args:
@@ -779,6 +803,7 @@ class TrackerDataProcessor(FileProcessor):
             start_date: Program start date
             target_date: Date to filter submissions up to
             current_week: Calculated current week number
+            app_data: Optional app CSV data bytes for phone numbers
             
         Returns:
             SubmissionsResult with summary embed and student lists
@@ -807,6 +832,8 @@ class TrackerDataProcessor(FileProcessor):
             member_id_col = self._find_column(headers, MASTER_CSV_COLUMNS["member_id"])
             name_col = self._find_column(headers, MASTER_CSV_COLUMNS["full_name"])
             discord_col = self._find_column(headers, MASTER_CSV_COLUMNS["discord_username"])
+            email_col = self._find_column(headers, MASTER_CSV_COLUMNS["email"])
+            phone_col = self._find_column(headers, MASTER_CSV_COLUMNS["phone"])
             
             enrolled_students: Dict[str, Dict] = {}
             for row in master_rows:
@@ -816,9 +843,18 @@ class TrackerDataProcessor(FileProcessor):
                         'member_id': member_id,
                         'name': str(row.get(name_col, "")).strip() if name_col else "",
                         'discord': str(row.get(discord_col, "")).strip() if discord_col else "",
+                        'email': str(row.get(email_col, "")).strip() if email_col else "",
+                        'phone': str(row.get(phone_col, "")).strip() if phone_col else "",
                         'submissions': [],
                         'issues': []
                     }
+            
+            # Merge phone numbers from app CSV (overrides master if present)
+            if app_data:
+                phone_lookup = self._build_app_phone_lookup(app_data)
+                for member_id, phone in phone_lookup.items():
+                    if member_id in enrolled_students:
+                        enrolled_students[member_id]['phone'] = phone
             
             # Parse typeform CSV and filter by date
             typeform_text = typeform_data.decode('utf-8-sig')
@@ -1161,7 +1197,8 @@ class TrackerDataProcessor(FileProcessor):
         discord_lookup: Dict[str, str],
         target_date: datetime,
         current_week: int = 1,
-        start_date: Optional[datetime] = None
+        start_date: Optional[datetime] = None,
+        phone_lookup: Optional[Dict[str, str]] = None
     ) -> List[StudentRecord]:
         """Add students from master CSV with no submissions as At Risk entries.
         
@@ -1172,10 +1209,12 @@ class TrackerDataProcessor(FileProcessor):
             target_date: Target date for filtering
             current_week: Current week number (based on start_date and target_date)
             start_date: Program start date (for calculating missed deadlines)
+            phone_lookup: Optional member_id -> phone mapping from app CSV
             
         Returns:
             Updated list including At Risk entries for students with no submissions
         """
+        phone_lookup = phone_lookup or {}
         try:
             # Get all member_ids that already have submissions
             submitted_member_ids = set(s.member_id for s in students if s.member_id)
@@ -1205,6 +1244,8 @@ class TrackerDataProcessor(FileProcessor):
             member_id_col = self._find_column(headers, MASTER_CSV_COLUMNS["member_id"])
             name_col = self._find_column(headers, MASTER_CSV_COLUMNS["full_name"])
             discord_col = self._find_column(headers, MASTER_CSV_COLUMNS["discord_username"])
+            email_col = self._find_column(headers, MASTER_CSV_COLUMNS["email"])
+            phone_col = self._find_column(headers, MASTER_CSV_COLUMNS["phone"])
             
             # Add missing students as At Risk
             for row in master_rows:
@@ -1214,10 +1255,16 @@ class TrackerDataProcessor(FileProcessor):
                     # This student has no submissions - add as At Risk
                     name = str(row.get(name_col, "")).strip() if name_col else ""
                     discord = str(row.get(discord_col, "")).strip() if discord_col else ""
+                    email = str(row.get(email_col, "")).strip() if email_col else ""
+                    phone = str(row.get(phone_col, "")).strip() if phone_col else ""
                     
                     # Use discord lookup as fallback
                     if not discord and member_id in discord_lookup:
                         discord = discord_lookup[member_id]
+                    
+                    # Use phone lookup from app CSV (overrides master)
+                    if member_id in phone_lookup:
+                        phone = phone_lookup[member_id]
                     
                     # Create an At Risk record for this student
                     # Use current_week (based on start_date and target_date) instead of 0
@@ -1225,6 +1272,8 @@ class TrackerDataProcessor(FileProcessor):
                         member_id=member_id,
                         name=name,
                         discord_username=discord,
+                        email=email,
+                        phone=phone,
                         week=current_week,
                         submission_date="",
                         wed_submitted=False,
@@ -1635,6 +1684,112 @@ class TrackerDataProcessor(FileProcessor):
         
         return discord_lookup
     
+    def _build_master_contact_lookup(self, master_data: bytes) -> Dict[str, Dict[str, str]]:
+        """Build a member_id -> contact info lookup from master roster CSV.
+        
+        Args:
+            master_data: Raw bytes of master CSV file
+            
+        Returns:
+            Dict mapping member_id to dict with discord, email, phone
+        """
+        contact_lookup: Dict[str, Dict[str, str]] = {}
+        
+        try:
+            text_data = master_data.decode('utf-8-sig')
+            text_data = _preprocess_master_csv(text_data)
+            
+            sample = text_data[:4096]
+            try:
+                dialect = csv.Sniffer().sniff(sample, delimiters=',\t;|')
+            except csv.Error:
+                dialect = 'excel'
+            
+            csv_reader = csv.DictReader(io.StringIO(text_data), dialect=dialect)
+            rows = list(csv_reader)
+            
+            if not rows:
+                return contact_lookup
+            
+            headers = list(rows[0].keys())
+            
+            member_id_col = self._find_column(headers, MASTER_CSV_COLUMNS["member_id"])
+            if not member_id_col:
+                return contact_lookup
+            
+            discord_col = self._find_column(headers, MASTER_CSV_COLUMNS["discord_username"])
+            email_col = self._find_column(headers, MASTER_CSV_COLUMNS["email"])
+            phone_col = self._find_column(headers, MASTER_CSV_COLUMNS["phone"])
+            
+            for row in rows:
+                member_id = str(row.get(member_id_col, "")).strip()
+                if member_id:
+                    contact_lookup[member_id] = {
+                        'discord': str(row.get(discord_col, "")).strip() if discord_col else "",
+                        'email': str(row.get(email_col, "")).strip() if email_col else "",
+                        'phone': str(row.get(phone_col, "")).strip() if phone_col else "",
+                    }
+            
+            print(f"[TrackerProcessor] Master CSV: Built contact lookup with {len(contact_lookup)} entries")
+            
+        except Exception as e:
+            print(f"[TrackerProcessor] Error parsing master CSV for contacts: {e}")
+        
+        return contact_lookup
+    
+    def _build_app_phone_lookup(self, app_data: bytes) -> Dict[str, str]:
+        """Build a member_id -> phone lookup from app data CSV.
+        
+        Args:
+            app_data: Raw bytes of app CSV file
+            
+        Returns:
+            Dict mapping member_id to phone number
+        """
+        phone_lookup: Dict[str, str] = {}
+        
+        try:
+            text_data = app_data.decode('utf-8-sig')
+            text_data = _preprocess_master_csv(text_data)
+            
+            sample = text_data[:4096]
+            try:
+                dialect = csv.Sniffer().sniff(sample, delimiters=',\t;|')
+            except csv.Error:
+                dialect = 'excel'
+            
+            csv_reader = csv.DictReader(io.StringIO(text_data), dialect=dialect)
+            rows = list(csv_reader)
+            
+            if not rows:
+                return phone_lookup
+            
+            headers = list(rows[0].keys())
+            
+            member_id_col = self._find_column(headers, MASTER_CSV_COLUMNS["member_id"])
+            if not member_id_col:
+                print("[TrackerProcessor] App CSV: Member ID column not found")
+                return phone_lookup
+            
+            phone_col = self._find_column(headers, MASTER_CSV_COLUMNS["phone"])
+            if not phone_col:
+                print("[TrackerProcessor] App CSV: Phone column not found")
+                return phone_lookup
+            
+            for row in rows:
+                member_id = str(row.get(member_id_col, "")).strip()
+                phone = str(row.get(phone_col, "")).strip()
+                
+                if member_id and phone:
+                    phone_lookup[member_id] = phone
+            
+            print(f"[TrackerProcessor] App CSV: Built phone lookup with {len(phone_lookup)} entries")
+            
+        except Exception as e:
+            print(f"[TrackerProcessor] Error parsing app CSV for phones: {e}")
+        
+        return phone_lookup
+    
     def _build_discord_lookup(self, raw_rows: List[Dict]) -> Dict[str, str]:
         """Build a member_id -> discord_username lookup from typeform data.
         
@@ -1724,15 +1879,19 @@ class TrackerDataProcessor(FileProcessor):
     
     def _transform_records(self, raw_rows: List[Dict], 
                           discord_lookup: Optional[Dict[str, str]] = None,
-                          name_lookup: Optional[Dict[str, str]] = None) -> List[StudentRecord]:
+                          name_lookup: Optional[Dict[str, str]] = None,
+                          contact_lookup: Optional[Dict[str, Dict[str, str]]] = None) -> List[StudentRecord]:
         """Transform raw CSV rows into StudentRecord objects.
         
         Args:
             raw_rows: List of raw CSV row dictionaries
             discord_lookup: Optional member_id -> discord_username mapping
+            name_lookup: Optional name -> member_id mapping for fallback matching
+            contact_lookup: Optional member_id -> {discord, email, phone} mapping
         """
         students = []
         discord_lookup = discord_lookup or {}
+        contact_lookup = contact_lookup or {}
         
         for row in raw_rows:
             student = StudentRecord()
@@ -1843,10 +2002,21 @@ class TrackerDataProcessor(FileProcessor):
                 if member_id_clean and whats_clean and member_id_clean != whats_clean:
                     student.member_id_mismatch = True
             
-            # Lookup discord username from the lookup table if not already set
-            if not student.discord_username and student.member_id:
+            # Lookup contact info from master roster
+            if student.member_id:
                 member_id = str(student.member_id).strip()
-                if member_id in discord_lookup:
+                
+                # Try contact lookup first (has all info)
+                if member_id in contact_lookup:
+                    contact = contact_lookup[member_id]
+                    if not student.discord_username and contact.get('discord'):
+                        student.discord_username = contact['discord']
+                    if not student.email and contact.get('email'):
+                        student.email = contact['email']
+                    if not student.phone and contact.get('phone'):
+                        student.phone = contact['phone']
+                # Fall back to discord_lookup for backward compatibility
+                elif member_id in discord_lookup and not student.discord_username:
                     student.discord_username = discord_lookup[member_id]
             
             students.append(student)
@@ -2352,11 +2522,11 @@ class TrackerDataProcessor(FileProcessor):
     
     def _create_master_tab(self, wb: Workbook, students: List[StudentRecord]) -> None:
         """Create Tab 1: Master Sheet with all student data."""
-        ws = wb.create_sheet("Master Tracker")
+        ws = wb.create_sheet("Intervention Tracker")
         
         # Define all columns in order
         headers = [
-            "member_id", "name", "discord_username", "week",
+            "member_id", "name", "discord_username", "email", "phone", "week",
             "submission_date", "wed_submitted", "sun_submitted", "submission_count_cumulative",
             "current_phase", "weeks_in_phase", "contribution_num", "contribution_start_week",
             "weeks_on_contribution", "weeks_remaining", "timeline_type", "phase_changed_this_week",
@@ -2387,6 +2557,8 @@ class TrackerDataProcessor(FileProcessor):
                 student.member_id,
                 student.name,
                 student.discord_username,
+                student.email,
+                student.phone,
                 student.week,
                 student.submission_date,
                 "Yes" if student.wed_submitted else "No",
@@ -2547,6 +2719,8 @@ class TrackerDataProcessor(FileProcessor):
                     'name': s.name,
                     'member_id': s.member_id,
                     'discord': s.discord_username,
+                    'email': s.email,
+                    'phone': s.phone,
                     'latest_week': s.week,
                     'latest_phase': s.current_phase,
                     'weeks_in_phase': s.weeks_in_phase,
@@ -2711,7 +2885,7 @@ class TrackerDataProcessor(FileProcessor):
         at_risk.sort(key=at_risk_sort_key)
         
         # Write header
-        headers = ["Name", "Member ID", "Discord", "Latest Week", "Phase", "Timeline",
+        headers = ["Name", "Member ID", "Discord", "Email", "Phone", "Latest Week", "Phase", "Timeline",
                    "Deliverables", "Intervention Types", "Description"]
         
         for col, header in enumerate(headers, 1):
@@ -2727,6 +2901,8 @@ class TrackerDataProcessor(FileProcessor):
                 student['name'],
                 student['member_id'],
                 student['discord'],
+                student.get('email', ''),
+                student.get('phone', ''),
                 student['latest_week'],
                 student['latest_phase'],
                 student['timeline'],
@@ -2765,7 +2941,7 @@ class TrackerDataProcessor(FileProcessor):
         flagged.sort(key=lambda s: s['latest_week'], reverse=True)
         
         # Write header
-        headers = ["Name", "Member ID", "Discord", "Latest Week", "Phase", "Timeline",
+        headers = ["Name", "Member ID", "Discord", "Email", "Phone", "Latest Week", "Phase", "Timeline",
                    "Deliverables", "Intervention Types", "Description"]
         
         for col, header in enumerate(headers, 1):
@@ -2781,6 +2957,8 @@ class TrackerDataProcessor(FileProcessor):
                 student['name'],
                 student['member_id'],
                 student['discord'],
+                student.get('email', ''),
+                student.get('phone', ''),
                 student['latest_week'],
                 student['latest_phase'],
                 student['timeline'],
@@ -2819,7 +2997,7 @@ class TrackerDataProcessor(FileProcessor):
         on_track.sort(key=lambda s: s['latest_week'], reverse=True)
         
         # Write header
-        headers = ["Name", "Member ID", "Discord", "Latest Week", "Phase", 
+        headers = ["Name", "Member ID", "Discord", "Email", "Phone", "Latest Week", "Phase", 
                    "Total Submissions", "Deliverables", "Description"]
         
         for col, header in enumerate(headers, 1):
@@ -2838,6 +3016,8 @@ class TrackerDataProcessor(FileProcessor):
                 student['name'],
                 student['member_id'],
                 student['discord'],
+                student.get('email', ''),
+                student.get('phone', ''),
                 student['latest_week'],
                 student['latest_phase'],
                 student['total_submissions'],

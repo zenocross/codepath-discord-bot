@@ -908,16 +908,155 @@ class GameCog(commands.Cog, name="Game"):
         Returns channel-specific points if configured, otherwise default points.
         """
         channel_config = self.community_state.get('channels', {}).get(str(channel_id), {})
-        defaults = self.community_state.get('default_points', {
-            'first_post': 5,
-            'first_response': 8,
-            'subsequent_response': 2
-        })
+        saved_defaults = self.community_state.get('default_points', {})
         return {
-            'first_post': channel_config.get('first_post', defaults['first_post']),
-            'first_response': channel_config.get('first_response', defaults['first_response']),
-            'subsequent_response': channel_config.get('subsequent_response', defaults['subsequent_response'])
+            'first_post': channel_config.get('first_post', saved_defaults.get('first_post', 5)),
+            'first_response': channel_config.get('first_response', saved_defaults.get('first_response', 8)),
+            'subsequent_response': channel_config.get('subsequent_response', saved_defaults.get('subsequent_response', 2)),
+            'emoji_reaction': channel_config.get('emoji_reaction', saved_defaults.get('emoji_reaction', 1))
         }
+    
+    async def _score_community_reaction(self, payload: discord.RawReactionActionEvent) -> None:
+        """Score an emoji reaction in real-time if it's in a tracked community channel.
+        
+        Called automatically when someone adds a reaction in a tracked channel.
+        """
+        # Get channel - check if it's tracked or if parent forum is tracked
+        channel = self.bot.get_channel(payload.channel_id)
+        if not channel:
+            return
+        
+        tracked_channels = self.community_state.get('channels', {})
+        cid_str = str(payload.channel_id)
+        
+        # For thread messages, check if parent forum is tracked
+        if isinstance(channel, discord.Thread) and channel.parent:
+            parent_id = channel.parent_id
+            if str(parent_id) in tracked_channels:
+                cid_str = str(parent_id)
+        
+        if cid_str not in tracked_channels:
+            return
+        
+        # Get the message that was reacted to
+        try:
+            message = await channel.fetch_message(payload.message_id)
+        except Exception:
+            return
+        
+        # Skip self-reactions (reacting to your own message)
+        if message.author.id == payload.user_id:
+            return
+        
+        # Skip bot messages
+        if message.author.bot:
+            return
+        
+        # Get the user who reacted
+        user = self.bot.get_user(payload.user_id)
+        if not user or user.bot:
+            return
+        
+        # Get master roster users
+        master_users = set(self._get_master_discord_usernames())
+        if not master_users:
+            return
+        
+        # Find matching user in master roster
+        author_name = user.name
+        matching_user = self._find_matching_user_in_master(author_name, master_users)
+        
+        if not matching_user and hasattr(user, 'display_name'):
+            matching_user = self._find_matching_user_in_master(user.display_name, master_users)
+        
+        if not matching_user:
+            return
+        
+        # Check if this user already scored for reacting to this message
+        # Only count once per user per message
+        if 'reaction_scores' not in self.community_state:
+            self.community_state['reaction_scores'] = {}
+        
+        msg_id_str = str(payload.message_id)
+        user_id_str = str(payload.user_id)
+        
+        if msg_id_str not in self.community_state['reaction_scores']:
+            self.community_state['reaction_scores'][msg_id_str] = []
+        
+        if user_id_str in self.community_state['reaction_scores'][msg_id_str]:
+            # Already scored for this message
+            return
+        
+        # Award points for the reaction
+        points_config = self._get_channel_points(int(cid_str))
+        points = points_config['emoji_reaction']
+        
+        if points > 0:
+            if 'community_points' not in self.community_state:
+                self.community_state['community_points'] = {}
+            
+            # Mark as scored for this message
+            self.community_state['reaction_scores'][msg_id_str].append(user_id_str)
+            
+            old_pts = self.community_state['community_points'].get(matching_user, 0)
+            self.community_state['community_points'][matching_user] = old_pts + points
+            self._save_community_state()
+    
+    async def _process_message_reactions_batch(
+        self, 
+        message: discord.Message, 
+        points_config: Dict[str, int],
+        master_users: set,
+        skipped_users: set
+    ) -> int:
+        """Process all reactions on a message for batch scoring.
+        
+        Returns total points awarded for reactions on this message.
+        Only counts once per user per message (multiple emojis = 1 point).
+        """
+        total_reaction_points = 0
+        reaction_points = points_config.get('emoji_reaction', 1)
+        
+        if reaction_points <= 0:
+            return 0
+        
+        # Track users who have already been scored for this message
+        scored_users: set = set()
+        
+        for reaction in message.reactions:
+            try:
+                async for user in reaction.users():
+                    # Skip bots
+                    if user.bot:
+                        continue
+                    
+                    # Skip self-reactions
+                    if user.id == message.author.id:
+                        continue
+                    
+                    # Skip if already scored for this message
+                    if user.id in scored_users:
+                        continue
+                    
+                    # Find matching user in master roster
+                    matching_user = self._find_matching_user_in_master(user.name, master_users)
+                    
+                    if not matching_user and hasattr(user, 'display_name'):
+                        matching_user = self._find_matching_user_in_master(user.display_name, master_users)
+                    
+                    if not matching_user:
+                        skipped_users.add(user.name)
+                        continue
+                    
+                    # Award points and mark as scored
+                    scored_users.add(user.id)
+                    old_pts = self.community_state['community_points'].get(matching_user, 0)
+                    self.community_state['community_points'][matching_user] = old_pts + reaction_points
+                    total_reaction_points += reaction_points
+            except Exception:
+                continue
+        
+        return total_reaction_points
     
     @commands.group(name='community', invoke_without_command=True)
     async def community_group(self, ctx: commands.Context) -> None:
@@ -965,7 +1104,8 @@ class GameCog(commands.Cog, name="Game"):
             name="⚙️ Default Points",
             value=f"First Post: {defaults.get('first_post', 5)}\n"
                   f"First Response: {defaults.get('first_response', 8)}\n"
-                  f"Subsequent Response: {defaults.get('subsequent_response', 2)}",
+                  f"Subsequent Response: {defaults.get('subsequent_response', 2)}\n"
+                  f"Emoji Reaction: {defaults.get('emoji_reaction', 1)}",
             inline=True
         )
         
@@ -1101,6 +1241,7 @@ class GameCog(commands.Cog, name="Game"):
         # Always do full reprocess - clear existing scores
         self.community_state['community_points'] = {}
         self.community_state['first_responders'] = {}
+        self.community_state['reaction_scores'] = {}
         
         status_msg = await ctx.send("⏳ Processing community messages... This may take a while.")
         
@@ -1169,6 +1310,12 @@ class GameCog(commands.Cog, name="Game"):
                                         total_points_awarded += points_config['first_post']
                                     else:
                                         skipped_users.add(author_name)
+                                    
+                                    # Process reactions on starter message
+                                    reaction_pts = await self._process_message_reactions_batch(
+                                        starter_msg, points_config, master_users, skipped_users
+                                    )
+                                    total_points_awarded += reaction_pts
                         except Exception:
                             pass
                         
@@ -1216,6 +1363,12 @@ class GameCog(commands.Cog, name="Game"):
                                 old_pts = self.community_state['community_points'].get(matching_user, 0)
                                 self.community_state['community_points'][matching_user] = old_pts + points
                                 total_points_awarded += points
+                            
+                            # Process reactions on this message
+                            reaction_pts = await self._process_message_reactions_batch(
+                                message, points_config, master_users, skipped_users
+                            )
+                            total_points_awarded += reaction_pts
                         
                         if threads_processed % 10 == 0:
                             await status_msg.edit(
@@ -1266,6 +1419,12 @@ class GameCog(commands.Cog, name="Game"):
                             old_pts = self.community_state['community_points'].get(matching_user, 0)
                             self.community_state['community_points'][matching_user] = old_pts + points
                             total_points_awarded += points
+                        
+                        # Process reactions on this message
+                        reaction_pts = await self._process_message_reactions_batch(
+                            message, points_config, master_users, skipped_users
+                        )
+                        total_points_awarded += reaction_pts
                         
                         if channel_messages % 100 == 0:
                             await status_msg.edit(
@@ -1457,6 +1616,7 @@ class GameCog(commands.Cog, name="Game"):
         
         self.community_state['community_points'] = {}
         self.community_state['processed_messages'] = {}
+        self.community_state['reaction_scores'] = {}
         for cid in self.community_state.get('channels', {}):
             self.community_state['channels'][cid]['last_processed_id'] = None
         self._save_community_state()
@@ -1472,13 +1632,13 @@ class GameCog(commands.Cog, name="Game"):
             !game community set_points <type> <value> - Set default points
             !game community set_points <type> <value> <channel_id> - Set channel-specific points
         
-        Point types: first_post, first_response, subsequent_response
+        Point types: first_post, first_response, subsequent_response, emoji_reaction
         """
         if not self._check_permission(ctx):
             await ctx.send("❌ You don't have permission to configure community points.")
             return
         
-        valid_types = ['first_post', 'first_response', 'subsequent_response']
+        valid_types = ['first_post', 'first_response', 'subsequent_response', 'emoji_reaction']
         
         if not point_type or point_type not in valid_types or value is None:
             await ctx.send(
@@ -1984,6 +2144,16 @@ class GameCog(commands.Cog, name="Game"):
         # Post the next question after a short delay
         await asyncio.sleep(5)
         await self._post_trivia_question()
+    
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
+        """Listen for emoji reactions in tracked community channels."""
+        # Skip bot reactions
+        if payload.user_id == self.bot.user.id:
+            return
+        
+        # Score the reaction for community points
+        await self._score_community_reaction(payload)
 
 
 async def setup(bot: 'DiscordBot') -> None:
