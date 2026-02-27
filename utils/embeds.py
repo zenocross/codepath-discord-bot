@@ -469,6 +469,7 @@ class EmbedBuilder:
                 "`!tracker upload master` - Upload master roster\n"
                 "`!tracker upload typeform` - Upload typeform responses\n"
                 "`!tracker upload zoom` - Upload zoom attendance\n"
+                "`!tracker upload app` - Upload app data (phone numbers)\n"
                 "`!tracker files` - Check uploaded file status\n"
                 "`!tracker clear <type>` - Clear specific CSV\n"
                 "`!tracker clearall` - Clear all CSVs"
@@ -499,11 +500,21 @@ class EmbedBuilder:
         )
         
         embed.add_field(
+            name="📝 Phase Completion (Admin)",
+            value=(
+                "`!tracker get_member_id <discord>` - Look up member ID\n"
+                "`!tracker set_phase_complete <phase> <member_id>` - Set phase"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
             name="📁 CSV File Types",
             value=(
                 "**Master** - Roster with Discord usernames\n"
                 "**Typeform** - Weekly progress submissions ✱\n"
                 "**Zoom** - Lecture & office hours attendance\n"
+                "**App** - Phone numbers and contact info\n"
                 "✱ Required for report generation"
             ),
             inline=False
@@ -679,6 +690,14 @@ class EmbedBuilder:
         embed.add_field(
             name="📢 !announce",
             value="Scheduled announcements and messaging (DM only)\n`!announce help` for details",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📝 !completion",
+            value="Student self-service phase tracking\n"
+                  "`!completion set_phase_complete <phase>` - Set your phase (1-4)\n"
+                  "`!completion status` - Check your completion status",
             inline=False
         )
         

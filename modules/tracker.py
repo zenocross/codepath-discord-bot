@@ -14,6 +14,8 @@ Commands:
     !tracker submissions      - Real-time submission checking
     !tracker submissions_download [options] - Download report filtered by submissions date
         Options: nofilter, validate_commits, validate_all
+    !tracker set_phase_complete <phase> <member_id> - Set a student's completed phase
+    !tracker get_member_id <discord_info> - Look up member ID from Discord username/ID
     !tracker help             - Show help (handled by bot/events.py)
 """
 
@@ -566,6 +568,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
             app_data = self.storage.read_file_by_category("app")
             
             # Build options dict
+            phase_completions = self.storage.get_all_phase_completions()
             process_options = {
                 'master_data': master_data,
                 'zoom_data': zoom_data,
@@ -573,7 +576,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
                 'start_date': start_date,
                 'target_date': target_date,
                 'current_week': current_week,
-                'filter_by_date': True
+                'filter_by_date': True,
+                'phase_completions': phase_completions
             }
             
             # Add GitLab options if enabled
@@ -660,12 +664,14 @@ class TrackerCog(commands.Cog, name="Tracker"):
             app_data = self.storage.read_file(app_file) if app_file else None
             
             # Process with tracker processor (pass all data sources)
+            phase_completions = self.storage.get_all_phase_completions()
             result = self.processor.process(
                 typeform_data,
                 options={
                     'master_data': master_data,
                     'zoom_data': zoom_data,
-                    'app_data': app_data
+                    'app_data': app_data,
+                    'phase_completions': phase_completions
                 }
             )
             
@@ -697,6 +703,370 @@ class TrackerCog(commands.Cog, name="Tracker"):
             
         except Exception as e:
             await ctx.send(f"❌ Error processing file: {e}")
+    
+    # ==================== Phase Completion Commands ====================
+    
+    @commands.command(name='set_phase_complete')
+    async def set_phase_complete(self, ctx: commands.Context, phase: int = None, member_id: str = None):
+        """Set a student's completed phase.
+        
+        Usage: !tracker set_phase_complete <phase> <member_id>
+        
+        Args:
+            phase: Phase number (1-4)
+            member_id: The student's member ID
+        """
+        if phase is None or member_id is None:
+            await ctx.send(
+                "**📝 Set Phase Complete**\n\n"
+                "Usage: `!tracker set_phase_complete <phase> <member_id>`\n\n"
+                "Example: `!tracker set_phase_complete 2 12345`\n\n"
+                "Use `!tracker get_member_id <discord_username>` to look up a member ID."
+            )
+            return
+        
+        if phase < 1 or phase > 4:
+            await ctx.send("❌ Phase must be between 1 and 4.")
+            return
+        
+        # Verify member_id exists in master CSV
+        master_file = self.storage.get_file("master")
+        if not master_file:
+            await ctx.send("❌ No master roster uploaded. Use `!tracker upload master` first.")
+            return
+        
+        member_exists = self._verify_member_id(member_id)
+        if not member_exists:
+            await ctx.send(
+                f"❌ Member ID `{member_id}` not found in master roster.\n\n"
+                f"Use `!tracker get_member_id <discord_username>` to look up the correct member ID."
+            )
+            return
+        
+        # Set the phase completion
+        updated_by = f"{ctx.author.name}#{ctx.author.discriminator}" if ctx.author.discriminator != "0" else ctx.author.name
+        self.storage.set_phase_complete(member_id, phase, updated_by)
+        
+        await ctx.send(
+            f"✅ **Phase Complete Updated**\n"
+            f"• Member ID: `{member_id}`\n"
+            f"• Completed Phase: **{phase}**\n"
+            f"• Updated by: {updated_by}"
+        )
+    
+    @commands.command(name='get_member_id')
+    async def get_member_id(self, ctx: commands.Context, *, discord_info: str = None):
+        """Look up a member ID from Discord display name, username, or user ID.
+        
+        Usage: !tracker get_member_id <display_name or discord_username or @mention>
+        """
+        if not discord_info:
+            await ctx.send(
+                "**🔍 Get Member ID**\n\n"
+                "Usage: `!tracker get_member_id <display_name or username>`\n\n"
+                "Examples:\n"
+                "• `!tracker get_member_id Queen Sydelle` (display name)\n"
+                "• `!tracker get_member_id queensydelle` (username)\n"
+                "• `!tracker get_member_id @JohnDoe` (mention)\n"
+                "• `!tracker get_member_id 123456789012345678` (user ID)"
+            )
+            return
+        
+        master_file = self.storage.get_file("master")
+        if not master_file:
+            await ctx.send("❌ No master roster uploaded. Use `!tracker upload master` first.")
+            return
+        
+        # Clean up the input
+        discord_info = discord_info.strip().strip('"').strip("'")
+        discord_user = None
+        result = None
+        
+        # Handle @mention format
+        if discord_info.startswith('<@') and discord_info.endswith('>'):
+            discord_id = discord_info.replace('<@', '').replace('>', '').replace('!', '')
+            try:
+                discord_user = await self.bot.fetch_user(int(discord_id))
+            except:
+                pass
+        # Handle numeric user ID
+        elif discord_info.isdigit():
+            try:
+                discord_user = await self.bot.fetch_user(int(discord_info))
+            except:
+                pass
+        
+        # If we have a discord user from mention/ID, look up by their username
+        if discord_user:
+            result = self._lookup_member_id_by_discord(discord_user.name)
+        
+        # Search guild members by display name FIRST (this is the primary use case)
+        # Get guild - ctx.guild may be None in some cases, try multiple fallbacks
+        guild = ctx.guild
+        if not guild and hasattr(ctx.channel, 'guild'):
+            guild = ctx.channel.guild
+        if not guild and self.bot.guilds:
+            # Use first guild the bot is in as fallback
+            guild = self.bot.guilds[0]
+            print(f"[Tracker] Using fallback guild: {guild.name}")
+        
+        print(f"[Tracker] Guild check: result={result}, guild={guild}")
+        if not result and guild:
+            search_lower = discord_info.lower()
+            
+            # Ensure members are cached
+            print(f"[Tracker] Guild chunked: {guild.chunked}, member count before: {len(guild.members)}")
+            if not guild.chunked:
+                try:
+                    await guild.chunk()
+                    print(f"[Tracker] After chunk: {len(guild.members)} members")
+                except Exception as e:
+                    print(f"[Tracker] Chunk failed: {e}")
+            
+            print(f"[Tracker] Searching {len(guild.members)} guild members for: {search_lower}")
+            
+            # Debug: list first 10 members
+            for i, m in enumerate(guild.members[:10]):
+                print(f"[Tracker] Member {i}: display={m.display_name}, name={m.name}")
+            
+            # Exact match on display name first
+            for member in guild.members:
+                display = (member.display_name or "").lower()
+                if display == search_lower:
+                    print(f"[Tracker] Found exact display match: {member.display_name} -> {member.name}")
+                    discord_user = member
+                    result = self._lookup_member_id_by_discord(member.name)
+                    if result:
+                        break
+            
+            # Partial match on display name
+            if not result:
+                for member in guild.members:
+                    display = (member.display_name or "").lower()
+                    global_name = (member.global_name or "").lower() if hasattr(member, 'global_name') else ""
+                    
+                    if search_lower in display or search_lower in global_name:
+                        print(f"[Tracker] Found partial match: {member.display_name} -> {member.name}")
+                        discord_user = member
+                        result = self._lookup_member_id_by_discord(member.name)
+                        if result:
+                            break
+            
+            # Try matching by username
+            if not result:
+                for member in guild.members:
+                    if search_lower == member.name.lower():
+                        print(f"[Tracker] Found username match: {member.name}")
+                        discord_user = member
+                        result = self._lookup_member_id_by_discord(member.name)
+                        if result:
+                            break
+        
+        # Final fallback: direct CSV lookup (for usernames not in this guild)
+        if not result:
+            result = self._lookup_member_id_by_discord(discord_info)
+        
+        if result:
+            member_id, name, roster_discord = result
+            discord_display = ""
+            if discord_user:
+                discord_display = f"\n• Discord User: {discord_user.display_name} (`{discord_user.name}`)"
+            await ctx.send(
+                f"✅ **Member Found**\n"
+                f"• Name: {name}\n"
+                f"• Member ID: `{member_id}`\n"
+                f"• Roster Discord: {roster_discord}{discord_display}"
+            )
+        else:
+            # Show helpful debug info
+            found_in_guild = ""
+            if ctx.guild and discord_user:
+                found_in_guild = f"\n\nFound Discord user `{discord_user.name}` but they're not in the master roster."
+            await ctx.send(
+                f"❌ No member found matching `{discord_info}`{found_in_guild}\n\n"
+                f"Make sure the Discord username matches the master roster."
+            )
+    
+    def _preprocess_master_csv(self, master_text: str) -> str:
+        """Preprocess master CSV to find actual header row and strip metadata.
+        
+        The master CSV may have metadata rows at the top before the actual header.
+        """
+        lines = master_text.splitlines()
+        header_row_idx = None
+        
+        # Find the row containing "Member ID" (the actual header)
+        for idx, line in enumerate(lines):
+            if "Member ID" in line or "member_id" in line.lower():
+                header_row_idx = idx
+                break
+        
+        if header_row_idx is None:
+            return master_text
+        
+        # Get lines from header onwards
+        data_lines = lines[header_row_idx:]
+        
+        # Strip leading empty column if present
+        if data_lines and data_lines[0].startswith(','):
+            data_lines = [line[1:] if line.startswith(',') else line for line in data_lines]
+        
+        return '\n'.join(data_lines)
+    
+    def _verify_member_id(self, member_id: str) -> bool:
+        """Check if a member ID exists in the master roster."""
+        master_file = self.storage.get_file("master")
+        if not master_file:
+            return False
+        
+        try:
+            import csv
+            master_data = self.storage.read_file(master_file)
+            text_data = master_data.decode('utf-8-sig')
+            
+            # Preprocess to find actual header row
+            text_data = self._preprocess_master_csv(text_data)
+            
+            reader = csv.DictReader(io.StringIO(text_data))
+            rows = list(reader)
+            
+            if not rows:
+                return False
+            
+            headers = list(rows[0].keys())
+            member_id_col = None
+            for col in ["Member ID", "member_id", "MemberID"]:
+                if col in headers:
+                    member_id_col = col
+                    break
+            
+            if not member_id_col:
+                return False
+            
+            for row in rows:
+                if str(row.get(member_id_col, "")).strip() == member_id:
+                    return True
+            
+            return False
+        except:
+            return False
+    
+    def _lookup_member_id_by_discord(self, discord_info: str) -> Optional[tuple]:
+        """Look up member ID by Discord username, display name, or name.
+        
+        Searches multiple columns and handles various Discord name formats.
+        
+        Returns:
+            Tuple of (member_id, name, discord_username) or None if not found
+        """
+        master_file = self.storage.get_file("master")
+        if not master_file:
+            print(f"[Tracker] No master file found")
+            return None
+        
+        try:
+            import csv
+            master_data = self.storage.read_file(master_file)
+            if not master_data:
+                print(f"[Tracker] Master file is empty")
+                return None
+            
+            text_data = master_data.decode('utf-8-sig')
+            print(f"[Tracker] Raw CSV lines: {len(text_data.splitlines())}, searching for: {discord_info}")
+            
+            # Preprocess to find actual header row (skip metadata rows)
+            text_data = self._preprocess_master_csv(text_data)
+            print(f"[Tracker] After preprocess lines: {len(text_data.splitlines())}")
+            
+            # Debug: show first line (header)
+            first_line = text_data.splitlines()[0] if text_data.splitlines() else "EMPTY"
+            print(f"[Tracker] Header row: {first_line[:100]}...")
+            
+            reader = csv.DictReader(io.StringIO(text_data))
+            rows = list(reader)
+            
+            if not rows:
+                print(f"[Tracker] No rows in CSV")
+                return None
+            
+            headers = list(rows[0].keys())
+            headers_lower = {h.lower(): h for h in headers}
+            print(f"[Tracker] Found headers: {headers[:8]}...")
+            
+            # Helper to find column (case-insensitive)
+            def find_col(possible_names):
+                for name in possible_names:
+                    if name in headers:
+                        return name
+                    if name.lower() in headers_lower:
+                        return headers_lower[name.lower()]
+                return None
+            
+            # Find columns
+            member_id_col = find_col(["Member ID", "member_id", "MemberID"])
+            discord_col = find_col(["Discord Username", "Discord", "discord_username", "Discord Handle"])
+            name_col = find_col(["Full Name", "Name", "full_name", "Student Name"])
+            
+            print(f"[Tracker] Columns found - member_id: {member_id_col}, discord: {discord_col}, name: {name_col}")
+            
+            if not member_id_col:
+                print(f"[Tracker] Member ID column not found. All headers: {headers}")
+                return None
+            
+            # Clean the search input
+            discord_lower = discord_info.lower().strip()
+            # Remove @ prefix if present
+            if discord_lower.startswith('@'):
+                discord_lower = discord_lower[1:]
+            # Remove discriminator if present (e.g., #1234)
+            if '#' in discord_lower:
+                discord_lower = discord_lower.split('#')[0]
+            
+            # Search Discord column first (if found)
+            if discord_col:
+                # Debug: show first few Discord values
+                sample_values = [str(row.get(discord_col, "")).strip() for row in rows[:5]]
+                print(f"[Tracker] First 5 Discord values: {sample_values}")
+                print(f"[Tracker] Looking for: '{discord_lower}'")
+                
+                # Exact match
+                for row in rows:
+                    discord_username = str(row.get(discord_col, "")).strip()
+                    discord_clean = discord_username.lower()
+                    # Also clean the stored value
+                    if discord_clean.startswith('@'):
+                        discord_clean = discord_clean[1:]
+                    if '#' in discord_clean:
+                        discord_clean = discord_clean.split('#')[0]
+                    
+                    if discord_clean == discord_lower:
+                        print(f"[Tracker] MATCH FOUND: {discord_username} -> {row.get(member_id_col)}")
+                        member_id = str(row.get(member_id_col, "")).strip()
+                        name = str(row.get(name_col, "")).strip() if name_col else ""
+                        return (member_id, name, discord_username)
+                
+                # Partial match (search term contained in discord username)
+                for row in rows:
+                    discord_username = str(row.get(discord_col, "")).strip()
+                    if discord_lower in discord_username.lower():
+                        member_id = str(row.get(member_id_col, "")).strip()
+                        name = str(row.get(name_col, "")).strip() if name_col else ""
+                        return (member_id, name, discord_username)
+            
+            # Fallback: Search by Name column
+            if name_col:
+                for row in rows:
+                    name = str(row.get(name_col, "")).strip()
+                    if discord_lower in name.lower():
+                        member_id = str(row.get(member_id_col, "")).strip()
+                        discord_username = str(row.get(discord_col, "")).strip() if discord_col else ""
+                        return (member_id, name, discord_username)
+            
+            print(f"[Tracker] No match found for '{discord_lower}' in {len(rows)} rows")
+            return None
+        except Exception as e:
+            print(f"[Tracker] Error looking up member ID: {e}")
+            return None
 
 
 async def setup(bot: commands.Bot):

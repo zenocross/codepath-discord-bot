@@ -712,8 +712,15 @@ class TrackerDataProcessor(FileProcessor):
                         # Use computed week
                         student.week = current_week
                 
-                # Calculate derived fields
-                self._calculate_derived_fields(students)
+                # Get phase completions early so we can use them in derived fields
+                phase_completions = options.get('phase_completions', {})
+                
+                # Calculate derived fields (pass phase_completions for MISSING_PREVIOUS_PHASE check)
+                self._calculate_derived_fields(students, phase_completions)
+                
+                # Apply manual phase completions (overrides typeform phase if higher)
+                if phase_completions:
+                    self._apply_phase_completions(students, phase_completions)
                 
                 # Determine grade status and interventions
                 # Pass start_date and target_date so we can check per-student deadlines
@@ -2074,10 +2081,56 @@ class TrackerDataProcessor(FileProcessor):
         
         return missing
     
-    def _calculate_derived_fields(self, students: List[StudentRecord]) -> None:
+    def _apply_phase_completions(self, students: List[StudentRecord], 
+                                 phase_completions: Dict[str, Dict]) -> None:
+        """Apply manual phase completions to student records.
+        
+        If a student has a manual phase completion that's higher than their
+        typeform-reported phase, update their current_phase to reflect the
+        manual completion.
+        
+        Args:
+            students: List of student records
+            phase_completions: Dict mapping member_id to {phase: int, updated_at: str, updated_by: str}
+        """
+        if not phase_completions:
+            return
+        
+        phase_names = {
+            1: "Phase 1",
+            2: "Phase 2",
+            3: "Phase 3",
+            4: "Phase 4"
+        }
+        
+        for student in students:
+            if not student.member_id:
+                continue
+            
+            completion_data = phase_completions.get(student.member_id)
+            if not completion_data:
+                continue
+            
+            manual_phase = completion_data.get('phase', 0)
+            if manual_phase < 1 or manual_phase > 4:
+                continue
+            
+            # Get current phase from typeform
+            current_phase_num = self._get_phase_number(student.current_phase)
+            
+            # Only apply if manual phase is higher (more complete)
+            if manual_phase > current_phase_num:
+                student.current_phase = phase_names.get(manual_phase, f"Phase {manual_phase}")
+                # Mark that this was manually set (optional - could add a flag field)
+                if not hasattr(student, 'phase_manually_set'):
+                    student.phase_manually_set = True
+    
+    def _calculate_derived_fields(self, students: List[StudentRecord], phase_completions: Dict = None) -> None:
         """Calculate derived fields for each student."""
+        if phase_completions is None:
+            phase_completions = {}
         # First, calculate weeks_in_phase by analyzing submission history
-        self._calculate_weeks_in_phase(students)
+        self._calculate_weeks_in_phase(students, phase_completions)
         
         for student in students:
             # Calculate deliverables expected and complete based on current phase only
@@ -2129,13 +2182,19 @@ class TrackerDataProcessor(FileProcessor):
             else:
                 student.timeline_type = "Standard"
     
-    def _calculate_weeks_in_phase(self, students: List[StudentRecord]) -> None:
+    def _calculate_weeks_in_phase(self, students: List[StudentRecord], phase_completions: Dict = None) -> None:
         """Calculate weeks_in_phase and submission_count_cumulative for each student.
         
         Groups submissions by member_id, sorts by week, and:
         - Counts consecutive weeks in the same phase
         - Counts cumulative complete submissions (all deliverables done)
+        
+        Args:
+            students: List of StudentRecord objects
+            phase_completions: Dict of member_id -> {phase: int, ...} for manual phase completions
         """
+        if phase_completions is None:
+            phase_completions = {}
         # Group submissions by member_id
         submissions_by_member: Dict[str, List[StudentRecord]] = {}
         for student in students:
@@ -2220,7 +2279,19 @@ class TrackerDataProcessor(FileProcessor):
                 # Only flag if the phase directly before current is missing
                 # e.g., Phase 3 with Phase 2 missing = flag, but Phase 3 with Phase 1 missing (Phase 2 exists) = ok
                 immediate_previous_phase = phase_num - 1
-                if immediate_previous_phase >= 1 and immediate_previous_phase not in phases_submitted_for_contribution:
+                
+                # Check if the previous phase is covered by manual phase completion
+                manual_phase_complete = 0
+                if member_id in phase_completions:
+                    manual_phase_complete = phase_completions[member_id].get('phase', 0)
+                
+                # Not missing if: previous phase was submitted OR manual phase completion covers it
+                previous_phase_covered = (
+                    immediate_previous_phase in phases_submitted_for_contribution or
+                    manual_phase_complete >= immediate_previous_phase
+                )
+                
+                if immediate_previous_phase >= 1 and not previous_phase_covered:
                     submission._missing_previous_phase = True
                 else:
                     submission._missing_previous_phase = False

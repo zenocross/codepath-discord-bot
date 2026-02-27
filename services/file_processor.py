@@ -528,6 +528,71 @@ class FileStorageService:
             except:
                 return None
         return None
+    
+    # ==================== Phase Completion Storage ====================
+    
+    def _get_phase_completions_file(self) -> Path:
+        """Get the phase completions file path."""
+        return self.storage_dir / "_phase_completions.json"
+    
+    def _load_phase_completions(self) -> Dict[str, Dict[str, Any]]:
+        """Load phase completions from disk.
+        
+        Returns:
+            Dict mapping member_id to completion data {phase: int, updated_at: str, updated_by: str}
+        """
+        completions_file = self._get_phase_completions_file()
+        if not completions_file.exists():
+            return {}
+        
+        try:
+            import json
+            with open(completions_file, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[FileStorage] Failed to load phase completions: {e}")
+            return {}
+    
+    def _save_phase_completions(self, completions: Dict[str, Dict[str, Any]]) -> None:
+        """Save phase completions to disk."""
+        try:
+            import json
+            with open(self._get_phase_completions_file(), 'w') as f:
+                json.dump(completions, f, indent=2)
+        except Exception as e:
+            print(f"[FileStorage] Failed to save phase completions: {e}")
+    
+    def set_phase_complete(self, member_id: str, phase: int, updated_by: str) -> None:
+        """Set a student's completed phase.
+        
+        Args:
+            member_id: The student's member ID
+            phase: The phase number they completed (1-4)
+            updated_by: Discord username/ID of who made the update
+        """
+        completions = self._load_phase_completions()
+        completions[member_id] = {
+            'phase': phase,
+            'updated_at': datetime.now().isoformat(),
+            'updated_by': updated_by
+        }
+        self._save_phase_completions(completions)
+    
+    def get_phase_complete(self, member_id: str) -> Optional[int]:
+        """Get a student's completed phase.
+        
+        Returns:
+            The phase number, or None if not set
+        """
+        completions = self._load_phase_completions()
+        data = completions.get(member_id)
+        if data:
+            return data.get('phase')
+        return None
+    
+    def get_all_phase_completions(self) -> Dict[str, Dict[str, Any]]:
+        """Get all phase completion records."""
+        return self._load_phase_completions()
 
 
 # ==================== Processor Registry (Dependency Inversion) ====================
