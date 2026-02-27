@@ -707,27 +707,41 @@ class TrackerCog(commands.Cog, name="Tracker"):
     # ==================== Phase Completion Commands ====================
     
     @commands.command(name='set_phase_complete')
-    async def set_phase_complete(self, ctx: commands.Context, phase: int = None, member_id: str = None):
+    async def set_phase_complete(self, ctx: commands.Context, phases: str = None, member_id: str = None):
         """Set a student's completed phase.
         
-        Usage: !tracker set_phase_complete <phase> <member_id>
+        Usage: !tracker set_phase_complete <phase(s)> <member_id>
         
         Args:
-            phase: Phase number (1-4)
+            phases: Phase number(s) - single (e.g., 2) or comma-separated (e.g., 1,2,3)
             member_id: The student's member ID
         """
-        if phase is None or member_id is None:
+        if phases is None or member_id is None:
             await ctx.send(
                 "**📝 Set Phase Complete**\n\n"
-                "Usage: `!tracker set_phase_complete <phase> <member_id>`\n\n"
-                "Example: `!tracker set_phase_complete 2 12345`\n\n"
+                "Usage: `!tracker set_phase_complete <phase(s)> <member_id>`\n\n"
+                "Examples:\n"
+                "• `!tracker set_phase_complete 2 12345`\n"
+                "• `!tracker set_phase_complete 1,2,3 12345`\n\n"
                 "Use `!tracker get_member_id <discord_username>` to look up a member ID."
             )
             return
         
-        if phase < 1 or phase > 4:
-            await ctx.send("❌ Phase must be between 1 and 4.")
+        # Parse phases - can be single number or comma-separated
+        try:
+            phase_list = [int(p.strip()) for p in phases.split(',')]
+        except ValueError:
+            await ctx.send("❌ Invalid phase format. Use a number (e.g., 2) or comma-separated numbers (e.g., 1,2,3).")
             return
+        
+        # Validate all phases
+        invalid_phases = [p for p in phase_list if p < 1 or p > 4]
+        if invalid_phases:
+            await ctx.send(f"❌ Invalid phase(s): {invalid_phases}. Phases must be between 1 and 4.")
+            return
+        
+        # Use the highest phase (completing phase 3 implies 1 and 2 are done)
+        phase = max(phase_list)
         
         # Verify member_id exists in master CSV
         master_file = self.storage.get_file("master")
@@ -735,22 +749,30 @@ class TrackerCog(commands.Cog, name="Tracker"):
             await ctx.send("❌ No master roster uploaded. Use `!tracker upload master` first.")
             return
         
-        member_exists = self._verify_member_id(member_id)
-        if not member_exists:
+        # Look up student name from master CSV
+        student_name = ""
+        member_info = self._get_member_info(member_id)
+        if member_info:
+            student_name = member_info.get('name', '')
+        else:
             await ctx.send(
                 f"❌ Member ID `{member_id}` not found in master roster.\n\n"
                 f"Use `!tracker get_member_id <discord_username>` to look up the correct member ID."
             )
             return
         
-        # Set the phase completion
+        # Set the phase completion (pass full list of phases)
         updated_by = f"{ctx.author.name}#{ctx.author.discriminator}" if ctx.author.discriminator != "0" else ctx.author.name
-        self.storage.set_phase_complete(member_id, phase, updated_by)
+        self.storage.set_phase_complete(member_id, phase_list, updated_by, student_name)
+        
+        # Build response message
+        phases_str = f"Phase {phase_list[0]}" if len(phase_list) == 1 else f"Phases {','.join(map(str, sorted(phase_list)))}"
         
         await ctx.send(
             f"✅ **Phase Complete Updated**\n"
+            f"• Name: {student_name}\n"
             f"• Member ID: `{member_id}`\n"
-            f"• Completed Phase: **{phase}**\n"
+            f"• Completed: **{phases_str}**\n"
             f"• Updated by: {updated_by}"
         )
     
@@ -872,6 +894,63 @@ class TrackerCog(commands.Cog, name="Tracker"):
                 f"❌ No member found matching `{discord_info}`{found_in_guild}\n\n"
                 f"Make sure the Discord username matches the master roster."
             )
+    
+    def _get_member_info(self, member_id: str) -> Optional[dict]:
+        """Look up member info by member ID from master CSV.
+        
+        Returns:
+            Dict with 'name', 'discord', 'email' or None if not found
+        """
+        master_file = self.storage.get_file("master")
+        if not master_file:
+            return None
+        
+        try:
+            import csv
+            master_data = self.storage.read_file(master_file)
+            if not master_data:
+                return None
+            
+            text_data = master_data.decode('utf-8-sig')
+            text_data = self._preprocess_master_csv(text_data)
+            
+            reader = csv.DictReader(io.StringIO(text_data))
+            rows = list(reader)
+            
+            if not rows:
+                return None
+            
+            headers = list(rows[0].keys())
+            headers_lower = {h.lower(): h for h in headers}
+            
+            def find_col(possible_names):
+                for name in possible_names:
+                    if name in headers:
+                        return name
+                    if name.lower() in headers_lower:
+                        return headers_lower[name.lower()]
+                return None
+            
+            member_id_col = find_col(["Member ID", "member_id", "MemberID"])
+            name_col = find_col(["Full Name", "Name", "full_name", "Student Name"])
+            discord_col = find_col(["Discord Username", "Discord", "discord_username"])
+            email_col = find_col(["Email", "email"])
+            
+            if not member_id_col:
+                return None
+            
+            for row in rows:
+                row_member_id = str(row.get(member_id_col, "")).strip()
+                if row_member_id == str(member_id).strip():
+                    return {
+                        'name': str(row.get(name_col, "")).strip() if name_col else "",
+                        'discord': str(row.get(discord_col, "")).strip() if discord_col else "",
+                        'email': str(row.get(email_col, "")).strip() if email_col else ""
+                    }
+            
+            return None
+        except Exception:
+            return None
     
     def _preprocess_master_csv(self, master_text: str) -> str:
         """Preprocess master CSV to find actual header row and strip metadata.

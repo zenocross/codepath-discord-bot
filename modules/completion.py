@@ -190,9 +190,9 @@ class CompletionCog(commands.Cog, name="Completion"):
         
         member_id, name, roster_discord = result
         
-        # Set the phase completion
+        # Set the phase completion (single phase as list)
         updated_by = f"self:{ctx.author.id}"
-        self.storage.set_phase_complete(member_id, phase, updated_by)
+        self.storage.set_phase_complete(member_id, [phase], updated_by, name)
         
         await ctx.send(
             f"✅ **Phase Complete Updated**\n\n"
@@ -222,23 +222,25 @@ class CompletionCog(commands.Cog, name="Completion"):
         
         member_id, name, roster_discord = result
         
-        # Get current phase completion
-        current_phase = self.storage.get_phase_complete(member_id)
+        # Get current phase completion (returns list)
+        completed_phases = self.storage.get_phase_complete(member_id)
         
-        if current_phase:
+        if completed_phases:
             phase_names = {
                 1: "Phase 1: Issue Selection",
                 2: "Phase 2: Reproduction",
                 3: "Phase 3: Implementation",
                 4: "Phase 4: Submission"
             }
-            phase_name = phase_names.get(current_phase, f"Phase {current_phase}")
+            
+            # Format completed phases
+            phases_str = ", ".join([phase_names.get(p, f"Phase {p}") for p in sorted(completed_phases)])
             
             await ctx.send(
                 f"📊 **Your Completion Status**\n\n"
                 f"• Name: {name}\n"
                 f"• Member ID: `{member_id}`\n"
-                f"• Current Phase Complete: **{phase_name}**\n\n"
+                f"• Phases Complete: **{phases_str}**\n\n"
                 f"To update, use `!completion set_phase_complete <phase>`"
             )
         else:

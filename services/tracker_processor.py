@@ -2118,7 +2118,15 @@ class TrackerDataProcessor(FileProcessor):
             if not completion_data:
                 continue
             
-            manual_phase = completion_data.get('phase', 0)
+            # Handle both list format (new) and int format (old)
+            phases_data = completion_data.get('phases') or completion_data.get('phase')
+            if isinstance(phases_data, list):
+                manual_phase = max(phases_data) if phases_data else 0
+            elif isinstance(phases_data, int):
+                manual_phase = phases_data
+            else:
+                continue
+            
             if manual_phase < 1 or manual_phase > 4:
                 continue
             
@@ -2288,20 +2296,48 @@ class TrackerDataProcessor(FileProcessor):
                 immediate_previous_phase = phase_num - 1
                 
                 # Check if the previous phase is covered by manual phase completion
-                manual_phase_complete = 0
+                # phases can be stored as list (new format) or int (old format)
+                manual_phases = []
                 if member_id in phase_completions:
-                    manual_phase_complete = phase_completions[member_id].get('phase', 0)
+                    phases_data = phase_completions[member_id].get('phases') or phase_completions[member_id].get('phase')
+                    if isinstance(phases_data, list):
+                        manual_phases = phases_data
+                    elif isinstance(phases_data, int):
+                        # Old format: single int means all phases up to that number
+                        manual_phases = list(range(1, phases_data + 1))
                 
-                # Not missing if: previous phase was submitted OR manual phase completion covers it
-                previous_phase_covered = (
-                    immediate_previous_phase in phases_submitted_for_contribution or
-                    manual_phase_complete >= immediate_previous_phase
-                )
+                # Combine all completed phases (from submissions + manual completions)
+                all_completed_phases = phases_submitted_for_contribution | set(manual_phases)
+                
+                # MISSING_PREVIOUS_PHASE: immediate previous phase (current - 1) is missing
+                previous_phase_covered = immediate_previous_phase in all_completed_phases
                 
                 if immediate_previous_phase >= 1 and not previous_phase_covered:
                     submission._missing_previous_phase = True
+                    submission._missing_previous_phase_num = immediate_previous_phase
                 else:
                     submission._missing_previous_phase = False
+                    submission._missing_previous_phase_num = None
+                
+                # SKIPPED_PHASE: phases BEFORE the immediate previous that are missing
+                # (but we have later phases completed - including current phase)
+                # e.g., Phase 4 with phases [1, 4] = skipped 2, 3 missing is MISSING_PREVIOUS_PHASE
+                # e.g., Phase 3 with phases [1, 3] = nothing skipped (missing 2 is MISSING_PREVIOUS_PHASE)
+                # e.g., Phase 4 with phases [1, 3, 4] = skipped 2
+                # e.g., Phase 4 with phases [4] = skipped 1, 2 (missing 3 is MISSING_PREVIOUS_PHASE)
+                skipped_phases = []
+                if phase_num >= 3:  # Only check for skipped if we're at phase 3+
+                    # Check phases 1 to (current - 2) - these would be "skipped" not "missing previous"
+                    for check_phase in range(1, immediate_previous_phase):
+                        if check_phase not in all_completed_phases:
+                            # Check if there's ANY later phase completed (including current phase)
+                            # A phase is "skipped" if we've moved past it (current phase > check_phase + 1)
+                            # and it wasn't completed
+                            has_later_phase = any(p in all_completed_phases for p in range(check_phase + 1, phase_num + 1))
+                            if has_later_phase:
+                                skipped_phases.append(check_phase)
+                
+                submission._skipped_phases = skipped_phases
             
             # Calculate submission_count_cumulative
             # Count both Wednesday and Sunday submissions
@@ -2528,7 +2564,27 @@ class TrackerDataProcessor(FileProcessor):
                 # Only flag if the phase directly before current has no submission record
                 if getattr(student, '_missing_previous_phase', False):
                     flagged = True
+                    missing_phase_num = getattr(student, '_missing_previous_phase_num', None)
                     intervention = "MISSING_PREVIOUS_PHASE"
+                    if missing_phase_num:
+                        student._intervention_detail = f"Missing Phase {missing_phase_num}"
+                
+                # Check for skipped phases (earlier phases missing but later phases exist)
+                # e.g., has phases 1, 3, 4 but missing phase 2 = skipped phase 2
+                # Note: This can occur alongside MISSING_PREVIOUS_PHASE
+                skipped_phases = getattr(student, '_skipped_phases', [])
+                if skipped_phases:
+                    flagged = True
+                    # If already have missing previous phase, combine interventions
+                    if intervention == "MISSING_PREVIOUS_PHASE":
+                        skipped_str = ", ".join([str(p) for p in skipped_phases])
+                        intervention = "MISSING_PREVIOUS_PHASE, SKIPPED_PHASE"
+                        existing_detail = getattr(student, '_intervention_detail', '')
+                        student._intervention_detail = f"{existing_detail}; Skipped Phase {skipped_str}"
+                    else:
+                        skipped_str = ", ".join([str(p) for p in skipped_phases])
+                        intervention = "SKIPPED_PHASE"
+                        student._intervention_detail = f"Skipped Phase {skipped_str}"
                 
                 # Check for illogical phase change (going backwards, e.g., Phase 3 -> Phase 2)
                 elif getattr(student, '_unexpected_phase_change', False):
@@ -2875,8 +2931,19 @@ class TrackerDataProcessor(FileProcessor):
             if getattr(s, '_unexpected_phase_change', False):
                 student_map[key]['issues'].add(f"Week {s.week}: Unexpected phase change")
             
+            # Missing previous phase (immediate previous phase is missing)
             if getattr(s, '_missing_previous_phase', False):
-                student_map[key]['issues'].add(f"Week {s.week}: Missing previous phase")
+                missing_num = getattr(s, '_missing_previous_phase_num', None)
+                if missing_num:
+                    student_map[key]['issues'].add(f"Week {s.week}: Missing Phase {missing_num}")
+                else:
+                    student_map[key]['issues'].add(f"Week {s.week}: Missing previous phase")
+            
+            # Skipped phases (earlier phases missing but later phases exist)
+            skipped_phases = getattr(s, '_skipped_phases', [])
+            if skipped_phases:
+                skipped_str = ", ".join([str(p) for p in skipped_phases])
+                student_map[key]['issues'].add(f"Week {s.week}: Skipped Phase {skipped_str}")
             
             if s.member_id_mismatch:
                 student_map[key]['issues'].add("Member ID mismatch")

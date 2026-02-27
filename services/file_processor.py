@@ -562,33 +562,43 @@ class FileStorageService:
         except Exception as e:
             print(f"[FileStorage] Failed to save phase completions: {e}")
     
-    def set_phase_complete(self, member_id: str, phase: int, updated_by: str) -> None:
-        """Set a student's completed phase.
+    def set_phase_complete(self, member_id: str, phases: list, updated_by: str, name: str = "") -> None:
+        """Set a student's completed phases.
         
         Args:
             member_id: The student's member ID
-            phase: The phase number they completed (1-4)
+            phases: List of phase numbers they completed (e.g., [1, 2, 3])
             updated_by: Discord username/ID of who made the update
+            name: The student's name (for readability in the JSON file)
         """
         completions = self._load_phase_completions()
         completions[member_id] = {
-            'phase': phase,
+            'name': name,
+            'phases': sorted(phases),
             'updated_at': datetime.now().isoformat(),
             'updated_by': updated_by
         }
         self._save_phase_completions(completions)
     
-    def get_phase_complete(self, member_id: str) -> Optional[int]:
-        """Get a student's completed phase.
+    def get_phase_complete(self, member_id: str) -> Optional[list]:
+        """Get a student's completed phases.
         
         Returns:
-            The phase number, or None if not set
+            List of completed phase numbers, or None if not set
         """
         completions = self._load_phase_completions()
         data = completions.get(member_id)
         if data:
-            return data.get('phase')
+            # Handle both old format (single int) and new format (list)
+            phases = data.get('phases') or data.get('phase')
+            if isinstance(phases, int):
+                return [phases]
+            return phases
         return None
+    
+    def get_phases_complete(self, member_id: str) -> Optional[list]:
+        """Alias for get_phase_complete - returns list of completed phases."""
+        return self.get_phase_complete(member_id)
     
     def get_all_phase_completions(self) -> Dict[str, Dict[str, Any]]:
         """Get all phase completion records."""
