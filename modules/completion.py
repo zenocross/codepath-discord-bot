@@ -254,3 +254,4 @@ class CompletionCog(commands.Cog, name="Completion"):
 async def setup(bot: 'DiscordBot') -> None:
     """Load the Completion cog."""
     await bot.add_cog(CompletionCog(bot))
+

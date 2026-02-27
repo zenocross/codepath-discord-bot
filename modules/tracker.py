@@ -808,32 +808,20 @@ class TrackerCog(commands.Cog, name="Tracker"):
         if not guild and self.bot.guilds:
             # Use first guild the bot is in as fallback
             guild = self.bot.guilds[0]
-            print(f"[Tracker] Using fallback guild: {guild.name}")
-        
-        print(f"[Tracker] Guild check: result={result}, guild={guild}")
         if not result and guild:
             search_lower = discord_info.lower()
             
             # Ensure members are cached
-            print(f"[Tracker] Guild chunked: {guild.chunked}, member count before: {len(guild.members)}")
             if not guild.chunked:
                 try:
                     await guild.chunk()
-                    print(f"[Tracker] After chunk: {len(guild.members)} members")
-                except Exception as e:
-                    print(f"[Tracker] Chunk failed: {e}")
-            
-            print(f"[Tracker] Searching {len(guild.members)} guild members for: {search_lower}")
-            
-            # Debug: list first 10 members
-            for i, m in enumerate(guild.members[:10]):
-                print(f"[Tracker] Member {i}: display={m.display_name}, name={m.name}")
+                except:
+                    pass
             
             # Exact match on display name first
             for member in guild.members:
                 display = (member.display_name or "").lower()
                 if display == search_lower:
-                    print(f"[Tracker] Found exact display match: {member.display_name} -> {member.name}")
                     discord_user = member
                     result = self._lookup_member_id_by_discord(member.name)
                     if result:
@@ -846,7 +834,6 @@ class TrackerCog(commands.Cog, name="Tracker"):
                     global_name = (member.global_name or "").lower() if hasattr(member, 'global_name') else ""
                     
                     if search_lower in display or search_lower in global_name:
-                        print(f"[Tracker] Found partial match: {member.display_name} -> {member.name}")
                         discord_user = member
                         result = self._lookup_member_id_by_discord(member.name)
                         if result:
@@ -856,7 +843,6 @@ class TrackerCog(commands.Cog, name="Tracker"):
             if not result:
                 for member in guild.members:
                     if search_lower == member.name.lower():
-                        print(f"[Tracker] Found username match: {member.name}")
                         discord_user = member
                         result = self._lookup_member_id_by_discord(member.name)
                         if result:
@@ -961,37 +947,27 @@ class TrackerCog(commands.Cog, name="Tracker"):
         """
         master_file = self.storage.get_file("master")
         if not master_file:
-            print(f"[Tracker] No master file found")
             return None
         
         try:
             import csv
             master_data = self.storage.read_file(master_file)
             if not master_data:
-                print(f"[Tracker] Master file is empty")
                 return None
             
             text_data = master_data.decode('utf-8-sig')
-            print(f"[Tracker] Raw CSV lines: {len(text_data.splitlines())}, searching for: {discord_info}")
             
             # Preprocess to find actual header row (skip metadata rows)
             text_data = self._preprocess_master_csv(text_data)
-            print(f"[Tracker] After preprocess lines: {len(text_data.splitlines())}")
-            
-            # Debug: show first line (header)
-            first_line = text_data.splitlines()[0] if text_data.splitlines() else "EMPTY"
-            print(f"[Tracker] Header row: {first_line[:100]}...")
             
             reader = csv.DictReader(io.StringIO(text_data))
             rows = list(reader)
             
             if not rows:
-                print(f"[Tracker] No rows in CSV")
                 return None
             
             headers = list(rows[0].keys())
             headers_lower = {h.lower(): h for h in headers}
-            print(f"[Tracker] Found headers: {headers[:8]}...")
             
             # Helper to find column (case-insensitive)
             def find_col(possible_names):
@@ -1007,10 +983,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
             discord_col = find_col(["Discord Username", "Discord", "discord_username", "Discord Handle"])
             name_col = find_col(["Full Name", "Name", "full_name", "Student Name"])
             
-            print(f"[Tracker] Columns found - member_id: {member_id_col}, discord: {discord_col}, name: {name_col}")
-            
             if not member_id_col:
-                print(f"[Tracker] Member ID column not found. All headers: {headers}")
                 return None
             
             # Clean the search input
@@ -1024,10 +997,6 @@ class TrackerCog(commands.Cog, name="Tracker"):
             
             # Search Discord column first (if found)
             if discord_col:
-                # Debug: show first few Discord values
-                sample_values = [str(row.get(discord_col, "")).strip() for row in rows[:5]]
-                print(f"[Tracker] First 5 Discord values: {sample_values}")
-                print(f"[Tracker] Looking for: '{discord_lower}'")
                 
                 # Exact match
                 for row in rows:
@@ -1040,7 +1009,6 @@ class TrackerCog(commands.Cog, name="Tracker"):
                         discord_clean = discord_clean.split('#')[0]
                     
                     if discord_clean == discord_lower:
-                        print(f"[Tracker] MATCH FOUND: {discord_username} -> {row.get(member_id_col)}")
                         member_id = str(row.get(member_id_col, "")).strip()
                         name = str(row.get(name_col, "")).strip() if name_col else ""
                         return (member_id, name, discord_username)
@@ -1062,7 +1030,6 @@ class TrackerCog(commands.Cog, name="Tracker"):
                         discord_username = str(row.get(discord_col, "")).strip() if discord_col else ""
                         return (member_id, name, discord_username)
             
-            print(f"[Tracker] No match found for '{discord_lower}' in {len(rows)} rows")
             return None
         except Exception as e:
             print(f"[Tracker] Error looking up member ID: {e}")

@@ -487,19 +487,26 @@ class TrackerDataProcessor(FileProcessor):
         # Determine effective week
         effective_week = typeform_week if typeform_week > 0 else current_week
         
-        if submission_date and submission_date.date() < start_date.date():
+        is_early_submission = submission_date and submission_date.date() < start_date.date()
+        
+        if is_early_submission:
             # Early submission - map to Week 1
             effective_week = 1
         
         # Check visibility based on deadline
-        wed_deadline, sun_deadline = self._get_week_deadlines(start_date, effective_week)
-        
-        if is_sunday:
-            # Sunday submissions visible after Sunday deadline
-            is_visible = target_date.date() >= sun_deadline.date()
+        # EXCEPTION: Early submissions (before start_date) are ALWAYS visible
+        # since the student submitted proactively before the program started
+        if is_early_submission:
+            is_visible = True
         else:
-            # Wednesday submissions visible after Wednesday deadline
-            is_visible = target_date.date() >= wed_deadline.date()
+            wed_deadline, sun_deadline = self._get_week_deadlines(start_date, effective_week)
+            
+            if is_sunday:
+                # Sunday submissions visible after Sunday deadline
+                is_visible = target_date.date() >= sun_deadline.date()
+            else:
+                # Wednesday submissions visible after Wednesday deadline
+                is_visible = target_date.date() >= wed_deadline.date()
         
         return effective_week, is_visible
     
