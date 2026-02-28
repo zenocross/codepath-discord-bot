@@ -603,6 +603,97 @@ class FileStorageService:
     def get_all_phase_completions(self) -> Dict[str, Dict[str, Any]]:
         """Get all phase completion records."""
         return self._load_phase_completions()
+    
+    # ==================== Bypass Storage ====================
+    
+    def _get_bypasses_file(self) -> Path:
+        """Get the bypasses file path."""
+        return self.storage_dir / "_bypasses.json"
+    
+    def _load_bypasses(self) -> Dict[str, Dict[str, Any]]:
+        """Load bypasses from disk.
+        
+        Returns:
+            Dict mapping "member_id:week" to bypass data
+        """
+        bypasses_file = self._get_bypasses_file()
+        if not bypasses_file.exists():
+            return {}
+        
+        try:
+            import json
+            with open(bypasses_file, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[FileStorage] Failed to load bypasses: {e}")
+            return {}
+    
+    def _save_bypasses(self, bypasses: Dict[str, Dict[str, Any]]) -> None:
+        """Save bypasses to disk."""
+        try:
+            import json
+            with open(self._get_bypasses_file(), 'w') as f:
+                json.dump(bypasses, f, indent=2)
+        except Exception as e:
+            print(f"[FileStorage] Failed to save bypasses: {e}")
+    
+    def set_bypass(self, member_id: str, submission_num: int, bypassed_by: str, name: str = "", 
+                   original_status: str = "", original_intervention: str = "", reason: str = "") -> None:
+        """Set a bypass for a specific submission.
+        
+        Args:
+            member_id: The student's member ID
+            submission_num: The submission number (Wed W1=1, Sun W1=2, etc.)
+            bypassed_by: Discord username/ID of who set the bypass
+            name: The student's name (for readability)
+            original_status: The original grade status before bypass
+            original_intervention: The original intervention type
+            reason: Optional reason for the bypass
+        """
+        bypasses = self._load_bypasses()
+        key = f"{member_id}:{submission_num}"
+        bypasses[key] = {
+            'name': name,
+            'member_id': member_id,
+            'submission_num': submission_num,
+            'bypassed': True,
+            'bypassed_at': datetime.now().isoformat(),
+            'bypassed_by': bypassed_by,
+            'original_status': original_status,
+            'original_intervention': original_intervention,
+            'reason': reason
+        }
+        self._save_bypasses(bypasses)
+    
+    def remove_bypass(self, member_id: str, submission_num: int) -> bool:
+        """Remove a bypass for a specific submission.
+        
+        Returns:
+            True if bypass was removed, False if it didn't exist
+        """
+        bypasses = self._load_bypasses()
+        key = f"{member_id}:{submission_num}"
+        if key in bypasses:
+            del bypasses[key]
+            self._save_bypasses(bypasses)
+            return True
+        return False
+    
+    def is_bypassed(self, member_id: str, submission_num: int) -> bool:
+        """Check if a submission is bypassed."""
+        bypasses = self._load_bypasses()
+        key = f"{member_id}:{submission_num}"
+        return key in bypasses and bypasses[key].get('bypassed', False)
+    
+    def get_bypass(self, member_id: str, submission_num: int) -> Optional[Dict[str, Any]]:
+        """Get bypass data for a specific submission."""
+        bypasses = self._load_bypasses()
+        key = f"{member_id}:{submission_num}"
+        return bypasses.get(key)
+    
+    def get_all_bypasses(self) -> Dict[str, Dict[str, Any]]:
+        """Get all bypass records."""
+        return self._load_bypasses()
 
 
 # ==================== Processor Registry (Dependency Inversion) ====================

@@ -509,6 +509,17 @@ class EmbedBuilder:
         )
         
         embed.add_field(
+            name="🔓 Bypass (Admin)",
+            value=(
+                "`!tracker bypass <sub#> <member_id> [reason]` - Mark as ON_TRACK\n"
+                "`!tracker unbypass <sub#> <member_id>` - Remove bypass\n"
+                "`!tracker list_bypasses` - View all active bypasses\n"
+                "Sub #: Wed W1=1, Sun W1=2, Wed W2=3, Sun W2=4..."
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
             name="📁 CSV File Types",
             value=(
                 "**Master** - Roster with Discord usernames\n"

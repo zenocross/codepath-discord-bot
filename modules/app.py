@@ -81,3 +81,5 @@ async def setup(bot: 'DiscordBot') -> None:
     """Setup function for loading the cog."""
     await bot.add_cog(AppCog(bot))
 
+
+

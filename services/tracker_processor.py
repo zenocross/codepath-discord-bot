@@ -48,6 +48,7 @@ class StudentRecord:
     
     # Time tracking
     week: int = 0
+    submission_num: int = 0  # Sequential submission number (Wed W1=1, Sun W1=2, Wed W2=3, etc.)
     submission_date: str = ""
     wed_submitted: bool = False
     sun_submitted: bool = False
@@ -733,8 +734,9 @@ class TrackerDataProcessor(FileProcessor):
                 # Pass start_date and target_date so we can check per-student deadlines
                 start_date = options.get('start_date')
                 target_date = options.get('target_date')
+                bypasses = options.get('bypasses', {})
                 
-                self._calculate_grade_status(students, start_date=start_date, target_date=target_date)
+                self._calculate_grade_status(students, start_date=start_date, target_date=target_date, bypasses=bypasses)
                 
                 # Mark typeform-only students (not in master CSV) as MISSING_ADMISSION_INFO
                 if master_data:
@@ -2033,6 +2035,13 @@ class TrackerDataProcessor(FileProcessor):
                 elif member_id in discord_lookup and not student.discord_username:
                     student.discord_username = discord_lookup[member_id]
             
+            # Calculate submission number: Wed W1=1, Sun W1=2, Wed W2=3, Sun W2=4, etc.
+            if student.week > 0:
+                if student.wed_submitted:
+                    student.submission_num = (student.week - 1) * 2 + 1
+                elif student.sun_submitted:
+                    student.submission_num = (student.week - 1) * 2 + 2
+            
             students.append(student)
         
         return students
@@ -2481,14 +2490,18 @@ class TrackerDataProcessor(FileProcessor):
     
     def _calculate_grade_status(self, students: List[StudentRecord], 
                                 start_date: Optional[datetime] = None,
-                                target_date: Optional[datetime] = None) -> None:
+                                target_date: Optional[datetime] = None,
+                                bypasses: Optional[Dict[str, Dict]] = None) -> None:
         """Calculate grade status and intervention type for each student.
         
         Args:
             students: List of student records to evaluate
             start_date: Program start date (for calculating per-week deadlines)
             target_date: Date the report is being run (for checking if deadlines passed)
+            bypasses: Optional dict of bypassed submissions (key: "member_id:week")
         """
+        bypasses = bypasses or {}
+        
         # First pass: Build lookup of which students have Sunday submissions for each week
         # Key: (member_id, week) -> has_sunday
         student_week_has_sunday: Dict[Tuple[str, int], bool] = {}
@@ -2502,6 +2515,14 @@ class TrackerDataProcessor(FileProcessor):
         # Second pass: Evaluate each student record
         for student in students:
             phase_num = self._get_phase_number(student.current_phase)
+            
+            # Check if this submission is bypassed
+            bypass_key = f"{student.member_id}:{student.submission_num}"
+            if student.submission_num > 0 and bypass_key in bypasses and bypasses[bypass_key].get('bypassed', False):
+                student.grade_status = "🟢 ON TRACK"
+                student.intervention_type = "BYPASSED"
+                student._bypassed = True
+                continue
             
             # If student has completed a previous contribution (contribution_num > 1),
             # always classify them as On Track regardless of issues on current contribution
@@ -2861,6 +2882,7 @@ class TrackerDataProcessor(FileProcessor):
                     'timeline': s.timeline_type,
                     'issues': set(),
                     'interventions': set(),
+                    'submission_nums': set(),  # Track flagged submission numbers
                     'blocked': s.blocked,
                     'blocker_desc': s.blocker_desc,
                     'readme_link': s.readme_link,
@@ -2885,9 +2907,11 @@ class TrackerDataProcessor(FileProcessor):
                 student_map[key]['blocker_desc'] = s.blocker_desc
                 student_map[key]['deliverables'] = f"{s.deliverables_complete}/{s.deliverables_expected}"
             
-            # Count submissions
+            # Count submissions and track submission numbers
             if s.wed_submitted or s.sun_submitted:
                 student_map[key]['total_submissions'] += 1
+                if s.submission_num > 0:
+                    student_map[key]['submission_nums'].add(s.submission_num)
             
             # Track which submissions exist per week (to avoid false "missing" reports)
             if 'week_submissions' not in student_map[key]:
@@ -2998,11 +3022,14 @@ class TrackerDataProcessor(FileProcessor):
             interventions = "\n".join(sorted(data['interventions'])) if data['interventions'] else "N/A"
             # Use newline separator for better readability
             description = "\n".join(issues_list) if issues_list else "No specific issues identified"
+            # Format submission numbers as comma-separated sorted list
+            submission_nums_str = ", ".join(str(n) for n in sorted(data['submission_nums'])) if data['submission_nums'] else ""
             
             result.append({
                 **data,
                 'interventions_str': interventions,
-                'description': description
+                'description': description,
+                'submission_nums_str': submission_nums_str
             })
         
         return result
@@ -3030,7 +3057,7 @@ class TrackerDataProcessor(FileProcessor):
         at_risk.sort(key=at_risk_sort_key)
         
         # Write header
-        headers = ["Name", "Member ID", "Discord", "Email", "Phone", "Latest Week", "Phase", "Timeline",
+        headers = ["Submission #", "Name", "Member ID", "Discord", "Email", "Phone", "Latest Week", "Phase", "Timeline",
                    "Deliverables", "Intervention Types", "Description"]
         
         for col, header in enumerate(headers, 1):
@@ -3043,6 +3070,7 @@ class TrackerDataProcessor(FileProcessor):
         # Write data
         for row_idx, student in enumerate(at_risk, 2):
             data = [
+                student.get('submission_nums_str', ''),
                 student['name'],
                 student['member_id'],
                 student['discord'],
@@ -3086,7 +3114,7 @@ class TrackerDataProcessor(FileProcessor):
         flagged.sort(key=lambda s: s['latest_week'], reverse=True)
         
         # Write header
-        headers = ["Name", "Member ID", "Discord", "Email", "Phone", "Latest Week", "Phase", "Timeline",
+        headers = ["Submission #", "Name", "Member ID", "Discord", "Email", "Phone", "Latest Week", "Phase", "Timeline",
                    "Deliverables", "Intervention Types", "Description"]
         
         for col, header in enumerate(headers, 1):
@@ -3099,6 +3127,7 @@ class TrackerDataProcessor(FileProcessor):
         # Write data
         for row_idx, student in enumerate(flagged, 2):
             data = [
+                student.get('submission_nums_str', ''),
                 student['name'],
                 student['member_id'],
                 student['discord'],
@@ -3142,7 +3171,7 @@ class TrackerDataProcessor(FileProcessor):
         on_track.sort(key=lambda s: s['latest_week'], reverse=True)
         
         # Write header
-        headers = ["Name", "Member ID", "Discord", "Email", "Phone", "Latest Week", "Phase", 
+        headers = ["Submission #", "Name", "Member ID", "Discord", "Email", "Phone", "Latest Week", "Phase", 
                    "Total Submissions", "Deliverables", "Description"]
         
         for col, header in enumerate(headers, 1):
@@ -3158,6 +3187,7 @@ class TrackerDataProcessor(FileProcessor):
             description = student['description'] if student['description'] != "No specific issues identified" else "Progressing normally"
             
             data = [
+                student.get('submission_nums_str', ''),
                 student['name'],
                 student['member_id'],
                 student['discord'],

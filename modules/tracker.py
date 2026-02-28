@@ -569,6 +569,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
             
             # Build options dict
             phase_completions = self.storage.get_all_phase_completions()
+            bypasses = self.storage.get_all_bypasses()
             process_options = {
                 'master_data': master_data,
                 'zoom_data': zoom_data,
@@ -577,7 +578,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
                 'target_date': target_date,
                 'current_week': current_week,
                 'filter_by_date': True,
-                'phase_completions': phase_completions
+                'phase_completions': phase_completions,
+                'bypasses': bypasses
             }
             
             # Add GitLab options if enabled
@@ -665,13 +667,15 @@ class TrackerCog(commands.Cog, name="Tracker"):
             
             # Process with tracker processor (pass all data sources)
             phase_completions = self.storage.get_all_phase_completions()
+            bypasses = self.storage.get_all_bypasses()
             result = self.processor.process(
                 typeform_data,
                 options={
                     'master_data': master_data,
                     'zoom_data': zoom_data,
                     'app_data': app_data,
-                    'phase_completions': phase_completions
+                    'phase_completions': phase_completions,
+                    'bypasses': bypasses
                 }
             )
             
@@ -775,6 +779,130 @@ class TrackerCog(commands.Cog, name="Tracker"):
             f"• Completed: **{phases_str}**\n"
             f"• Updated by: {updated_by}"
         )
+    
+    @commands.command(name='bypass')
+    async def bypass_submission(self, ctx: commands.Context, submission_num: int = None, member_id: str = None, *, reason: str = ""):
+        """Bypass a submission to mark it as ON_TRACK regardless of interventions.
+        
+        Usage: !tracker bypass <submission_num> <member_id> [reason]
+        
+        Submission numbers: Wed W1=1, Sun W1=2, Wed W2=3, Sun W2=4, etc.
+        This is used after manually investigating and intervening with an AT_RISK student.
+        Bypassed submissions will always show as ON_TRACK in future reports.
+        
+        Args:
+            submission_num: The submission number (see P1/P2/P3 sheets)
+            member_id: The student's member ID
+            reason: Optional reason for the bypass
+        """
+        if submission_num is None or member_id is None:
+            await ctx.send(
+                "**🔓 Bypass Submission**\n\n"
+                "Usage: `!tracker bypass <submission_num> <member_id> [reason]`\n\n"
+                "**Submission Numbers:** Wed W1=1, Sun W1=2, Wed W2=3, Sun W2=4, etc.\n"
+                "Check the 'Submission #' column in P1/P2/P3 sheets.\n\n"
+                "Examples:\n"
+                "• `!tracker bypass 1 12345` - Bypass Wed Week 1\n"
+                "• `!tracker bypass 2 12345 Issue resolved` - Bypass Sun Week 1\n\n"
+                "Use `!tracker get_member_id <discord_username>` to look up a member ID."
+            )
+            return
+        
+        if submission_num < 1:
+            await ctx.send("❌ Submission number must be 1 or greater.")
+            return
+        
+        # Look up student name from master CSV
+        member_info = self._get_member_info(member_id)
+        if not member_info:
+            await ctx.send(
+                f"❌ Member ID `{member_id}` not found in master roster.\n\n"
+                f"Use `!tracker get_member_id <discord_username>` to look up the correct member ID."
+            )
+            return
+        
+        student_name = member_info.get('name', '')
+        
+        # Calculate week and day from submission_num
+        week = (submission_num + 1) // 2
+        day = "Wednesday" if submission_num % 2 == 1 else "Sunday"
+        
+        # Set the bypass
+        bypassed_by = f"{ctx.author.name}#{ctx.author.discriminator}" if ctx.author.discriminator != "0" else ctx.author.name
+        self.storage.set_bypass(
+            member_id=member_id,
+            submission_num=submission_num,
+            bypassed_by=bypassed_by,
+            name=student_name,
+            reason=reason
+        )
+        
+        response = (
+            f"✅ **Submission Bypassed**\n"
+            f"• Name: {student_name}\n"
+            f"• Member ID: `{member_id}`\n"
+            f"• Submission #: **{submission_num}** ({day} Week {week})\n"
+            f"• Bypassed by: {bypassed_by}"
+        )
+        if reason:
+            response += f"\n• Reason: {reason}"
+        
+        await ctx.send(response)
+    
+    @commands.command(name='unbypass')
+    async def unbypass_submission(self, ctx: commands.Context, submission_num: int = None, member_id: str = None):
+        """Remove a bypass from a submission.
+        
+        Usage: !tracker unbypass <submission_num> <member_id>
+        """
+        if submission_num is None or member_id is None:
+            await ctx.send(
+                "**🔒 Remove Bypass**\n\n"
+                "Usage: `!tracker unbypass <submission_num> <member_id>`\n\n"
+                "Example: `!tracker unbypass 1 12345`"
+            )
+            return
+        
+        removed = self.storage.remove_bypass(member_id, submission_num)
+        
+        if removed:
+            week = (submission_num + 1) // 2
+            day = "Wednesday" if submission_num % 2 == 1 else "Sunday"
+            await ctx.send(f"✅ Bypass removed for member `{member_id}` submission #{submission_num} ({day} Week {week}).")
+        else:
+            await ctx.send(f"❌ No bypass found for member `{member_id}` submission #{submission_num}.")
+    
+    @commands.command(name='list_bypasses')
+    async def list_bypasses(self, ctx: commands.Context):
+        """List all active bypasses."""
+        bypasses = self.storage.get_all_bypasses()
+        
+        if not bypasses:
+            await ctx.send("📋 No active bypasses.")
+            return
+        
+        lines = ["**📋 Active Bypasses**\n"]
+        for key, data in sorted(bypasses.items()):
+            name = data.get('name', 'Unknown')
+            member_id = data.get('member_id', 'Unknown')
+            submission_num = data.get('submission_num', '?')
+            bypassed_by = data.get('bypassed_by', 'Unknown')
+            reason = data.get('reason', '')
+            
+            # Calculate week and day from submission_num
+            if isinstance(submission_num, int):
+                week = (submission_num + 1) // 2
+                day = "Wed" if submission_num % 2 == 1 else "Sun"
+                sub_display = f"#{submission_num} ({day} W{week})"
+            else:
+                sub_display = f"#{submission_num}"
+            
+            line = f"• **{name}** (`{member_id}`) - {sub_display} by {bypassed_by}"
+            if reason:
+                line += f"\n  └ Reason: {reason}"
+            lines.append(line)
+        
+        await ctx.send("\n".join(lines))
     
     @commands.command(name='get_member_id')
     async def get_member_id(self, ctx: commands.Context, *, discord_info: str = None):
