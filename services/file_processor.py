@@ -30,6 +30,7 @@ class ProcessingResult:
     output_filename: Optional[str] = None
     error_message: Optional[str] = None
     rows_processed: int = 0
+    students: Optional[List[Any]] = None  # Raw student records for autogroup
 
 
 @dataclass
@@ -694,6 +695,77 @@ class FileStorageService:
     def get_all_bypasses(self) -> Dict[str, Dict[str, Any]]:
         """Get all bypass records."""
         return self._load_bypasses()
+    
+    # ==================== Autogroup Preset Storage ====================
+    
+    def _get_autogroup_presets_file(self) -> Path:
+        """Get the autogroup presets file path."""
+        return self.storage_dir / "_autogroup_presets.json"
+    
+    def _load_autogroup_presets(self) -> Dict[str, Dict[str, Any]]:
+        """Load autogroup presets from disk.
+        
+        Returns:
+            Dict mapping preset_name to preset data {intervention_types: list, created_at: str}
+        """
+        presets_file = self._get_autogroup_presets_file()
+        if not presets_file.exists():
+            return {}
+        
+        try:
+            import json
+            with open(presets_file, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[FileStorage] Failed to load autogroup presets: {e}")
+            return {}
+    
+    def _save_autogroup_presets(self, presets: Dict[str, Dict[str, Any]]) -> None:
+        """Save autogroup presets to disk."""
+        try:
+            import json
+            with open(self._get_autogroup_presets_file(), 'w') as f:
+                json.dump(presets, f, indent=2)
+        except Exception as e:
+            print(f"[FileStorage] Failed to save autogroup presets: {e}")
+    
+    def set_autogroup_preset(self, name: str, intervention_types: list, created_by: str = "") -> None:
+        """Create or update an autogroup preset.
+        
+        Args:
+            name: The preset name
+            intervention_types: List of intervention type strings to match
+            created_by: Who created/updated this preset
+        """
+        presets = self._load_autogroup_presets()
+        presets[name] = {
+            'intervention_types': intervention_types,
+            'created_at': datetime.now().isoformat(),
+            'created_by': created_by
+        }
+        self._save_autogroup_presets(presets)
+    
+    def delete_autogroup_preset(self, name: str) -> bool:
+        """Delete an autogroup preset.
+        
+        Returns:
+            True if preset was deleted, False if it didn't exist
+        """
+        presets = self._load_autogroup_presets()
+        if name in presets:
+            del presets[name]
+            self._save_autogroup_presets(presets)
+            return True
+        return False
+    
+    def get_autogroup_preset(self, name: str) -> Optional[Dict[str, Any]]:
+        """Get a specific autogroup preset."""
+        presets = self._load_autogroup_presets()
+        return presets.get(name)
+    
+    def get_all_autogroup_presets(self) -> Dict[str, Dict[str, Any]]:
+        """Get all autogroup presets."""
+        return self._load_autogroup_presets()
 
 
 # ==================== Processor Registry (Dependency Inversion) ====================

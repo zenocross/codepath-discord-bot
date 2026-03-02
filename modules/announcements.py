@@ -1,18 +1,49 @@
 """Announcement commands module (Cog)."""
 
 import uuid
-from typing import TYPE_CHECKING
+from datetime import timedelta
+from typing import TYPE_CHECKING, Dict, List, Set
 
 import discord
 from discord.ext import commands
 
 from bot.config import Config
 from services.scheduler_service import SchedulerService
+from services.file_processor import FileStorageService
+from services.tracker_processor import TrackerDataProcessor
 from utils.embeds import EmbedBuilder
 from utils.time_utils import format_time_until, parse_time_string, parse_day_of_week
 
 if TYPE_CHECKING:
     from bot.client import DiscordBot
+
+# Valid intervention types for autogroup presets
+VALID_INTERVENTION_TYPES = {
+    'NO_SUBMISSIONS',
+    'MISSING_ADMISSION_INFO',
+    'MR_URL_MISMATCH',
+    'COMMITS_NOT_OWNED',
+    'README_NOT_OWNED',
+    'README_NONEXISTENT',
+    'README_LINK_MISSING',
+    'MISSING_PREVIOUS_PHASE',
+    'SKIPPED_PHASE',
+    'UNEXPECTED_PHASE_CHANGE',
+    'ISSUE_CHANGED',
+    'INCORRECT_PHASE_URL',
+    'MISSING_DELIVERABLES',
+    'NO_ACTIVITY',
+    'TIMELINE_COMPRESSED',
+    'MEMBER_ID_MISMATCH',
+    'INVALID_MEMBER_ID',
+    'STALLED',
+    'BLOCKED',
+    'MISSING_SUNDAY',
+    'MISSING_WEDNESDAY',
+}
+
+# Prefix for auto-generated DM groups
+AUTO_GROUP_PREFIX = "auto_"
 
 
 class AnnouncementsCog(commands.Cog, name="Announcements"):
@@ -20,6 +51,8 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
     
     def __init__(self, bot: 'DiscordBot'):
         self.bot = bot
+        self.storage = FileStorageService()
+        self.processor = TrackerDataProcessor()
     
     def _check_dm_permission(self, ctx: commands.Context) -> bool:
         """Check if user is allowed to use announce commands."""
@@ -697,6 +730,407 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
         if failed_users and len(failed_users) <= 5:
             result_msg += f"\n\n**Failed:**\n" + "\n".join(f"• {u}" for u in failed_users)
         await ctx.send(result_msg)
+    
+    # ==================== Autogroup Commands ====================
+    
+    @commands.command(name='set_group')
+    async def set_autogroup_preset(self, ctx: commands.Context, preset_name: str = None, *, intervention_types: str = None) -> None:
+        """Create or update an autogroup preset based on intervention types.
+        
+        Usage: !announce set_group <name> <intervention_types>
+        
+        Intervention types (comma-separated):
+        NO_SUBMISSIONS, MISSING_PREVIOUS_PHASE, SKIPPED_PHASE, STALLED, BLOCKED,
+        MISSING_DELIVERABLES, NO_ACTIVITY, TIMELINE_COMPRESSED, INVALID_MEMBER_ID, etc.
+        
+        Example: !announce set_group critical NO_SUBMISSIONS,STALLED,BLOCKED
+        """
+        if not isinstance(ctx.channel, discord.DMChannel):
+            await ctx.send("⚠️ This command only works in DMs for security.")
+            return
+        
+        if not self._check_dm_permission(ctx):
+            await ctx.send("❌ You don't have permission to use announce commands.")
+            return
+        
+        if not preset_name or not intervention_types:
+            types_list = ", ".join(sorted(VALID_INTERVENTION_TYPES))
+            await ctx.send(
+                "**📋 Create Autogroup Preset**\n\n"
+                "Usage: `!announce set_group <name> <intervention_types>`\n\n"
+                "Example:\n"
+                "• `!announce set_group critical NO_SUBMISSIONS,STALLED,BLOCKED`\n"
+                "• `!announce set_group phase_issues MISSING_PREVIOUS_PHASE,SKIPPED_PHASE`\n\n"
+                f"**Valid Intervention Types:**\n```\n{types_list}\n```"
+            )
+            return
+        
+        # Parse and validate intervention types
+        types_list = [t.strip().upper() for t in intervention_types.split(',')]
+        invalid_types = [t for t in types_list if t not in VALID_INTERVENTION_TYPES]
+        
+        if invalid_types:
+            await ctx.send(
+                f"❌ Invalid intervention types: `{', '.join(invalid_types)}`\n\n"
+                f"Valid types: `{', '.join(sorted(VALID_INTERVENTION_TYPES))}`"
+            )
+            return
+        
+        # Save the preset
+        created_by = f"{ctx.author.name}#{ctx.author.discriminator}" if ctx.author.discriminator != "0" else ctx.author.name
+        self.storage.set_autogroup_preset(preset_name, types_list, created_by)
+        
+        await ctx.send(
+            f"✅ **Autogroup Preset Created/Updated**\n"
+            f"• Name: `{preset_name}`\n"
+            f"• Intervention Types: `{', '.join(types_list)}`\n"
+            f"• Created by: {created_by}\n\n"
+            f"Run `!announce autogroup` to create DM groups from presets."
+        )
+    
+    @commands.command(name='delete_preset')
+    async def delete_autogroup_preset(self, ctx: commands.Context, preset_name: str = None) -> None:
+        """Delete an autogroup preset.
+        
+        Usage: !announce delete_preset <name>
+        """
+        if not isinstance(ctx.channel, discord.DMChannel):
+            await ctx.send("⚠️ This command only works in DMs for security.")
+            return
+        
+        if not self._check_dm_permission(ctx):
+            await ctx.send("❌ You don't have permission to use announce commands.")
+            return
+        
+        if not preset_name:
+            await ctx.send("Usage: `!announce delete_preset <name>`")
+            return
+        
+        if self.storage.delete_autogroup_preset(preset_name):
+            await ctx.send(f"✅ Deleted preset `{preset_name}`")
+        else:
+            await ctx.send(f"❌ Preset `{preset_name}` not found.")
+    
+    @commands.command(name='presets')
+    async def list_autogroup_presets(self, ctx: commands.Context) -> None:
+        """List all autogroup presets."""
+        if not isinstance(ctx.channel, discord.DMChannel):
+            await ctx.send("⚠️ This command only works in DMs for security.")
+            return
+        
+        if not self._check_dm_permission(ctx):
+            await ctx.send("❌ You don't have permission to use announce commands.")
+            return
+        
+        presets = self.storage.get_all_autogroup_presets()
+        
+        if not presets:
+            await ctx.send(
+                "📋 **Autogroup Presets:** None configured\n\n"
+                "Use `!announce set_group <name> <intervention_types>` to create one."
+            )
+            return
+        
+        lines = ["**📋 Autogroup Presets**\n"]
+        for name, data in sorted(presets.items()):
+            types = data.get('intervention_types', [])
+            created_by = data.get('created_by', 'Unknown')
+            lines.append(f"• **{name}**: `{', '.join(types)}`\n  └ by {created_by}")
+        
+        await ctx.send("\n".join(lines))
+    
+    @commands.command(name='autogroup')
+    async def autogroup(self, ctx: commands.Context) -> None:
+        """Create DM groups automatically based on presets and current tracker data.
+        
+        This will:
+        1. Clear all existing auto-generated DM groups (prefixed with 'auto_')
+        2. Create phase-based groups (auto_phase_1, auto_phase_2, etc.)
+        3. Create intervention-based groups from presets
+        
+        Only students with unresolved issues (not bypassed) are included.
+        """
+        if not isinstance(ctx.channel, discord.DMChannel):
+            await ctx.send("⚠️ This command only works in DMs for security.")
+            return
+        
+        if not self._check_dm_permission(ctx):
+            await ctx.send("❌ You don't have permission to use announce commands.")
+            return
+        
+        await ctx.send("🔄 Processing tracker data and creating autogroups...")
+        
+        # Load tracker data
+        typeform_file = self.storage.get_file("typeform")
+        if not typeform_file:
+            await ctx.send("❌ No typeform data uploaded. Use `!tracker upload typeform` first.")
+            return
+        
+        typeform_data = self.storage.read_file(typeform_file)
+        master_file = self.storage.get_file("master")
+        master_data = self.storage.read_file(master_file) if master_file else None
+        
+        # Get start_date and target_date (same as submissions_download)
+        start_date = self.storage.get_start_date()
+        target_date = self.storage.get_last_submissions_date()
+        
+        if not start_date:
+            await ctx.send(
+                "❌ **No start date set.**\n\n"
+                "Set the program start date first using `!tracker start_date MM/DD/YYYY`."
+            )
+            return
+        
+        if not target_date:
+            await ctx.send(
+                "❌ **No submissions date set.**\n\n"
+                "Run `!tracker submissions <DATE>` first to set the date filter."
+            )
+            return
+        
+        # Calculate current week (same logic as tracker)
+        days_since_start = (target_date - start_date).days
+        current_week = max(1, (days_since_start // 7) + 1)
+        
+        # Get phase completions and bypasses
+        phase_completions = self.storage.get_all_phase_completions()
+        bypasses = self.storage.get_all_bypasses()
+        
+        # Get app data for phone numbers
+        app_file = self.storage.get_file("app")
+        app_data = self.storage.read_file(app_file) if app_file else None
+        
+        # Process the data with full options (same as submissions_download)
+        result = self.processor.process(
+            typeform_data,
+            options={
+                'master_data': master_data,
+                'app_data': app_data,
+                'start_date': start_date,
+                'target_date': target_date,
+                'current_week': current_week,
+                'filter_by_date': True,
+                'phase_completions': phase_completions,
+                'bypasses': bypasses
+            }
+        )
+        
+        if not result.success:
+            await ctx.send(f"❌ Processing failed: {result.error_message}")
+            return
+        
+        students = result.students
+        if not students:
+            await ctx.send("❌ No student data found in processing result.")
+            return
+        
+        # Clear existing auto-generated groups
+        auto_groups_removed = []
+        groups_to_remove = [name for name in self.bot.dm_groups.keys() if name.startswith(AUTO_GROUP_PREFIX)]
+        for group_name in groups_to_remove:
+            del self.bot.dm_groups[group_name]
+            auto_groups_removed.append(group_name)
+        
+        # Build lookup: discord_username -> user object
+        discord_user_cache: Dict[str, discord.User] = {}
+        
+        async def find_user(discord_username: str) -> discord.User | None:
+            """Find a user by Discord username."""
+            if not discord_username:
+                return None
+            if discord_username in discord_user_cache:
+                return discord_user_cache[discord_username]
+            user = await self.bot.find_user_by_username(discord_username)
+            if user:
+                discord_user_cache[discord_username] = user
+            return user
+        
+        # Build student data with user lookups
+        # Group by member_id to get latest data per student
+        student_data: Dict[str, dict] = {}
+        for s in students:
+            key = s.member_id or s.name
+            if key not in student_data or s.week > student_data[key].get('week', 0):
+                # Check if this submission is bypassed
+                bypass_key = f"{s.member_id}:{s.submission_num}"
+                is_bypassed = bypass_key in bypasses and bypasses[bypass_key].get('bypassed', False)
+                
+                student_data[key] = {
+                    'name': s.name,
+                    'member_id': s.member_id,
+                    'discord_username': s.discord_username,
+                    'phase': s.current_phase,
+                    'intervention_type': s.intervention_type,
+                    'grade_status': s.grade_status,
+                    'week': s.week,
+                    'bypassed': is_bypassed or s.intervention_type == 'BYPASSED'
+                }
+                
+                # Debug: print specific student (search by member_id, name, or discord)
+                search_term = 'mgadepalli'
+                if (search_term in str(key).lower() or 
+                    search_term in str(s.name).lower() or 
+                    search_term in str(s.member_id).lower() or
+                    search_term in str(s.discord_username).lower()):
+                    print(f"[Autogroup Debug] {search_term}: member_id={s.member_id}, name={s.name}, week={s.week}, intervention={s.intervention_type}, phase={s.current_phase}, bypassed={is_bypassed}, discord={s.discord_username}")
+        
+        # Create phase-based groups
+        phase_groups: Dict[str, List[dict]] = {
+            f"{AUTO_GROUP_PREFIX}phase_1": [],
+            f"{AUTO_GROUP_PREFIX}phase_2": [],
+            f"{AUTO_GROUP_PREFIX}phase_3": [],
+            f"{AUTO_GROUP_PREFIX}phase_4": [],
+        }
+        
+        for key, data in student_data.items():
+            phase = data.get('phase', '')
+            if '1' in phase:
+                phase_groups[f"{AUTO_GROUP_PREFIX}phase_1"].append(data)
+            elif '2' in phase:
+                phase_groups[f"{AUTO_GROUP_PREFIX}phase_2"].append(data)
+            elif '3' in phase:
+                phase_groups[f"{AUTO_GROUP_PREFIX}phase_3"].append(data)
+            elif '4' in phase:
+                phase_groups[f"{AUTO_GROUP_PREFIX}phase_4"].append(data)
+        
+        # Create intervention-based groups from presets
+        presets = self.storage.get_all_autogroup_presets()
+        preset_groups: Dict[str, List[dict]] = {}
+        
+        # Debug: collect all unique intervention types found
+        all_intervention_types: Set[str] = set()
+        for key, data in student_data.items():
+            student_interventions = data.get('intervention_type', '')
+            if student_interventions:
+                student_types = set(student_interventions.replace('\n', ',').split(','))
+                student_types = {t.strip().split(':')[0] for t in student_types if t.strip()}
+                all_intervention_types.update(student_types)
+        
+        print(f"[Autogroup] Found intervention types: {all_intervention_types}")
+        
+        for preset_name, preset_data in presets.items():
+            group_name = f"{AUTO_GROUP_PREFIX}{preset_name}"
+            preset_groups[group_name] = []
+            intervention_types = set(preset_data.get('intervention_types', []))
+            
+            for key, data in student_data.items():
+                # Skip bypassed students
+                if data.get('bypassed'):
+                    continue
+                
+                # Check if student has any of the intervention types
+                student_interventions = data.get('intervention_type', '')
+                if student_interventions:
+                    # Split by newline since multiple interventions can be combined
+                    student_types = set(student_interventions.replace('\n', ',').split(','))
+                    student_types = {t.strip().split(':')[0] for t in student_types if t.strip()}
+                    
+                    if intervention_types & student_types:
+                        preset_groups[group_name].append(data)
+                        print(f"[Autogroup] Matched {key} to {preset_name}: {student_types}")
+        
+        # Resolve Discord users and create DM groups
+        groups_created = []
+        users_added = 0
+        users_not_found = 0
+        users_not_found_list = []  # Track which users weren't found
+        
+        all_groups = {**phase_groups, **preset_groups}
+        
+        for group_name, members in all_groups.items():
+            if not members:
+                continue
+            
+            self.bot.dm_groups[group_name] = []
+            
+            for member in members:
+                discord_username = member.get('discord_username', '')
+                member_name = member.get('name', 'Unknown')
+                member_id = member.get('member_id', '?')
+                
+                if not discord_username:
+                    users_not_found += 1
+                    not_found_msg = f"{member_name} ({member_id}) - no Discord username"
+                    if not_found_msg not in users_not_found_list:
+                        users_not_found_list.append(not_found_msg)
+                    print(f"[Autogroup] No Discord username for {member_name} ({member_id}) in {group_name}")
+                    continue
+                
+                user = await find_user(discord_username)
+                if user:
+                    self.bot.dm_groups[group_name].append({
+                        'user_id': user.id,
+                        'username': user.name,
+                        'member_id': member_id,
+                        'name': member_name
+                    })
+                    users_added += 1
+                else:
+                    users_not_found += 1
+                    not_found_msg = f"{member_name} ({member_id}) - `{discord_username}`"
+                    if not_found_msg not in users_not_found_list:
+                        users_not_found_list.append(not_found_msg)
+                    print(f"[Autogroup] Discord user not found: '{discord_username}' for {member_name} ({member_id}) in {group_name}")
+            
+            if self.bot.dm_groups[group_name]:
+                groups_created.append(f"{group_name} ({len(self.bot.dm_groups[group_name])} users)")
+            else:
+                del self.bot.dm_groups[group_name]
+        
+        # Save DM groups
+        self.bot.save_dm_groups()
+        
+        # Build response
+        response = ["✅ **Autogroup Complete**\n"]
+        
+        if auto_groups_removed:
+            response.append(f"🗑️ Cleared {len(auto_groups_removed)} auto-generated group(s)")
+        
+        if groups_created:
+            response.append(f"\n**📋 Groups Created:**")
+            for group in groups_created:
+                response.append(f"• {group}")
+        else:
+            response.append("\n⚠️ No groups created (no matching students found)")
+        
+        response.append(f"\n**Stats:**")
+        response.append(f"• Students processed: {len(student_data)}")
+        response.append(f"• Users added to groups: {users_added}")
+        if users_not_found:
+            response.append(f"• Users not found: {users_not_found}")
+        
+        # Show which users weren't found (deduplicated)
+        if users_not_found_list:
+            response.append(f"\n**⚠️ Users Not Found:**")
+            for user_info in users_not_found_list[:15]:  # Limit to 15 to avoid message too long
+                response.append(f"• {user_info}")
+            if len(users_not_found_list) > 15:
+                response.append(f"• ... and {len(users_not_found_list) - 15} more")
+        
+        await ctx.send("\n".join(response))
+    
+    @commands.command(name='clear_autogroups')
+    async def clear_autogroups(self, ctx: commands.Context) -> None:
+        """Clear all auto-generated DM groups (those starting with 'auto_')."""
+        if not isinstance(ctx.channel, discord.DMChannel):
+            await ctx.send("⚠️ This command only works in DMs for security.")
+            return
+        
+        if not self._check_dm_permission(ctx):
+            await ctx.send("❌ You don't have permission to use announce commands.")
+            return
+        
+        groups_to_remove = [name for name in self.bot.dm_groups.keys() if name.startswith(AUTO_GROUP_PREFIX)]
+        
+        if not groups_to_remove:
+            await ctx.send("ℹ️ No auto-generated groups to clear.")
+            return
+        
+        for group_name in groups_to_remove:
+            del self.bot.dm_groups[group_name]
+        
+        self.bot.save_dm_groups()
+        await ctx.send(f"✅ Cleared {len(groups_to_remove)} auto-generated group(s):\n• " + "\n• ".join(groups_to_remove))
 
 
 async def setup(bot: 'DiscordBot') -> None:

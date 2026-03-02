@@ -799,7 +799,8 @@ class TrackerDataProcessor(FileProcessor):
                 success=True,
                 output_data=output.read(),
                 output_filename="tracker_report.xlsx",
-                rows_processed=unique_students
+                rows_processed=unique_students,
+                students=students  # Include raw student records for autogroup
             )
             
         except Exception as e:
