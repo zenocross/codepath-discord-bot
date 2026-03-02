@@ -406,7 +406,8 @@ class EmbedBuilder:
                   "`!announce dmgroup create <name>` - Create DM group\n"
                   "`!announce dmgroup delete <name>` - Delete DM group\n"
                   "`!announce dmgroup add <name> <username>` - Add user by username/ID\n"
-                  "`!announce dmgroup remove <name> <username>` - Remove user",
+                  "`!announce dmgroup remove <name> <username>` - Remove user\n"
+                  "`!announce dmgroup test <name>` - Test DM accessibility",
             inline=False
         )
         

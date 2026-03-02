@@ -247,13 +247,80 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
             else:
                 await ctx.send(f"ℹ️ User `{username}` not found in DM group `{group_name}`")
         
+        elif action == 'test' and group_name:
+            # Test DM accessibility for all users in a group
+            if group_name not in self.bot.dm_groups:
+                await ctx.send(f"❌ DM group `{group_name}` doesn't exist.")
+                return
+            
+            users = self.bot.dm_groups[group_name]
+            if not users:
+                await ctx.send(f"❌ DM group `{group_name}` has no users.")
+                return
+            
+            await ctx.send(f"🔍 Testing DM accessibility for {len(users)} users in `{group_name}`...")
+            
+            can_dm = []
+            cannot_dm = []
+            
+            for user_data in users:
+                user_id = user_data.get('user_id')
+                username = user_data.get('username', 'Unknown')
+                name = user_data.get('name', '')
+                display = f"{name} ({username})" if name else username
+                
+                if not user_id:
+                    cannot_dm.append(f"{display} - no user ID")
+                    continue
+                
+                try:
+                    user = await self.bot.fetch_user(user_id)
+                    if user:
+                        # Try to create DM channel (doesn't send a message)
+                        dm_channel = await user.create_dm()
+                        if dm_channel:
+                            can_dm.append(display)
+                        else:
+                            cannot_dm.append(f"{display} - couldn't create DM")
+                    else:
+                        cannot_dm.append(f"{display} - user not found")
+                except discord.Forbidden:
+                    cannot_dm.append(f"{display} - DMs disabled/blocked")
+                except discord.NotFound:
+                    cannot_dm.append(f"{display} - user not found")
+                except Exception as e:
+                    cannot_dm.append(f"{display} - error: {str(e)[:30]}")
+            
+            # Build response
+            response = [f"**📬 DM Test Results for `{group_name}`**\n"]
+            response.append(f"✅ **Can DM ({len(can_dm)}):**")
+            if can_dm:
+                for u in can_dm[:20]:
+                    response.append(f"• {u}")
+                if len(can_dm) > 20:
+                    response.append(f"• ... and {len(can_dm) - 20} more")
+            else:
+                response.append("• None")
+            
+            response.append(f"\n❌ **Cannot DM ({len(cannot_dm)}):**")
+            if cannot_dm:
+                for u in cannot_dm[:20]:
+                    response.append(f"• {u}")
+                if len(cannot_dm) > 20:
+                    response.append(f"• ... and {len(cannot_dm) - 20} more")
+            else:
+                response.append("• None")
+            
+            await ctx.send("\n".join(response))
+        
         else:
             await ctx.send(
                 "Usage:\n"
                 "`!announce dmgroup create <name>` - Create a DM group\n"
                 "`!announce dmgroup delete <name>` - Delete a DM group\n"
                 "`!announce dmgroup add <name> <username>` - Add user (by username or user ID)\n"
-                "`!announce dmgroup remove <name> <username>` - Remove user"
+                "`!announce dmgroup remove <name> <username>` - Remove user\n"
+                "`!announce dmgroup test <name>` - Test DM accessibility"
             )
     
     @commands.command(name='dmgroups')
