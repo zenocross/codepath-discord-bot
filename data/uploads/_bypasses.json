@@ -9,5 +9,71 @@
     "original_status": "",
     "original_intervention": "",
     "reason": "Corrected member id"
+  },
+  "122491:1": {
+    "name": "Oluwatomi Adenekan",
+    "member_id": "122491",
+    "submission_num": 1,
+    "bypassed": true,
+    "bypassed_at": "2026-03-03T01:24:41.198426",
+    "bypassed_by": "zenocross",
+    "original_status": "",
+    "original_intervention": "",
+    "reason": "STALL_INTERVENTION"
+  },
+  "91371:1": {
+    "name": "Andrea Nunoo",
+    "member_id": "91371",
+    "submission_num": 1,
+    "bypassed": true,
+    "bypassed_at": "2026-03-03T01:24:48.369425",
+    "bypassed_by": "zenocross",
+    "original_status": "",
+    "original_intervention": "",
+    "reason": "STALL_INTERVENTION"
+  },
+  "86270:1": {
+    "name": "Oluwatomisin Sapara-Williams",
+    "member_id": "86270",
+    "submission_num": 1,
+    "bypassed": true,
+    "bypassed_at": "2026-03-03T01:24:55.747577",
+    "bypassed_by": "zenocross",
+    "original_status": "",
+    "original_intervention": "",
+    "reason": "STALL_INTERVENTION"
+  },
+  "54243:1": {
+    "name": "Bhagyesh Rathi",
+    "member_id": "54243",
+    "submission_num": 1,
+    "bypassed": true,
+    "bypassed_at": "2026-03-03T01:25:03.448240",
+    "bypassed_by": "zenocross",
+    "original_status": "",
+    "original_intervention": "",
+    "reason": "STALL_INTERVENTION"
+  },
+  "148473:1": {
+    "name": "Kalyaan Kanugula",
+    "member_id": "148473",
+    "submission_num": 1,
+    "bypassed": true,
+    "bypassed_at": "2026-03-03T01:25:12.374380",
+    "bypassed_by": "zenocross",
+    "original_status": "",
+    "original_intervention": "",
+    "reason": "STALL_INTERVENTION"
+  },
+  "12352:1": {
+    "name": "Sabareesh Kappagantu",
+    "member_id": "12352",
+    "submission_num": 1,
+    "bypassed": true,
+    "bypassed_at": "2026-03-03T01:25:18.520857",
+    "bypassed_by": "zenocross",
+    "original_status": "",
+    "original_intervention": "",
+    "reason": "STALL_INTERVENTION"
   }
 }

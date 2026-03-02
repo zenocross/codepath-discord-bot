@@ -2525,12 +2525,9 @@ class TrackerDataProcessor(FileProcessor):
                 student._bypassed = True
                 continue
             
-            # If student has completed a previous contribution (contribution_num > 1),
-            # always classify them as On Track regardless of issues on current contribution
-            if student.contribution_num > 1:
-                student.grade_status = "🟢 ON TRACK"
-                student.intervention_type = ""
-                continue
+            # Note: We no longer automatically mark contribution_num > 1 as ON TRACK
+            # because students may switch contributions without completing the previous one.
+            # Instead, new_contribution_detected will be flagged for review.
             
             # Check if THIS student's week's Sunday deadline has passed
             sun_deadline_passed = False
@@ -2612,6 +2609,12 @@ class TrackerDataProcessor(FileProcessor):
                 elif getattr(student, '_unexpected_phase_change', False):
                     flagged = True
                     intervention = "UNEXPECTED_PHASE_CHANGE"
+                
+                # Check for new contribution started (switched contribution numbers)
+                elif student.new_contribution_detected:
+                    flagged = True
+                    intervention = "NEW_CONTRIBUTION"
+                    student._intervention_detail = f"Switched to Contribution {student.contribution_num}"
                 
                 # Check for issue change (student switched to a different issue)
                 elif student.issue_changed:
@@ -2785,12 +2788,13 @@ class TrackerDataProcessor(FileProcessor):
         self._auto_fit_columns(ws)
         ws.freeze_panes = 'A2'
     
-    def _get_student_priority_status(self, students: List[StudentRecord]) -> Dict[str, str]:
+    def _get_student_priority_status(self, students: List[StudentRecord]) -> Tuple[Dict[str, str], Dict[str, str]]:
         """Determine each student's priority status across all their submissions.
         
-        Logic: If a student has a Sunday submission (official weekly submission) 
-        that is ON TRACK, they are considered ON TRACK for the week, regardless 
-        of Wednesday check-in status.
+        Logic: A student is forced to ON TRACK if any of these conditions are met:
+        1. Has a Sunday submission that is ON TRACK
+        2. Has contribution_num > 1 (on second or later contribution)
+        3. Has an mr_url submitted (MR already created)
         
         Otherwise, use the worst status across all submissions.
         
@@ -2798,10 +2802,12 @@ class TrackerDataProcessor(FileProcessor):
             students: List of all student records
             
         Returns:
-            Dict mapping member_id/name to their priority status
+            Tuple of:
+            - Dict mapping member_id/name to their priority status
+            - Dict mapping member_id/name to forced ON TRACK reason (empty string if not forced)
         """
         student_status: Dict[str, str] = {}
-        student_has_on_track_sunday: Dict[str, bool] = {}
+        student_forced_reason: Dict[str, str] = {}
         
         # Status priority (higher number = worse)
         status_priority = {
@@ -2810,18 +2816,33 @@ class TrackerDataProcessor(FileProcessor):
             "🔴 AT RISK": 3
         }
         
-        # First pass: check if student has any ON TRACK Sunday submission
+        # First pass: check if student meets any forced ON TRACK condition
+        # Priority: Sunday ON TRACK > Has MR > Multiple Contributions
         for s in students:
             key = s.member_id or s.name
+            
+            # Skip if already has a higher-priority reason
+            if key in student_forced_reason:
+                continue
+                
+            # Condition 1: ON TRACK Sunday submission (highest priority - natural progression)
             if s.sun_submitted and s.grade_status == "🟢 ON TRACK":
-                student_has_on_track_sunday[key] = True
+                student_forced_reason[key] = ""  # Empty = natural ON TRACK, no special reason needed
+            # Condition 2: Has submitted an MR (significant progress)
+            elif s.mr_url and str(s.mr_url).strip():
+                if key not in student_forced_reason:
+                    student_forced_reason[key] = "Has MR submitted"
+            # Condition 3: On second or later contribution (completed at least one)
+            elif s.contribution_num > 1:
+                if key not in student_forced_reason:
+                    student_forced_reason[key] = f"On Contribution {s.contribution_num}"
         
         # Second pass: determine status
         for s in students:
             key = s.member_id or s.name
             
-            # If student has an ON TRACK Sunday submission, they're ON TRACK
-            if student_has_on_track_sunday.get(key, False):
+            # If student meets any forced ON TRACK condition, they're ON TRACK
+            if key in student_forced_reason:
                 student_status[key] = "🟢 ON TRACK"
                 continue
             
@@ -2832,7 +2853,7 @@ class TrackerDataProcessor(FileProcessor):
             if current_priority > existing_priority:
                 student_status[key] = s.grade_status
         
-        return student_status
+        return student_status, student_forced_reason
     
     def _aggregate_student_issues(
         self, 
@@ -2858,7 +2879,7 @@ class TrackerDataProcessor(FileProcessor):
             List of dicts with unique students and aggregated issue descriptions
         """
         # First, determine each student's priority status (worst across all submissions)
-        priority_status = self._get_student_priority_status(students)
+        priority_status, forced_reasons = self._get_student_priority_status(students)
         
         # Group by member_id, but only include students whose PRIORITY status matches the filter
         student_map: Dict[str, Dict] = {}
@@ -2889,6 +2910,7 @@ class TrackerDataProcessor(FileProcessor):
                     'readme_link': s.readme_link,
                     'total_submissions': 0,
                     'deliverables': f"{s.deliverables_complete}/{s.deliverables_expected}",
+                    'forced_on_track_reason': forced_reasons.get(key, ''),  # Why forced ON TRACK
                 }
             
             # Update to latest week data, preferring Sunday submissions over Wednesday
@@ -2955,6 +2977,9 @@ class TrackerDataProcessor(FileProcessor):
             
             if getattr(s, '_unexpected_phase_change', False):
                 student_map[key]['issues'].add(f"Week {s.week}: Unexpected phase change")
+            
+            if s.new_contribution_detected:
+                student_map[key]['issues'].add(f"Week {s.week}: Switched to Contribution {s.contribution_num}")
             
             # Missing previous phase (immediate previous phase is missing)
             if getattr(s, '_missing_previous_phase', False):
@@ -3184,8 +3209,15 @@ class TrackerDataProcessor(FileProcessor):
         
         # Write data
         for row_idx, student in enumerate(on_track, 2):
-            # For on-track students, show positive status
-            description = student['description'] if student['description'] != "No specific issues identified" else "Progressing normally"
+            # For on-track students, show positive status or forced reason
+            forced_reason = student.get('forced_on_track_reason', '')
+            if forced_reason:
+                # Student was forced to ON TRACK due to special case
+                description = f"✓ Forced ON TRACK: {forced_reason}"
+            elif student['description'] != "No specific issues identified":
+                description = student['description']
+            else:
+                description = "Progressing normally"
             
             data = [
                 student.get('submission_nums_str', ''),
@@ -3224,11 +3256,14 @@ class TrackerDataProcessor(FileProcessor):
         
         latest_records = list(unique_students.values())
         
-        # Calculate statistics based on unique students
+        # Use the same priority logic as P1/P2/P3 tabs for consistency
+        priority_status, _ = self._get_student_priority_status(students)
+        
+        # Calculate statistics based on priority status (matches P1/P2/P3 tabs)
         total = len(latest_records)
-        on_track = len([s for s in latest_records if s.grade_status == "🟢 ON TRACK"])
-        flagged = len([s for s in latest_records if s.grade_status == "🟡 FLAGGED"])
-        at_risk = len([s for s in latest_records if s.grade_status == "🔴 AT RISK"])
+        on_track = sum(1 for key in priority_status.values() if key == "🟢 ON TRACK")
+        flagged = sum(1 for key in priority_status.values() if key == "🟡 FLAGGED")
+        at_risk = sum(1 for key in priority_status.values() if key == "🔴 AT RISK")
         
         sun_submitted = len([s for s in latest_records if s.sun_submitted])
         wed_submitted = len([s for s in latest_records if s.wed_submitted])
