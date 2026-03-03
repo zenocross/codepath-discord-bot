@@ -1076,17 +1076,23 @@ class TrackerDataProcessor(FileProcessor):
                         missing_sunday = True
                 
                 # Check for member ID mismatch
-                if student.get('member_id_mismatch', False):
+                has_member_id_mismatch = student.get('member_id_mismatch', False)
+                if has_member_id_mismatch:
                     issues.append("Member ID mismatch")
                 
                 # Check for invalid Member ID in submission (primary column was #N/A, empty, etc.)
-                if student.get('invalid_member_id', False):
+                has_invalid_member_id = student.get('invalid_member_id', False)
+                if has_invalid_member_id:
                     invalid_val = student.get('invalid_member_id_value', 'invalid')
                     issues.append(f"Invalid Member ID column: {invalid_val}")
                 
                 # Categorize based on issues
-                if missing_sunday or student.get('member_id_mismatch', False) or student.get('invalid_member_id', False):
+                # AT RISK: missing Sunday or invalid member ID (critical issues)
+                # FLAGGED: member ID mismatch only (data quality concern)
+                if missing_sunday or has_invalid_member_id:
                     at_risk.append({**student, 'issues': issues, 'status': 'AT RISK'})
+                elif has_member_id_mismatch:
+                    flagged.append({**student, 'issues': issues, 'status': 'FLAGGED'})
                 else:
                     on_track.append({**student, 'issues': [], 'status': 'ON TRACK'})
             
@@ -2564,11 +2570,6 @@ class TrackerDataProcessor(FileProcessor):
                 at_risk = True
                 intervention = "PHASE_COMPRESSED" if student.timeline_type == "Compressed" else "PHASE_CRITICAL"
             
-            # Stalled with blockers
-            elif student.blocked and student.blocker_desc:
-                at_risk = True
-                intervention = "STALLED"
-            
             # Missed previous Sunday submission(s) - At Risk level
             # Wednesday is optional, only Sunday counts for consecutive misses
             elif student.consecutive_misses > 0 and student.last_week_sun_missing:
@@ -2579,9 +2580,14 @@ class TrackerDataProcessor(FileProcessor):
             flagged = False
             
             if not at_risk:
+                # Stalled with blockers (moved from At Risk to Flagged)
+                if student.blocked and student.blocker_desc:
+                    flagged = True
+                    intervention = "STALLED"
+                
                 # Check for missing immediate previous phase submission
                 # Only flag if the phase directly before current has no submission record
-                if getattr(student, '_missing_previous_phase', False):
+                elif getattr(student, '_missing_previous_phase', False):
                     flagged = True
                     missing_phase_num = getattr(student, '_missing_previous_phase_num', None)
                     intervention = "MISSING_PREVIOUS_PHASE"
@@ -2648,15 +2654,15 @@ class TrackerDataProcessor(FileProcessor):
                     intervention = "TIMELINE_COMPRESSED"
             
             # Always append MEMBER_ID_MISMATCH if detected (data quality issue)
-            # This is AT_RISK level since it indicates potential identity issues
+            # This is FLAGGED level (data quality concern, not critical)
             if student.member_id_mismatch:
                 if intervention:
                     intervention += "\nMEMBER_ID_MISMATCH"
                 else:
                     intervention = "MEMBER_ID_MISMATCH"
-                # Member ID mismatch is AT_RISK level
-                if not at_risk:
-                    at_risk = True
+                # Member ID mismatch is FLAGGED level
+                if not at_risk and not flagged:
+                    flagged = True
             
             # Always append INVALID_MEMBER_ID if detected (data quality issue)
             # This is AT_RISK level since we can't verify the student's identity
@@ -3136,8 +3142,8 @@ class TrackerDataProcessor(FileProcessor):
         # Get unique students with aggregated issues
         flagged = self._aggregate_student_issues(students, "🟡 FLAGGED", start_date, target_date)
         
-        # Sort by latest week
-        flagged.sort(key=lambda s: s['latest_week'], reverse=True)
+        # Sort by intervention type (alphabetically), then by latest week (descending)
+        flagged.sort(key=lambda s: (s.get('interventions_str', 'N/A'), -s['latest_week']))
         
         # Write header
         headers = ["Submission #", "Name", "Member ID", "Discord", "Email", "Phone", "Latest Week", "Phase", "Timeline",
@@ -3193,8 +3199,18 @@ class TrackerDataProcessor(FileProcessor):
         # Get unique students with aggregated info
         on_track = self._aggregate_student_issues(students, "🟢 ON TRACK", start_date, target_date)
         
-        # Sort by latest week
-        on_track.sort(key=lambda s: s['latest_week'], reverse=True)
+        # Helper to compute display description for sorting
+        def get_display_description(s):
+            forced_reason = s.get('forced_on_track_reason', '')
+            if forced_reason:
+                return f"✓ Forced ON TRACK: {forced_reason}"
+            elif s['description'] != "No specific issues identified":
+                return s['description']
+            else:
+                return "Progressing normally"
+        
+        # Sort by description (alphabetically), then by latest week (descending)
+        on_track.sort(key=lambda s: (get_display_description(s), -s['latest_week']))
         
         # Write header
         headers = ["Submission #", "Name", "Member ID", "Discord", "Email", "Phone", "Latest Week", "Phase", 
@@ -3210,14 +3226,7 @@ class TrackerDataProcessor(FileProcessor):
         # Write data
         for row_idx, student in enumerate(on_track, 2):
             # For on-track students, show positive status or forced reason
-            forced_reason = student.get('forced_on_track_reason', '')
-            if forced_reason:
-                # Student was forced to ON TRACK due to special case
-                description = f"✓ Forced ON TRACK: {forced_reason}"
-            elif student['description'] != "No specific issues identified":
-                description = student['description']
-            else:
-                description = "Progressing normally"
+            description = get_display_description(student)
             
             data = [
                 student.get('submission_nums_str', ''),
@@ -3265,8 +3274,9 @@ class TrackerDataProcessor(FileProcessor):
         flagged = sum(1 for key in priority_status.values() if key == "🟡 FLAGGED")
         at_risk = sum(1 for key in priority_status.values() if key == "🔴 AT RISK")
         
-        sun_submitted = len([s for s in latest_records if s.sun_submitted])
-        wed_submitted = len([s for s in latest_records if s.wed_submitted])
+        # Count submissions from ALL rows (each submission row counts separately)
+        sun_submitted = len([s for s in students if s.sun_submitted])
+        wed_submitted = len([s for s in students if s.wed_submitted])
         
         phase_dist = {1: 0, 2: 0, 3: 0, 4: 0}
         for s in latest_records:
@@ -3274,8 +3284,17 @@ class TrackerDataProcessor(FileProcessor):
             if phase_num in phase_dist:
                 phase_dist[phase_num] += 1
         
-        mr_submitted = len([s for s in latest_records if s.mr_url])
-        mr_merged = len([s for s in latest_records if "merged" in s.mr_status.lower()])
+        # Count unique students with MR URL (once per student)
+        students_with_mr = set()
+        students_with_merged_mr = set()
+        for s in students:
+            key = s.member_id or s.name
+            if s.mr_url and str(s.mr_url).strip():
+                students_with_mr.add(key)
+            if s.mr_status and "merged" in s.mr_status.lower():
+                students_with_merged_mr.add(key)
+        mr_submitted = len(students_with_mr)
+        mr_merged = len(students_with_merged_mr)
         
         interventions_sent = len([s for s in latest_records if s.intervention_type])
         
@@ -3315,20 +3334,20 @@ class TrackerDataProcessor(FileProcessor):
         ws.cell(row=row, column=3, value=f"{at_risk} ({at_risk/total*100:.1f}%)" if total else "0")
         ws.cell(row=row, column=2).fill = Styles.RED_FILL
         
-        # Submissions section
+        # Submissions section (counts all submission rows, not unique students)
         row += 2
         ws.merge_cells(f'B{row}:C{row}')
-        section = ws.cell(row=row, column=2, value="Submissions")
+        section = ws.cell(row=row, column=2, value="Submissions (Total Rows)")
         section.fill = Styles.DASHBOARD_SECTION_FILL
         section.font = Styles.BOLD_FONT
         
         row += 1
         ws.cell(row=row, column=2, value="└─ Sunday:")
-        ws.cell(row=row, column=3, value=f"{sun_submitted}/{total} ({sun_submitted/total*100:.1f}%)" if total else "0")
+        ws.cell(row=row, column=3, value=f"{sun_submitted} submissions")
         
         row += 1
         ws.cell(row=row, column=2, value="└─ Wednesday:")
-        ws.cell(row=row, column=3, value=f"{wed_submitted}/{total} ({wed_submitted/total*100:.1f}%)" if total else "0")
+        ws.cell(row=row, column=3, value=f"{wed_submitted} submissions")
         
         # Phase distribution
         row += 2
@@ -3342,10 +3361,10 @@ class TrackerDataProcessor(FileProcessor):
             ws.cell(row=row, column=2, value=f"└─ Phase {phase}:")
             ws.cell(row=row, column=3, value=f"{phase_dist[phase]} students")
         
-        # MR section
+        # MR section (unique students with MR URL)
         row += 2
-        ws.cell(row=row, column=2, value="MRs Submitted:").font = Styles.BOLD_FONT
-        ws.cell(row=row, column=3, value=f"{mr_submitted} ({mr_submitted/total*100:.1f}%)" if total else "0")
+        ws.cell(row=row, column=2, value="Students with MR:").font = Styles.BOLD_FONT
+        ws.cell(row=row, column=3, value=f"{mr_submitted}/{total} ({mr_submitted/total*100:.1f}%)" if total else "0")
         
         row += 1
         ws.cell(row=row, column=2, value="MRs Merged:").font = Styles.BOLD_FONT
