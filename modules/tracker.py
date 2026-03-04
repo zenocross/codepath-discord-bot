@@ -16,6 +16,7 @@ Commands:
         Options: nofilter, validate_commits, validate_all
     !tracker set_phase_complete <phase> <member_id> - Set a student's completed phase
     !tracker get_member_id <discord_info> - Look up member ID from Discord username/ID
+    !tracker no_issues        - List all unique students without an issue_url
     !tracker help             - Show help (handled by bot/events.py)
 """
 
@@ -1241,6 +1242,272 @@ class TrackerCog(commands.Cog, name="Tracker"):
         except Exception as e:
             print(f"[Tracker] Error looking up member ID: {e}")
             return None
+    
+    @commands.command(name='no_issues')
+    async def no_issues(self, ctx: commands.Context):
+        """List students by issue selection status with contact info.
+        
+        Usage: !tracker no_issues
+        
+        Shows four lists with email, Discord, and phone:
+        1. Students WITHOUT an issue URL
+        2. Students WITHOUT issue URL but HAS 'Why I Chose This' (anomaly)
+        3. Students WITH issue URL but MISSING 'Why I Chose This'
+        4. Students WITH 'Why I Chose This' complete
+        """
+        # Check for typeform data
+        typeform_file = self.storage.get_file("typeform")
+        if not typeform_file:
+            await ctx.send("❌ **No typeform data uploaded.** Upload typeform CSV first with `!tracker upload typeform`")
+            return
+        
+        typeform_data = self.storage.read_file(typeform_file)
+        
+        await ctx.send("🔍 **Analyzing students by issue selection status...**")
+        
+        try:
+            import csv
+            from services.tracker_processor import _preprocess_typeform_csv
+            
+            # Build contact lookup from master CSV
+            contact_lookup: dict = {}  # member_id -> {email, discord, phone}
+            master_file = self.storage.get_file("master")
+            if master_file:
+                master_data = self.storage.read_file(master_file)
+                master_text = master_data.decode('utf-8-sig')
+                
+                # Preprocess master CSV - find the header row containing "Member ID"
+                lines = master_text.splitlines()
+                header_row_idx = None
+                for idx, line in enumerate(lines):
+                    if "Member ID" in line or "member_id" in line.lower():
+                        header_row_idx = idx
+                        break
+                
+                if header_row_idx is not None:
+                    master_text = "\n".join(lines[header_row_idx:])
+                
+                try:
+                    m_dialect = csv.Sniffer().sniff(master_text[:4096], delimiters=',\t;|')
+                except csv.Error:
+                    m_dialect = 'excel'
+                m_reader = csv.DictReader(io.StringIO(master_text), dialect=m_dialect)
+                m_rows = list(m_reader)
+                if m_rows:
+                    m_headers = list(m_rows[0].keys())
+                    # Find columns
+                    m_member_col = next((h for h in m_headers if 'member' in h.lower() and 'id' in h.lower()), None)
+                    m_email_col = next((h for h in m_headers if 'email' in h.lower() and 'secondary' not in h.lower()), None)
+                    m_discord_col = next((h for h in m_headers if 'discord' in h.lower()), None)
+                    
+                    for row in m_rows:
+                        mid = str(row.get(m_member_col, "")).strip() if m_member_col else ""
+                        if mid and mid.lower() not in ['#n/a', 'n/a', '', 'member id']:
+                            contact_lookup[mid] = {
+                                'email': str(row.get(m_email_col, "")).strip() if m_email_col else "",
+                                'discord': str(row.get(m_discord_col, "")).strip() if m_discord_col else "",
+                                'phone': ""
+                            }
+            
+            # Add phone numbers from app CSV
+            app_file = self.storage.get_file("app")
+            if app_file:
+                app_data = self.storage.read_file(app_file)
+                app_text = app_data.decode('utf-8-sig')
+                
+                # Preprocess app CSV - find the header row containing "Member ID"
+                lines = app_text.splitlines()
+                header_row_idx = None
+                for idx, line in enumerate(lines):
+                    if "Member ID" in line or "member_id" in line.lower():
+                        header_row_idx = idx
+                        break
+                
+                if header_row_idx is not None:
+                    app_text = "\n".join(lines[header_row_idx:])
+                
+                try:
+                    a_dialect = csv.Sniffer().sniff(app_text[:4096], delimiters=',\t;|')
+                except csv.Error:
+                    a_dialect = 'excel'
+                a_reader = csv.DictReader(io.StringIO(app_text), dialect=a_dialect)
+                a_rows = list(a_reader)
+                if a_rows:
+                    a_headers = list(a_rows[0].keys())
+                    a_member_col = next((h for h in a_headers if 'member' in h.lower() and 'id' in h.lower()), None)
+                    a_phone_col = next((h for h in a_headers if 'phone' in h.lower()), None)
+                    
+                    for row in a_rows:
+                        mid = str(row.get(a_member_col, "")).strip() if a_member_col else ""
+                        phone = str(row.get(a_phone_col, "")).strip() if a_phone_col else ""
+                        if mid and mid.lower() not in ['#n/a', 'n/a', '', 'member id'] and phone:
+                            if mid in contact_lookup:
+                                contact_lookup[mid]['phone'] = phone
+                            else:
+                                contact_lookup[mid] = {'email': '', 'discord': '', 'phone': phone}
+            
+            # Parse typeform CSV (with preprocessing to find header row)
+            text = typeform_data.decode('utf-8-sig')
+            text = _preprocess_typeform_csv(text)
+            
+            # Auto-detect delimiter
+            sample = text[:4096]
+            try:
+                dialect = csv.Sniffer().sniff(sample, delimiters=',\t;|')
+            except csv.Error:
+                dialect = 'excel'
+            
+            reader = csv.DictReader(io.StringIO(text), dialect=dialect)
+            rows = list(reader)
+            
+            if not rows:
+                await ctx.send("❌ **Typeform CSV is empty.**")
+                return
+            
+            # Find relevant columns
+            headers = list(rows[0].keys())
+            
+            # Find member_id column
+            member_id_col = None
+            for h in headers:
+                h_lower = h.lower()
+                if "member id" in h_lower or h_lower == "member_id":
+                    member_id_col = h
+                    break
+            
+            # Find name column
+            name_col = None
+            for h in headers:
+                h_lower = h.lower()
+                if "discord" in h_lower or "username" in h_lower:
+                    continue
+                if "name" in h_lower:
+                    name_col = h
+                    break
+            
+            # Find discord column in typeform
+            tf_discord_col = None
+            for h in headers:
+                if "discord" in h.lower():
+                    tf_discord_col = h
+                    break
+            
+            # Find issue_url column
+            issue_col = None
+            for h in headers:
+                h_lower = h.lower()
+                if "gitlab issue" in h_lower or "issue url" in h_lower or "direct link to your gitlab issue" in h_lower:
+                    issue_col = h
+                    break
+            
+            # Find why_chosen_complete column
+            why_chosen_col = None
+            for h in headers:
+                if "why i chose this issue" in h.lower() or "why_chosen" in h.lower():
+                    why_chosen_col = h
+                    break
+            
+            if not member_id_col:
+                await ctx.send(f"❌ **Could not find Member ID column in typeform.**\n\nColumns: {', '.join(headers[:10])}...")
+                return
+            
+            if not issue_col:
+                await ctx.send(f"❌ **Could not find Issue URL column in typeform.**\n\nColumns: {', '.join(headers[:10])}...")
+                return
+            
+            # Track unique students - store full info
+            student_info: dict = {}  # member_id -> {name, discord, email, phone}
+            students_with_issues: set = set()
+            students_with_why_chosen: set = set()
+            
+            for row in rows:
+                member_id = str(row.get(member_id_col, "")).strip()
+                if not member_id or member_id.lower() in ['#n/a', 'n/a', '']:
+                    continue
+                
+                name = str(row.get(name_col, "")).strip() if name_col else "Unknown"
+                tf_discord = str(row.get(tf_discord_col, "")).strip() if tf_discord_col else ""
+                
+                # Get contact info from lookup, with typeform discord as fallback
+                contact = contact_lookup.get(member_id, {})
+                discord = contact.get('discord', '') or tf_discord
+                email = contact.get('email', '')
+                phone = contact.get('phone', '')
+                
+                student_info[member_id] = {
+                    'name': name,
+                    'discord': discord,
+                    'email': email,
+                    'phone': phone
+                }
+                
+                issue_url = str(row.get(issue_col, "")).strip() if issue_col else ""
+                why_chosen = str(row.get(why_chosen_col, "")).strip().lower() if why_chosen_col else ""
+                
+                if issue_url and issue_url.lower() not in ['', 'n/a', '#n/a', 'none']:
+                    students_with_issues.add(member_id)
+                
+                if why_chosen in ['yes', 'true', '1', 'y']:
+                    students_with_why_chosen.add(member_id)
+            
+            # Calculate four categories
+            all_students = set(student_info.keys())
+            students_without_issues = all_students - students_with_issues
+            students_why_no_issue = students_with_why_chosen - students_with_issues  # Has why but no issue (anomaly)
+            students_issue_no_why = students_with_issues - students_with_why_chosen  # Has issue but no why
+            students_complete = students_with_issues & students_with_why_chosen  # Has both
+            
+            # Helper function to send a list with contact info
+            async def send_list(title: str, student_ids: set, emoji: str = "•"):
+                if not student_ids:
+                    await ctx.send(f"**{title}**\n✅ None!")
+                    return
+                
+                lines = [f"**{title} ({len(student_ids)} total)**\n"]
+                sorted_ids = sorted(student_ids, key=lambda mid: student_info[mid]['name'].lower())
+                
+                for member_id in sorted_ids:
+                    info = student_info[member_id]
+                    contact_parts = []
+                    if info['discord']:
+                        contact_parts.append(f"Discord: {info['discord']}")
+                    if info['email']:
+                        contact_parts.append(f"Email: {info['email']}")
+                    if info['phone']:
+                        contact_parts.append(f"Phone: {info['phone']}")
+                    
+                    contact_str = " | ".join(contact_parts) if contact_parts else "No contact info"
+                    lines.append(f"{emoji} **{info['name']}** (`{member_id}`)\n   └─ {contact_str}")
+                
+                message = "\n".join(lines)
+                if len(message) <= 2000:
+                    await ctx.send(message)
+                else:
+                    chunks = []
+                    current_chunk = lines[0] + "\n"
+                    for line in lines[1:]:
+                        if len(current_chunk) + len(line) + 1 > 1900:
+                            chunks.append(current_chunk)
+                            current_chunk = ""
+                        current_chunk += line + "\n"
+                    if current_chunk:
+                        chunks.append(current_chunk)
+                    
+                    for i, chunk in enumerate(chunks):
+                        if i == 0:
+                            await ctx.send(chunk)
+                        else:
+                            await ctx.send(f"*(continued)*\n{chunk}")
+            
+            # Send all four lists
+            await send_list("❌ Students Without Issue URL", students_without_issues, "❌")
+            await send_list("⚠️ Students Without Issue URL but has 'Why I Chose This'", students_why_no_issue, "⚠️")
+            await send_list("⚠️ Students With Issue URL but Missing 'Why I Chose This'", students_issue_no_why, "⚠️")
+            await send_list("✅ Students With 'Why I Chose This' Complete", students_complete, "✅")
+                        
+        except Exception as e:
+            await ctx.send(f"❌ **Error analyzing data:** {str(e)}")
+            print(f"[Tracker] Error in no_issues: {e}")
 
 
 async def setup(bot: commands.Bot):

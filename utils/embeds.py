@@ -511,6 +511,15 @@ class EmbedBuilder:
         )
         
         embed.add_field(
+            name="🔍 Query Commands",
+            value=(
+                "`!tracker no_issues` - List students by issue selection status\n"
+                "  └─ Without issue URL / With issue but no 'Why I Chose' / Complete"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
             name="📝 Phase Completion (Admin)",
             value=(
                 "`!tracker get_member_id <discord>` - Look up member ID\n"

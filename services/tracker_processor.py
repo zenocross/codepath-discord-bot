@@ -2525,11 +2525,7 @@ class TrackerDataProcessor(FileProcessor):
             
             # Check if this submission is bypassed
             bypass_key = f"{student.member_id}:{student.submission_num}"
-            if student.submission_num > 0 and bypass_key in bypasses and bypasses[bypass_key].get('bypassed', False):
-                student.grade_status = "🟢 ON TRACK"
-                student.intervention_type = "BYPASSED"
-                student._bypassed = True
-                continue
+            is_bypassed = student.submission_num > 0 and bypass_key in bypasses and bypasses[bypass_key].get('bypassed', False)
             
             # Note: We no longer automatically mark contribution_num > 1 as ON TRACK
             # because students may switch contributions without completing the previous one.
@@ -2550,12 +2546,14 @@ class TrackerDataProcessor(FileProcessor):
             student_has_sunday_for_week = student_week_has_sunday.get(student_key, False)
             
             # Missing both submissions (and no Sunday in another row for this week)
-            if not student.wed_submitted and not student.sun_submitted and not student_has_sunday_for_week:
+            # Don't flag if bypassed
+            if not is_bypassed and not student.wed_submitted and not student.sun_submitted and not student_has_sunday_for_week:
                 at_risk = True
                 intervention = "MISSING_BOTH"
             
             # Has Wednesday but missing Sunday after Sunday deadline passed
             # Only flag if the student doesn't have a Sunday submission in another row
+            # IMPORTANT: Still flag even if the Wednesday submission is bypassed - bypass only covers that specific submission
             elif student.wed_submitted and not student.sun_submitted and sun_deadline_passed and not student_has_sunday_for_week:
                 at_risk = True
                 intervention = "MISSING_SUNDAY"
@@ -2678,8 +2676,16 @@ class TrackerDataProcessor(FileProcessor):
             # Set status
             if at_risk:
                 student.grade_status = "🔴 AT RISK"
+                # Note if the Wednesday submission was bypassed but Sunday is still missing
+                if is_bypassed:
+                    intervention = f"BYPASSED (Wed only)\n{intervention}"
             elif flagged:
                 student.grade_status = "🟡 FLAGGED"
+            elif is_bypassed:
+                # Only mark as ON TRACK with BYPASSED if no other issues
+                student.grade_status = "🟢 ON TRACK"
+                intervention = "BYPASSED"
+                student._bypassed = True
             else:
                 student.grade_status = "🟢 ON TRACK"
             
@@ -2824,6 +2830,8 @@ class TrackerDataProcessor(FileProcessor):
         
         # First pass: check if student meets any forced ON TRACK condition
         # Priority: Sunday ON TRACK > Has MR > Multiple Contributions
+        # Note: BYPASSED is NOT a forced condition - it only applies to that specific submission,
+        # other submissions should still be evaluated normally (worst status wins)
         for s in students:
             key = s.member_id or s.name
             
