@@ -838,6 +838,7 @@ class GameCog(commands.Cog, name="Game"):
         
         points_config = self._get_channel_points(message.channel.id)
         points = 0
+        point_type = 'first_post'
         
         # Initialize first_responders for this channel if needed
         if 'first_responders' not in self.community_state:
@@ -854,6 +855,7 @@ class GameCog(commands.Cog, name="Game"):
             # Check if this is the thread starter message
             if message.channel.starter_message and message.id == message.channel.starter_message.id:
                 points = points_config['first_post']
+                point_type = 'first_post'
             else:
                 # Reply within a thread - use thread_id as the "original post" key
                 if thread_id not in first_responders:
@@ -861,15 +863,19 @@ class GameCog(commands.Cog, name="Game"):
                     if message.channel.owner_id != message.author.id:
                         first_responders[thread_id] = message.author.id
                         points = points_config['first_response']
+                        point_type = 'first_response'
                     else:
                         # Thread owner replying to their own thread - subsequent
                         points = points_config['subsequent_response']
+                        point_type = 'subsequent_response'
                 elif first_responders.get(thread_id) == message.author.id:
                     # Same person who was first responder
                     points = points_config['subsequent_response']
+                    point_type = 'subsequent_response'
                 else:
                     # Someone else replying after first response
                     points = points_config['subsequent_response']
+                    point_type = 'subsequent_response'
         elif message.reference and message.reference.message_id:
             # This is a reply in a regular text channel
             ref_msg_id = str(message.reference.message_id)
@@ -884,22 +890,29 @@ class GameCog(commands.Cog, name="Game"):
                     # First response to this message
                     first_responders[ref_msg_id] = message.author.id
                     points = points_config['first_response']
+                    point_type = 'first_response'
                 else:
                     # Subsequent response
                     points = points_config['subsequent_response']
+                    point_type = 'subsequent_response'
             except Exception:
                 # If we can't fetch referenced message, treat as subsequent
                 points = points_config['subsequent_response']
+                point_type = 'subsequent_response'
         else:
             # This is a new post (not a reply)
             points = points_config['first_post']
+            point_type = 'first_post'
         
         if points > 0:
-            if 'community_points' not in self.community_state:
-                self.community_state['community_points'] = {}
-            
-            old_pts = self.community_state['community_points'].get(matching_user, 0)
-            self.community_state['community_points'][matching_user] = old_pts + points
+            self._record_point_event(
+                matching_user,
+                points,
+                point_type,
+                message.created_at,
+                channel_id=cid_str,
+                message_id=str(message.id)
+            )
             self._save_community_state()
     
     def _get_channel_points(self, channel_id: int) -> Dict[str, int]:
@@ -915,6 +928,126 @@ class GameCog(commands.Cog, name="Game"):
             'subsequent_response': channel_config.get('subsequent_response', saved_defaults.get('subsequent_response', 2)),
             'emoji_reaction': channel_config.get('emoji_reaction', saved_defaults.get('emoji_reaction', 1))
         }
+    
+    def _record_point_event(
+        self, 
+        username: str, 
+        points: int, 
+        point_type: str, 
+        timestamp: datetime,
+        channel_id: str = None,
+        message_id: str = None
+    ) -> None:
+        """Record a point event with timestamp for weekly breakdown tracking.
+        
+        Args:
+            username: Discord username from master roster
+            points: Number of points awarded
+            point_type: Type of action (first_post, first_response, subsequent_response, emoji_reaction)
+            timestamp: When the action occurred (message.created_at)
+            channel_id: Optional channel ID for reference
+            message_id: Optional message ID for reference
+        """
+        # Ensure data structures exist
+        if 'community_points' not in self.community_state:
+            self.community_state['community_points'] = {}
+        if 'point_history' not in self.community_state:
+            self.community_state['point_history'] = {}
+        if username not in self.community_state['point_history']:
+            self.community_state['point_history'][username] = []
+        
+        # Update running total
+        old_pts = self.community_state['community_points'].get(username, 0)
+        self.community_state['community_points'][username] = old_pts + points
+        
+        # Record the event with timestamp
+        event = {
+            'points': points,
+            'type': point_type,
+            'timestamp': timestamp.isoformat() if isinstance(timestamp, datetime) else timestamp
+        }
+        if channel_id:
+            event['channel_id'] = channel_id
+        if message_id:
+            event['message_id'] = message_id
+        
+        self.community_state['point_history'][username].append(event)
+    
+    def _iso_week_to_date_range(self, year: int, week: int) -> str:
+        """Convert ISO year and week number to a human-readable date range.
+        
+        Returns format like 'Feb 16-22' or 'Feb 23 - Mar 1' if spanning months.
+        """
+        # Get the Monday of the given ISO week
+        # ISO week 1 is the week containing January 4th
+        jan4 = datetime(year, 1, 4, tzinfo=timezone.utc)
+        # Find the Monday of week 1
+        week1_monday = jan4 - timedelta(days=jan4.weekday())
+        # Calculate the Monday of the target week
+        monday = week1_monday + timedelta(weeks=week - 1)
+        sunday = monday + timedelta(days=6)
+        
+        # Format the date range
+        if monday.month == sunday.month:
+            # Same month: "Feb 16-22"
+            return f"{monday.strftime('%b')} {monday.day}-{sunday.day}"
+        else:
+            # Different months: "Feb 23 - Mar 1"
+            return f"{monday.strftime('%b')} {monday.day} - {sunday.strftime('%b')} {sunday.day}"
+    
+    def _get_week_sort_key(self, year: int, week: int) -> str:
+        """Get a sortable key for a week (used internally for ordering)."""
+        return f"{year}-W{week:02d}"
+    
+    def _get_weekly_breakdown(self, username: str) -> Dict[str, int]:
+        """Get per-week point totals for a user.
+        
+        Returns dict like {'Feb 16-22': 15, 'Feb 23 - Mar 1': 23, ...}
+        """
+        point_history = self.community_state.get('point_history', {}).get(username, [])
+        weekly_totals = {}
+        
+        for event in point_history:
+            try:
+                ts = event.get('timestamp', '')
+                if isinstance(ts, str):
+                    # Parse ISO format timestamp
+                    dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                else:
+                    dt = ts
+                
+                # Get ISO week info and convert to date range
+                iso_cal = dt.isocalendar()
+                week_str = self._iso_week_to_date_range(iso_cal[0], iso_cal[1])
+                weekly_totals[week_str] = weekly_totals.get(week_str, 0) + event.get('points', 0)
+            except Exception:
+                continue
+        
+        return weekly_totals
+    
+    def _get_all_weeks(self) -> List[str]:
+        """Get sorted list of all weeks that have point data (as date ranges)."""
+        # Collect weeks as (year, week_num, date_range_str) tuples for sorting
+        all_weeks = {}  # sort_key -> date_range_str
+        point_history = self.community_state.get('point_history', {})
+        
+        for username, events in point_history.items():
+            for event in events:
+                try:
+                    ts = event.get('timestamp', '')
+                    if isinstance(ts, str):
+                        dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                    else:
+                        dt = ts
+                    iso_cal = dt.isocalendar()
+                    sort_key = self._get_week_sort_key(iso_cal[0], iso_cal[1])
+                    if sort_key not in all_weeks:
+                        all_weeks[sort_key] = self._iso_week_to_date_range(iso_cal[0], iso_cal[1])
+                except Exception:
+                    continue
+        
+        # Sort by the ISO week key, return the date range strings
+        return [all_weeks[k] for k in sorted(all_weeks.keys())]
     
     async def _score_community_reaction(self, payload: discord.RawReactionActionEvent) -> None:
         """Score an emoji reaction in real-time if it's in a tracked community channel.
@@ -992,14 +1125,18 @@ class GameCog(commands.Cog, name="Game"):
         points = points_config['emoji_reaction']
         
         if points > 0:
-            if 'community_points' not in self.community_state:
-                self.community_state['community_points'] = {}
-            
             # Mark as scored for this message
             self.community_state['reaction_scores'][msg_id_str].append(user_id_str)
             
-            old_pts = self.community_state['community_points'].get(matching_user, 0)
-            self.community_state['community_points'][matching_user] = old_pts + points
+            # Use current time for real-time reactions (message.created_at is when message was posted, not reaction)
+            self._record_point_event(
+                matching_user,
+                points,
+                'emoji_reaction',
+                datetime.now(timezone.utc),
+                channel_id=cid_str,
+                message_id=msg_id_str
+            )
             self._save_community_state()
     
     async def _process_message_reactions_batch(
@@ -1007,7 +1144,8 @@ class GameCog(commands.Cog, name="Game"):
         message: discord.Message, 
         points_config: Dict[str, int],
         master_users: set,
-        skipped_users: set
+        skipped_users: set,
+        channel_id: str = None
     ) -> int:
         """Process all reactions on a message for batch scoring.
         
@@ -1050,8 +1188,15 @@ class GameCog(commands.Cog, name="Game"):
                     
                     # Award points and mark as scored
                     scored_users.add(user.id)
-                    old_pts = self.community_state['community_points'].get(matching_user, 0)
-                    self.community_state['community_points'][matching_user] = old_pts + reaction_points
+                    # Use message creation time as proxy for reaction time
+                    self._record_point_event(
+                        matching_user,
+                        reaction_points,
+                        'emoji_reaction',
+                        message.created_at,
+                        channel_id=channel_id,
+                        message_id=str(message.id)
+                    )
                     total_reaction_points += reaction_points
             except Exception:
                 continue
@@ -1240,6 +1385,7 @@ class GameCog(commands.Cog, name="Game"):
         
         # Always do full reprocess - clear existing scores
         self.community_state['community_points'] = {}
+        self.community_state['point_history'] = {}
         self.community_state['first_responders'] = {}
         self.community_state['reaction_scores'] = {}
         
@@ -1303,9 +1449,13 @@ class GameCog(commands.Cog, name="Game"):
                                         )
                                     
                                     if matching_user:
-                                        old_pts = self.community_state['community_points'].get(matching_user, 0)
-                                        self.community_state['community_points'][matching_user] = (
-                                            old_pts + points_config['first_post']
+                                        self._record_point_event(
+                                            matching_user,
+                                            points_config['first_post'],
+                                            'first_post',
+                                            starter_msg.created_at,
+                                            channel_id=cid_str,
+                                            message_id=str(starter_msg.id)
                                         )
                                         total_points_awarded += points_config['first_post']
                                     else:
@@ -1313,7 +1463,7 @@ class GameCog(commands.Cog, name="Game"):
                                     
                                     # Process reactions on starter message
                                     reaction_pts = await self._process_message_reactions_batch(
-                                        starter_msg, points_config, master_users, skipped_users
+                                        starter_msg, points_config, master_users, skipped_users, cid_str
                                     )
                                     total_points_awarded += reaction_pts
                         except Exception:
@@ -1355,18 +1505,26 @@ class GameCog(commands.Cog, name="Game"):
                             if not first_reply_recorded and message.author.id != thread_owner_id:
                                 thread_first_responders[thread_id] = message.author.id
                                 points = points_config['first_response']
+                                point_type = 'first_response'
                                 first_reply_recorded = True
                             else:
                                 points = points_config['subsequent_response']
+                                point_type = 'subsequent_response'
                             
                             if points > 0:
-                                old_pts = self.community_state['community_points'].get(matching_user, 0)
-                                self.community_state['community_points'][matching_user] = old_pts + points
+                                self._record_point_event(
+                                    matching_user,
+                                    points,
+                                    point_type,
+                                    message.created_at,
+                                    channel_id=cid_str,
+                                    message_id=str(message.id)
+                                )
                                 total_points_awarded += points
                             
                             # Process reactions on this message
                             reaction_pts = await self._process_message_reactions_batch(
-                                message, points_config, master_users, skipped_users
+                                message, points_config, master_users, skipped_users, cid_str
                             )
                             total_points_awarded += reaction_pts
                         
@@ -1398,6 +1556,7 @@ class GameCog(commands.Cog, name="Game"):
                         
                         points = 0
                         
+                        point_type = 'first_post'
                         if message.reference and message.reference.message_id:
                             ref_msg_id = message.reference.message_id
                             try:
@@ -1408,21 +1567,31 @@ class GameCog(commands.Cog, name="Game"):
                                 if ref_msg_id not in thread_first_responders:
                                     thread_first_responders[ref_msg_id] = message.author.id
                                     points = points_config['first_response']
+                                    point_type = 'first_response'
                                 else:
                                     points = points_config['subsequent_response']
+                                    point_type = 'subsequent_response'
                             except Exception:
                                 points = points_config['subsequent_response']
+                                point_type = 'subsequent_response'
                         else:
                             points = points_config['first_post']
+                            point_type = 'first_post'
                         
                         if points > 0:
-                            old_pts = self.community_state['community_points'].get(matching_user, 0)
-                            self.community_state['community_points'][matching_user] = old_pts + points
+                            self._record_point_event(
+                                matching_user,
+                                points,
+                                point_type,
+                                message.created_at,
+                                channel_id=cid_str,
+                                message_id=str(message.id)
+                            )
                             total_points_awarded += points
                         
                         # Process reactions on this message
                         reaction_pts = await self._process_message_reactions_batch(
-                            message, points_config, master_users, skipped_users
+                            message, points_config, master_users, skipped_users, cid_str
                         )
                         total_points_awarded += reaction_pts
                         
@@ -1540,9 +1709,11 @@ class GameCog(commands.Cog, name="Game"):
     
     @community_group.command(name='download')
     async def community_download(self, ctx: commands.Context) -> None:
-        """Download community points leaderboard as CSV.
+        """Download community points leaderboard as CSV with per-week breakdown.
         
         Usage: !game community download
+        
+        Includes total points and points earned per week for each student.
         """
         if not self._check_permission(ctx):
             await ctx.send("❌ You don't have permission to download community scores.")
@@ -1559,17 +1730,26 @@ class GameCog(commands.Cog, name="Game"):
         
         community_points = self.community_state.get('community_points', {})
         
+        # Get all weeks that have point data (sorted chronologically)
+        all_weeks = self._get_all_weeks()
+        
         # Build full list with all master users (0 points if not scored)
         all_scores = {}
+        weekly_data = {}
         for username in master_users:
             all_scores[username] = community_points.get(username, 0)
+            weekly_data[username] = self._get_weekly_breakdown(username)
         
         sorted_scores = sorted(all_scores.items(), key=lambda x: (-x[1], x[0].lower()))
         
-        # Generate CSV
+        # Generate CSV with weekly columns
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(['Rank', 'Full Name', 'Discord Username', 'Points'])
+        
+        # Header row: Rank, Full Name, Discord Username, Total Points, Week1, Week2, ...
+        header = ['Rank', 'Full Name', 'Discord Username', 'Total Points']
+        header.extend(all_weeks)  # Add weekly columns
+        writer.writerow(header)
         
         current_rank = 0
         prev_points = None
@@ -1581,7 +1761,14 @@ class GameCog(commands.Cog, name="Game"):
             
             rank_display = current_rank if pts > 0 else "-"
             full_name = discord_to_name.get(username, "")
-            writer.writerow([rank_display, full_name, username, pts])
+            
+            # Build row with weekly data
+            row = [rank_display, full_name, username, pts]
+            user_weekly = weekly_data.get(username, {})
+            for week in all_weeks:
+                row.append(user_weekly.get(week, 0))
+            
+            writer.writerow(row)
         
         output.seek(0)
         
@@ -1592,10 +1779,12 @@ class GameCog(commands.Cog, name="Game"):
         file = discord.File(io.BytesIO(output.getvalue().encode('utf-8')), filename=filename)
         
         total_points = sum(pts for pts in community_points.values())
+        weeks_str = f"{len(all_weeks)} weeks tracked" if all_weeks else "No weekly data yet"
         await ctx.send(
             f"📥 **Community Leaderboard Export**\n"
             f"• Total members: {len(master_users)}\n"
-            f"• Total points: {total_points}",
+            f"• Total points: {total_points}\n"
+            f"• {weeks_str}",
             file=file
         )
     
@@ -1615,13 +1804,14 @@ class GameCog(commands.Cog, name="Game"):
             return
         
         self.community_state['community_points'] = {}
+        self.community_state['point_history'] = {}
         self.community_state['processed_messages'] = {}
         self.community_state['reaction_scores'] = {}
         for cid in self.community_state.get('channels', {}):
             self.community_state['channels'][cid]['last_processed_id'] = None
         self._save_community_state()
         
-        await ctx.send("🔄 Community points reset! All scores cleared and channels marked for reprocessing.")
+        await ctx.send("🔄 Community points reset! All scores and history cleared. Run `!game community process_scores` to rebuild.")
     
     @community_group.command(name='set_points')
     async def community_set_points(self, ctx: commands.Context, point_type: str = None, 
@@ -2159,6 +2349,7 @@ class GameCog(commands.Cog, name="Game"):
 async def setup(bot: 'DiscordBot') -> None:
     """Setup function for loading the cog."""
     await bot.add_cog(GameCog(bot))
+
 
 
 
