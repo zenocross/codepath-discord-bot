@@ -669,6 +669,16 @@ class TrackerCog(commands.Cog, name="Tracker"):
             # Process with tracker processor (pass all data sources)
             phase_completions = self.storage.get_all_phase_completions()
             bypasses = self.storage.get_all_bypasses()
+            
+            # Get dates for proper deadline checking
+            # If start_date is set, use it along with target_date (last submissions date or today)
+            start_date = self.storage.get_start_date()
+            target_date = self.storage.get_last_submissions_date() or datetime.now()
+            current_week = 1
+            if start_date:
+                days_since_start = (target_date - start_date).days
+                current_week = max(1, (days_since_start // 7) + 1)
+            
             result = self.processor.process(
                 typeform_data,
                 options={
@@ -676,7 +686,10 @@ class TrackerCog(commands.Cog, name="Tracker"):
                     'zoom_data': zoom_data,
                     'app_data': app_data,
                     'phase_completions': phase_completions,
-                    'bypasses': bypasses
+                    'bypasses': bypasses,
+                    'start_date': start_date,
+                    'target_date': target_date,
+                    'current_week': current_week
                 }
             )
             

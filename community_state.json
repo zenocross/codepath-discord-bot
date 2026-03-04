@@ -49,19 +49,19 @@
     "lucky_panda_46622": 13,
     "rlawton.cs": 20,
     "hube2148": 11,
-    "bpathak": 31,
+    "bpathak": 33,
     "topu9727": 35,
     "speedboatwillie": 6,
     "moo4president": 10,
     "hayate_kun01": 59,
-    "mgadepalli_27526": 20,
+    "mgadepalli_27526": 21,
     "duckylikesbread": 11,
     "beast.op": 5,
     "_depressed_": 13,
     "suzkim23": 5,
     "chichizhang0510": 5,
     "jc_1024": 5,
-    "sbrshkappa": 138,
+    "sbrshkappa": 141,
     "arjunc_21": 5,
     "brittany.h": 5,
     "lindsey3213": 36,
@@ -139,7 +139,20 @@
       "1476450029496696916": 715691481859358911
     }
   },
-  "reaction_scores": {},
+  "reaction_scores": {
+    "1478788030776217630": [
+      "715691481859358911"
+    ],
+    "1478493714354667800": [
+      "1446008641412010127"
+    ],
+    "1478727638309798030": [
+      "433577031473561600"
+    ],
+    "1478700500739293204": [
+      "433577031473561600"
+    ]
+  },
   "point_history": {
     "k.b5104": [
       {
@@ -1018,6 +1031,20 @@
         "timestamp": "2026-03-03T20:57:52.584000+00:00",
         "channel_id": "1471205680806625434",
         "message_id": "1478496658743623953"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-04T17:09:04.682934+00:00",
+        "channel_id": "1471205680806625434",
+        "message_id": "1478727638309798030"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-04T17:09:07.492328+00:00",
+        "channel_id": "1471205680806625434",
+        "message_id": "1478700500739293204"
       }
     ],
     "topu9727": [
@@ -1245,6 +1272,13 @@
         "timestamp": "2026-03-04T05:31:06.181000+00:00",
         "channel_id": "1471205680806625434",
         "message_id": "1478625816450568275"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-04T16:52:07.184707+00:00",
+        "channel_id": "1471204453368725565",
+        "message_id": "1478493714354667800"
       }
     ],
     "duckylikesbread": [
@@ -1714,6 +1748,20 @@
         "timestamp": "2026-02-27T19:21:09.024000+00:00",
         "channel_id": "1471205680806625434",
         "message_id": "1477022765386039507"
+      },
+      {
+        "points": 2,
+        "type": "subsequent_response",
+        "timestamp": "2026-03-04T16:20:59.975000+00:00",
+        "channel_id": "1471205492540833813",
+        "message_id": "1478789368276844604"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-04T16:22:34.790120+00:00",
+        "channel_id": "1471205492540833813",
+        "message_id": "1478788030776217630"
       }
     ],
     "arjunc_21": [

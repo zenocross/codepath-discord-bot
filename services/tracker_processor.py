@@ -2558,6 +2558,13 @@ class TrackerDataProcessor(FileProcessor):
                 at_risk = True
                 intervention = "MISSING_SUNDAY"
             
+            # SPECIAL CASE: Bypassed Wednesday submission but still missing Sunday
+            # The bypass only covers the specific issue that was bypassed (e.g., STALLED), 
+            # NOT the missing Sunday submission. Check explicitly.
+            elif is_bypassed and not student.sun_submitted and sun_deadline_passed and not student_has_sunday_for_week:
+                at_risk = True
+                intervention = "MISSING_SUNDAY"
+            
             # Phase critical (stuck in early phase late in program)
             elif student.week >= 6 and phase_num <= 2:
                 at_risk = True

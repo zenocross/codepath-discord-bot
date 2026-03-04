@@ -37,6 +37,18 @@
       "name": "Pierre Cuyeu"
     },
     {
+      "user_id": 667204679364640779,
+      "username": "_depressed_",
+      "member_id": "84448",
+      "name": "Arely Martinez Garcia"
+    },
+    {
+      "user_id": 671293616668278784,
+      "username": "beast.op",
+      "member_id": "115747",
+      "name": "Ronak Patel"
+    },
+    {
       "user_id": 448351526558367754,
       "username": "speedboatwillie",
       "member_id": "56604",
@@ -193,12 +205,6 @@
       "name": "Manraj Singh"
     },
     {
-      "user_id": 1133549734343229551,
-      "username": "geniusavo",
-      "member_id": "124586",
-      "name": "Divya Ganesh"
-    },
-    {
       "user_id": 807768171603820576,
       "username": "daria_khot",
       "member_id": "91407",
@@ -325,12 +331,6 @@
       "name": "Kesiena Berezi"
     },
     {
-      "user_id": 671293616668278784,
-      "username": "beast.op",
-      "member_id": "115747",
-      "name": "Ronak Patel"
-    },
-    {
       "user_id": 758673456895623189,
       "username": "anagram_magic",
       "member_id": "82801",
@@ -455,6 +455,42 @@
       "username": "bertinir01",
       "member_id": "130082",
       "name": "Bertin Iradukunda"
+    },
+    {
+      "user_id": 842500323012116503,
+      "username": "fiston4927",
+      "member_id": "103088",
+      "name": "NIYOBUZIMA Theophile"
+    },
+    {
+      "user_id": 759953905437638668,
+      "username": "balor_aura",
+      "member_id": "109843",
+      "name": "Luke Gearty"
+    },
+    {
+      "user_id": 791688131623387187,
+      "username": "rogernguyen",
+      "member_id": "85567",
+      "name": "Roger Nguyen"
+    },
+    {
+      "user_id": 1016515194198954065,
+      "username": "mk370z",
+      "member_id": "58411",
+      "name": "Muhammad Moeez Khan"
+    },
+    {
+      "user_id": 1334749919168299011,
+      "username": "blilly33_70974",
+      "member_id": "119467",
+      "name": "Brittney Lilly"
+    },
+    {
+      "user_id": 546853373983326218,
+      "username": "moo4president",
+      "member_id": "115855",
+      "name": "Moo Muhammad"
     }
   ],
   "auto_phase_2": [
@@ -471,25 +507,21 @@
       "name": "Emanuel Pimentel"
     },
     {
-      "user_id": 667204679364640779,
-      "username": "_depressed_",
-      "member_id": "84448",
-      "name": "Arely Martinez Garcia"
-    },
-    {
       "user_id": 1301283445808304221,
       "username": "olayinkav",
       "member_id": "116006",
       "name": "Olayinka Vaughan"
     }
   ],
-  "auto_phase_4": [
+  "auto_phase_3": [
     {
       "user_id": 1446008641412010127,
       "username": "mgadepalli_27526",
       "member_id": "147088",
-      "name": "Manasa Gadepalli"
-    },
+      "name": "Sai Manasa Gadepalli"
+    }
+  ],
+  "auto_phase_4": [
     {
       "user_id": 715691481859358911,
       "username": "sbrshkappa",
@@ -498,36 +530,6 @@
     }
   ],
   "auto_stalled": [
-    {
-      "user_id": 1231072915643174956,
-      "username": "oluwatomi06",
-      "member_id": "122491",
-      "name": "Oluwatomi Adenekan"
-    },
-    {
-      "user_id": 1143317377119961249,
-      "username": "andi_85004",
-      "member_id": "91371",
-      "name": "Andrea Nunoo"
-    },
-    {
-      "user_id": 950865088389185536,
-      "username": ".its_tomi",
-      "member_id": "86270",
-      "name": "Oluwatomisin Sapara-Williams"
-    },
-    {
-      "user_id": 1145573694211625023,
-      "username": "kalyaan09",
-      "member_id": "148473",
-      "name": "Kalyaan Kanugula"
-    },
-    {
-      "user_id": 715691481859358911,
-      "username": "sbrshkappa",
-      "member_id": "12352",
-      "name": "Sabareesh Kappagantu"
-    },
     {
       "user_id": 939452789497671790,
       "username": "youngfadd",
@@ -557,14 +559,12 @@
       "username": "totally_rimuru",
       "member_id": "134915",
       "name": "Riad Benyamna"
-    }
-  ],
-  "auto_skipped_phase": [
+    },
     {
-      "user_id": 1446008641412010127,
-      "username": "mgadepalli_27526",
-      "member_id": "147088",
-      "name": "Manasa Gadepalli"
+      "user_id": 759953905437638668,
+      "username": "balor_aura",
+      "member_id": "109843",
+      "name": "Luke Gearty"
     }
   ]
 }
