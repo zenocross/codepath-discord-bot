@@ -689,7 +689,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
                     'bypasses': bypasses,
                     'start_date': start_date,
                     'target_date': target_date,
-                    'current_week': current_week
+                    'current_week': current_week,
+                    'filter_by_date': True
                 }
             )
             

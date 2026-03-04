@@ -1050,14 +1050,6 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
                     'is_sunday': s.sun_submitted,
                     'bypassed': is_bypassed or s.intervention_type == 'BYPASSED'
                 }
-                
-                # Debug: print specific student (search by member_id, name, or discord)
-                search_term = 'mgadepalli'
-                if (search_term in str(key).lower() or 
-                    search_term in str(s.name).lower() or 
-                    search_term in str(s.member_id).lower() or
-                    search_term in str(s.discord_username).lower()):
-                    print(f"[Autogroup Debug] {search_term}: member_id={s.member_id}, name={s.name}, week={s.week}, intervention={s.intervention_type}, phase={s.current_phase}, bypassed={is_bypassed}, discord={s.discord_username}")
         
         # Create phase-based groups
         phase_groups: Dict[str, List[dict]] = {
@@ -1128,6 +1120,9 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
             
             self.bot.dm_groups[group_name] = []
             
+            # Get a friendly display name for the group (e.g., "Phase 1" instead of "auto_phase_1")
+            display_group = group_name.replace("auto_", "").replace("_", " ").title()
+            
             for member in members:
                 discord_username = member.get('discord_username', '')
                 member_name = member.get('name', 'Unknown')
@@ -1135,7 +1130,7 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
                 
                 if not discord_username:
                     users_not_found += 1
-                    not_found_msg = f"{member_name} ({member_id}) - no Discord username"
+                    not_found_msg = f"{member_name} ({member_id}) - no Discord username → **{display_group}**"
                     if not_found_msg not in users_not_found_list:
                         users_not_found_list.append(not_found_msg)
                     print(f"[Autogroup] No Discord username for {member_name} ({member_id}) in {group_name}")
@@ -1152,7 +1147,7 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
                     users_added += 1
                 else:
                     users_not_found += 1
-                    not_found_msg = f"{member_name} ({member_id}) - `{discord_username}`"
+                    not_found_msg = f"{member_name} ({member_id}) - `{discord_username}` → **{display_group}**"
                     if not_found_msg not in users_not_found_list:
                         users_not_found_list.append(not_found_msg)
                     print(f"[Autogroup] Discord user not found: '{discord_username}' for {member_name} ({member_id}) in {group_name}")

@@ -13,6 +13,12 @@
       "name": "Lynjai Jimenez"
     },
     {
+      "user_id": 431324804885250048,
+      "username": "hayate_kun01",
+      "member_id": "83182",
+      "name": "Ricardo Ortega-Pacheco"
+    },
+    {
       "user_id": 1195238926252769372,
       "username": "rlawton.cs",
       "member_id": "115965",
@@ -23,12 +29,6 @@
       "username": ".pead",
       "member_id": "79141",
       "name": "Pierre Cuyeu"
-    },
-    {
-      "user_id": 667204679364640779,
-      "username": "_depressed_",
-      "member_id": "84448",
-      "name": "Arely Martinez Garcia"
     },
     {
       "user_id": 671293616668278784,
@@ -65,12 +65,6 @@
       "username": "lmfai",
       "member_id": "111582",
       "name": "Alicia Yu"
-    },
-    {
-      "user_id": 433577031473561600,
-      "username": "bpathak",
-      "member_id": "125662",
-      "name": "Biraj"
     },
     {
       "user_id": 209761369011126272,
@@ -175,6 +169,12 @@
       "name": "Andrea Nunoo"
     },
     {
+      "user_id": 475066466530623499,
+      "username": "actualjam",
+      "member_id": "101792",
+      "name": "Emanuel Pimentel"
+    },
+    {
       "user_id": 498226086627246110,
       "username": "nnati.",
       "member_id": "127346",
@@ -184,7 +184,7 @@
       "user_id": 909461295194079303,
       "username": "ultrasynchd",
       "member_id": "129843",
-      "name": "Matheus"
+      "name": "Matheus Fonseca"
     },
     {
       "user_id": 1029443825229365338,
@@ -385,12 +385,6 @@
       "name": "Roger"
     },
     {
-      "user_id": 1016515194198954065,
-      "username": "mk370z",
-      "member_id": "58411",
-      "name": "Muhammad Moeez Khan"
-    },
-    {
       "user_id": 1334749919168299011,
       "username": "blilly33_70974",
       "member_id": "119467",
@@ -411,28 +405,28 @@
       "name": "Hubert Huang"
     },
     {
+      "user_id": 667204679364640779,
+      "username": "_depressed_",
+      "member_id": "84448",
+      "name": "Arely Martinez Garcia"
+    },
+    {
       "user_id": 448351526558367754,
       "username": "speedboatwillie",
       "member_id": "56604",
       "name": "Jose"
     },
     {
-      "user_id": 479787112665841696,
-      "username": "suzkim23",
-      "member_id": "81629",
-      "name": "Suzuna Kimura"
-    },
-    {
-      "user_id": 1029490163639930911,
-      "username": "lucianoscarpaci",
-      "member_id": "59602",
-      "name": "Luciano Scarpaci"
-    },
-    {
       "user_id": 734229707884724256,
       "username": "brittany.h",
       "member_id": "109632",
       "name": "Brittany Chan"
+    },
+    {
+      "user_id": 433577031473561600,
+      "username": "bpathak",
+      "member_id": "125662",
+      "name": "Biraj Pathak"
     },
     {
       "user_id": 334702149596610560,
@@ -445,12 +439,6 @@
       "username": "mj_sp05",
       "member_id": "104339",
       "name": "Meirzhan Saparov"
-    },
-    {
-      "user_id": 475066466530623499,
-      "username": "actualjam",
-      "member_id": "101792",
-      "name": "Emanuel Pimentel"
     },
     {
       "user_id": 968294700572373012,
@@ -493,6 +481,12 @@
       "username": "olayinkav",
       "member_id": "116006",
       "name": "Olayinka Vaughan"
+    },
+    {
+      "user_id": 1016515194198954065,
+      "username": "mk370z",
+      "member_id": "58411",
+      "name": "Muhammad Moeez Khan"
     }
   ],
   "auto_phase_3": [
@@ -501,14 +495,20 @@
       "username": "mgadepalli_27526",
       "member_id": "147088",
       "name": "Sai Manasa Gadepalli"
+    },
+    {
+      "user_id": 479787112665841696,
+      "username": "suzkim23",
+      "member_id": "81629",
+      "name": "Suzuna Kimura"
     }
   ],
   "auto_phase_4": [
     {
-      "user_id": 431324804885250048,
-      "username": "hayate_kun01",
-      "member_id": "83182",
-      "name": "Ricardo Ortega-Pacheco"
+      "user_id": 1029490163639930911,
+      "username": "lucianoscarpaci",
+      "member_id": "59602",
+      "name": "Luciano Scarpaci"
     },
     {
       "user_id": 715691481859358911,
@@ -580,12 +580,6 @@
     }
   ],
   "auto_skipped_phase": [
-    {
-      "user_id": 431324804885250048,
-      "username": "hayate_kun01",
-      "member_id": "83182",
-      "name": "Ricardo Ortega-Pacheco"
-    },
     {
       "user_id": 715691481859358911,
       "username": "sbrshkappa",

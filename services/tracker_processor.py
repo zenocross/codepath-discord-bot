@@ -495,9 +495,15 @@ class TrackerDataProcessor(FileProcessor):
             effective_week = 1
         
         # Check visibility based on deadline
-        # EXCEPTION: Early submissions (before start_date) are ALWAYS visible
+        # EXCEPTION 1: Early submissions (before start_date) are ALWAYS visible
         # since the student submitted proactively before the program started
+        # EXCEPTION 2: If the submission was actually made (submission_date <= target_date),
+        # it should be visible even if submitted before the deadline
         if is_early_submission:
+            is_visible = True
+        elif submission_date and submission_date.date() <= target_date.date():
+            # Submission was actually made on or before target date - always show it
+            # This handles students who submit early (before the deadline)
             is_visible = True
         else:
             wed_deadline, sun_deadline = self._get_week_deadlines(start_date, effective_week)

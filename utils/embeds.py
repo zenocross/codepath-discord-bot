@@ -227,13 +227,60 @@ class EmbedBuilder:
                 user_list = []
                 for user_data in users:
                     username = user_data.get('username', 'Unknown')
-                    user_id = user_data.get('user_id', '?')
-                    user_list.append(f"• {username} (`{user_id}`)")
-                embed.add_field(
-                    name=f"**{group_name}** ({len(users)} users)",
-                    value="\n".join(user_list)[:1024],
-                    inline=False
-                )
+                    name = user_data.get('name', '')
+                    member_id = user_data.get('member_id', '')
+                    
+                    # Show name if available (from autogroup), otherwise just Discord info
+                    if name:
+                        display = f"• **{name}** - {username}"
+                        if member_id:
+                            display += f" (ID: {member_id})"
+                    else:
+                        user_id = user_data.get('user_id', '?')
+                        display = f"• {username} (`{user_id}`)"
+                    
+                    user_list.append(display)
+                
+                # Split into multiple fields if too long (Discord limit: 1024 chars per field)
+                full_text = "\n".join(user_list)
+                if len(full_text) <= 1024:
+                    embed.add_field(
+                        name=f"**{group_name}** ({len(users)} users)",
+                        value=full_text,
+                        inline=False
+                    )
+                else:
+                    # Split into chunks that fit
+                    chunks = []
+                    current_chunk = []
+                    current_length = 0
+                    
+                    for user_entry in user_list:
+                        entry_length = len(user_entry) + 1  # +1 for newline
+                        if current_length + entry_length > 1000:  # Leave some margin
+                            chunks.append("\n".join(current_chunk))
+                            current_chunk = [user_entry]
+                            current_length = entry_length
+                        else:
+                            current_chunk.append(user_entry)
+                            current_length += entry_length
+                    
+                    if current_chunk:
+                        chunks.append("\n".join(current_chunk))
+                    
+                    # Add first chunk with group name
+                    embed.add_field(
+                        name=f"**{group_name}** ({len(users)} users)",
+                        value=chunks[0],
+                        inline=False
+                    )
+                    # Add continuation chunks (use invisible character for seamless continuation)
+                    for chunk in chunks[1:]:
+                        embed.add_field(
+                            name="\u200b",  # Zero-width space - appears blank
+                            value=chunk,
+                            inline=False
+                        )
             else:
                 embed.add_field(
                     name=f"**{group_name}** (0 users)",
