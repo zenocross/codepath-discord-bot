@@ -3273,9 +3273,21 @@ class TrackerDataProcessor(FileProcessor):
         ws = wb.create_sheet("Weekly Summary")
         
         # Get unique students by member_id (use most recent week's record for each student)
+        # Priority: Higher week > Sunday over Wednesday for same week (Sunday is more up-to-date)
         unique_students: Dict[str, StudentRecord] = {}
         for s in students:
-            if s.member_id not in unique_students or s.week > unique_students[s.member_id].week:
+            should_update = False
+            if s.member_id not in unique_students:
+                should_update = True
+            else:
+                current = unique_students[s.member_id]
+                # Update if: newer week, OR same week but this is Sunday and current is not
+                if s.week > current.week:
+                    should_update = True
+                elif s.week == current.week and s.sun_submitted and not current.sun_submitted:
+                    should_update = True
+            
+            if should_update:
                 unique_students[s.member_id] = s
         
         latest_records = list(unique_students.values())
@@ -3311,7 +3323,8 @@ class TrackerDataProcessor(FileProcessor):
         mr_submitted = len(students_with_mr)
         mr_merged = len(students_with_merged_mr)
         
-        interventions_sent = len([s for s in latest_records if s.intervention_type])
+        # Interventions needed = At Risk + Flagged students (those who need attention)
+        interventions_needed = at_risk + flagged
         
         # Get current week from data
         current_week = max(s.week for s in students) if students else 0
@@ -3388,7 +3401,7 @@ class TrackerDataProcessor(FileProcessor):
         # Interventions
         row += 2
         ws.cell(row=row, column=2, value="Interventions Needed:").font = Styles.BOLD_FONT
-        ws.cell(row=row, column=3, value=interventions_sent)
+        ws.cell(row=row, column=3, value=interventions_needed)
         
         # Add border around dashboard
         for r in range(2, row + 1):

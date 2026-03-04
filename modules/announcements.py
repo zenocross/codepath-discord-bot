@@ -1015,10 +1015,26 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
         
         # Build student data with user lookups
         # Group by member_id to get latest data per student
+        # Priority: Higher week > Sunday over Wednesday for same week
         student_data: Dict[str, dict] = {}
         for s in students:
             key = s.member_id or s.name
-            if key not in student_data or s.week > student_data[key].get('week', 0):
+            
+            # Determine if we should update this student's data
+            should_update = False
+            if key not in student_data:
+                should_update = True
+            else:
+                current_week = student_data[key].get('week', 0)
+                current_is_sunday = student_data[key].get('is_sunday', False)
+                
+                # Update if: newer week, OR same week but this is Sunday and current is not
+                if s.week > current_week:
+                    should_update = True
+                elif s.week == current_week and s.sun_submitted and not current_is_sunday:
+                    should_update = True
+            
+            if should_update:
                 # Check if this submission is bypassed
                 bypass_key = f"{s.member_id}:{s.submission_num}"
                 is_bypassed = bypass_key in bypasses and bypasses[bypass_key].get('bypassed', False)
@@ -1031,6 +1047,7 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
                     'intervention_type': s.intervention_type,
                     'grade_status': s.grade_status,
                     'week': s.week,
+                    'is_sunday': s.sun_submitted,
                     'bypassed': is_bypassed or s.intervention_type == 'BYPASSED'
                 }
                 
