@@ -19,6 +19,8 @@ Commands:
     !tracker no_issues        - Show issue status from validated data (requires validate first)
     !tracker no_issues quick  - Quick list of students without issue_url (no validation)
     !tracker no_issues validate - Crawl READMEs to find/validate issue URLs
+    !tracker search_issues_title <term> - Search issue titles for a term (e.g., JsonSafeParse)
+    !tracker search_dl_issues_title <term> - Search + download CSV with contact info
     !tracker help             - Show help (handled by bot/events.py)
 """
 
@@ -1741,6 +1743,506 @@ class TrackerCog(commands.Cog, name="Tracker"):
         except Exception as e:
             await ctx.send(f"❌ **Error analyzing data:** {str(e)}")
             print(f"[Tracker] Error in no_issues: {e}")
+    
+    @commands.command(name='search_issues_title')
+    async def search_issues_title(self, ctx: commands.Context, *, search_term: str = None):
+        """Search issue titles from validated issues for a specific term.
+        
+        Usage: 
+            !tracker search_issues_title <search_term>
+            
+        Example:
+            !tracker search_issues_title JsonSafeParse
+        """
+        import json
+        import os
+        import re
+        import asyncio
+        
+        if not search_term:
+            await ctx.send("❌ **Please provide a search term.**\n\nUsage: `!tracker search_issues_title <search_term>`")
+            return
+        
+        results_file = os.path.join('data', 'uploads', '_validated_issues.json')
+        
+        # Check if file exists
+        if not os.path.exists(results_file):
+            await ctx.send(
+                "❌ **No validated issues data found.**\n\n"
+                "Run `!tracker no_issues validate` first to generate the data."
+            )
+            return
+        
+        # Load the validated data
+        try:
+            with open(results_file, 'r') as f:
+                data = json.load(f)
+        except Exception as e:
+            await ctx.send(f"❌ **Error reading validated issues file:** {str(e)}")
+            return
+        
+        # Collect all (student, issue_url) pairs from various categories
+        # Key: (member_id, issue_url) to avoid duplicates while preserving all student-issue pairs
+        all_student_issues: dict = {}  # (member_id, issue_url) -> {member_id, name, url}
+        
+        # Pattern to extract project path and issue IID from URL
+        ISSUE_URL_PATTERN = re.compile(
+            r'https?://gitlab\.com/([^/]+(?:/[^/]+)*)/-/(?:issues|work_items)/(\d+)',
+            re.IGNORECASE
+        )
+        
+        def add_issue(mid: str, name: str, url: str):
+            """Add a student-issue pair if URL is valid."""
+            if url and ISSUE_URL_PATTERN.match(url):
+                key = (mid, url)
+                if key not in all_student_issues:
+                    all_student_issues[key] = {'member_id': mid, 'name': name, 'url': url}
+        
+        # Gather from students_with_valid_issue
+        for mid, info in data.get('students_with_valid_issue', {}).items():
+            name = info.get('name', 'Unknown')
+            add_issue(mid, name, info.get('issue_url', ''))
+        
+        # Gather from issue_url_in_readme_link (they have valid issues, just wrong field)
+        for mid, info in data.get('issue_url_in_readme_link', {}).items():
+            name = info.get('name', 'Unknown')
+            add_issue(mid, name, info.get('issue_url', ''))
+        
+        # Gather from issues_found (extracted from READMEs) - include ALL issues found
+        for mid, info in data.get('issues_found', {}).items():
+            name = info.get('name', 'Unknown')
+            # Add the primary issue_url
+            add_issue(mid, name, info.get('issue_url', ''))
+            # Also add all issues found in the README
+            for url in info.get('all_issues_found', []):
+                add_issue(mid, name, url)
+        
+        if not all_student_issues:
+            await ctx.send("❌ **No valid issue URLs found in validated data.**")
+            return
+        
+        await ctx.send(f"🔍 **Searching {len(all_student_issues)} student-issue pairs for:** `{search_term}`\n\nThis may take a moment...")
+        
+        # Cache issue titles to avoid re-fetching the same URL
+        issue_title_cache: dict = {}  # url -> {title, state} or None if error
+        
+        # Search each issue via GitLab API
+        matching_issues: list = []
+        errors: list = []
+        processed = 0
+        
+        for (member_id, issue_url), student_info in all_student_issues.items():
+            processed += 1
+            
+            # Progress update every 20 issues
+            if processed % 20 == 0:
+                await ctx.send(f"⏳ Progress: {processed}/{len(all_student_issues)} checked...")
+            
+            # Check cache first
+            if issue_url in issue_title_cache:
+                cached = issue_title_cache[issue_url]
+                if cached and search_term.lower() in cached['title'].lower():
+                    matching_issues.append({
+                        'title': cached['title'],
+                        'url': issue_url,
+                        'member_id': student_info['member_id'],
+                        'name': student_info['name'],
+                        'state': cached['state']
+                    })
+                continue
+            
+            # Extract project path and issue IID
+            match = ISSUE_URL_PATTERN.match(issue_url)
+            if not match:
+                issue_title_cache[issue_url] = None
+                continue
+            
+            project_path = match.group(1)
+            issue_iid = match.group(2)
+            
+            # Rate limiting
+            await asyncio.sleep(0.3)
+            
+            try:
+                import urllib.parse
+                encoded_project = urllib.parse.quote(project_path, safe="")
+                api_url = f"https://gitlab.com/api/v4/projects/{encoded_project}/issues/{issue_iid}"
+                
+                issue_data = self.gitlab._make_request(api_url)
+                
+                if issue_data and issue_data.get('title'):
+                    title = issue_data.get('title', '')
+                    state = issue_data.get('state', 'unknown')
+                    
+                    # Cache the result
+                    issue_title_cache[issue_url] = {'title': title, 'state': state}
+                    
+                    # Case-insensitive search
+                    if search_term.lower() in title.lower():
+                        matching_issues.append({
+                            'title': title,
+                            'url': issue_url,
+                            'member_id': student_info['member_id'],
+                            'name': student_info['name'],
+                            'state': state
+                        })
+                else:
+                    issue_title_cache[issue_url] = None
+                    if issue_data is None:
+                        errors.append(f"{student_info['name']} ({student_info['member_id']}): API error for {issue_url}")
+            except Exception as e:
+                issue_title_cache[issue_url] = None
+                errors.append(f"{student_info['name']} ({student_info['member_id']}): {str(e)}")
+        
+        # Build report
+        report = [f"✅ **Search Complete for:** `{search_term}`\n"]
+        report.append(f"📊 **Results:** {len(matching_issues)} matching issue(s) found out of {len(all_student_issues)} searched\n")
+        
+        if matching_issues:
+            report.append("**🔗 Matching Issues:**")
+            for issue in sorted(matching_issues, key=lambda x: x['name'].lower()):
+                state_emoji = "🟢" if issue['state'] == 'opened' else "🔴" if issue['state'] == 'closed' else "⚪"
+                report.append(f"• **{issue['name']}** (`{issue['member_id']}`) {state_emoji}")
+                report.append(f"  └─ Title: {issue['title']}")
+                report.append(f"  └─ <{issue['url']}>")
+            report.append("")
+        else:
+            report.append("📭 **No issues found with that search term in the title.**\n")
+        
+        if errors and len(errors) <= 5:
+            report.append(f"⚠️ **Errors ({len(errors)}):**")
+            for err in errors[:5]:
+                report.append(f"  └─ {err}")
+        elif errors:
+            report.append(f"⚠️ **{len(errors)} errors occurred during search** (not shown)")
+        
+        # Send report in chunks
+        full_report = "\n".join(report)
+        if len(full_report) <= 2000:
+            await ctx.send(full_report)
+        else:
+            chunks = []
+            current = ""
+            for line in report:
+                if len(current) + len(line) + 1 > 1900:
+                    chunks.append(current)
+                    current = line
+                else:
+                    current += "\n" + line if current else line
+            if current:
+                chunks.append(current)
+            for chunk in chunks:
+                await ctx.send(chunk)
+    
+    @commands.command(name='search_dl_issues_title')
+    async def search_dl_issues_title(self, ctx: commands.Context, *, search_term: str = None):
+        """Search issue titles and download results as CSV with contact info.
+        
+        Usage: 
+            !tracker search_dl_issues_title <search_term>
+            
+        Example:
+            !tracker search_dl_issues_title JsonSafeParse
+        
+        Downloads a CSV with: Name, Member ID, Discord, Email, Phone, Issue Title, Issue URL, State
+        """
+        import json
+        import os
+        import re
+        import csv
+        import asyncio
+        
+        if not search_term:
+            await ctx.send("❌ **Please provide a search term.**\n\nUsage: `!tracker search_dl_issues_title <search_term>`")
+            return
+        
+        results_file = os.path.join('data', 'uploads', '_validated_issues.json')
+        
+        # Check if file exists
+        if not os.path.exists(results_file):
+            await ctx.send(
+                "❌ **No validated issues data found.**\n\n"
+                "Run `!tracker no_issues validate` first to generate the data."
+            )
+            return
+        
+        # Load the validated data
+        try:
+            with open(results_file, 'r') as f:
+                data = json.load(f)
+        except Exception as e:
+            await ctx.send(f"❌ **Error reading validated issues file:** {str(e)}")
+            return
+        
+        # Build contact lookup from master CSV
+        contact_lookup: dict = {}  # member_id -> {email, discord, phone}
+        master_file = self.storage.get_file("master")
+        if master_file:
+            master_data = self.storage.read_file(master_file)
+            master_text = master_data.decode('utf-8-sig')
+            
+            # Preprocess master CSV - find the header row containing "Member ID"
+            lines = master_text.splitlines()
+            header_row_idx = None
+            for idx, line in enumerate(lines):
+                if "Member ID" in line or "member_id" in line.lower():
+                    header_row_idx = idx
+                    break
+            
+            if header_row_idx is not None:
+                master_text = "\n".join(lines[header_row_idx:])
+            
+            try:
+                m_dialect = csv.Sniffer().sniff(master_text[:4096], delimiters=',\t;|')
+            except csv.Error:
+                m_dialect = 'excel'
+            m_reader = csv.DictReader(io.StringIO(master_text), dialect=m_dialect)
+            m_rows = list(m_reader)
+            if m_rows:
+                m_headers = list(m_rows[0].keys())
+                m_member_col = next((h for h in m_headers if 'member' in h.lower() and 'id' in h.lower()), None)
+                m_email_col = next((h for h in m_headers if 'email' in h.lower() and 'secondary' not in h.lower()), None)
+                m_discord_col = next((h for h in m_headers if 'discord' in h.lower()), None)
+                
+                for row in m_rows:
+                    mid = str(row.get(m_member_col, "")).strip() if m_member_col else ""
+                    if mid and mid.lower() not in ['#n/a', 'n/a', '', 'member id']:
+                        contact_lookup[mid] = {
+                            'email': str(row.get(m_email_col, "")).strip() if m_email_col else "",
+                            'discord': str(row.get(m_discord_col, "")).strip() if m_discord_col else "",
+                            'phone': ""
+                        }
+        
+        # Add phone numbers from app CSV
+        app_file = self.storage.get_file("app")
+        if app_file:
+            app_data = self.storage.read_file(app_file)
+            app_text = app_data.decode('utf-8-sig')
+            
+            lines = app_text.splitlines()
+            header_row_idx = None
+            for idx, line in enumerate(lines):
+                if "Member ID" in line or "member_id" in line.lower():
+                    header_row_idx = idx
+                    break
+            
+            if header_row_idx is not None:
+                app_text = "\n".join(lines[header_row_idx:])
+            
+            try:
+                a_dialect = csv.Sniffer().sniff(app_text[:4096], delimiters=',\t;|')
+            except csv.Error:
+                a_dialect = 'excel'
+            a_reader = csv.DictReader(io.StringIO(app_text), dialect=a_dialect)
+            a_rows = list(a_reader)
+            if a_rows:
+                a_headers = list(a_rows[0].keys())
+                a_member_col = next((h for h in a_headers if 'member' in h.lower() and 'id' in h.lower()), None)
+                a_phone_col = next((h for h in a_headers if 'phone' in h.lower()), None)
+                
+                for row in a_rows:
+                    mid = str(row.get(a_member_col, "")).strip() if a_member_col else ""
+                    phone = str(row.get(a_phone_col, "")).strip() if a_phone_col else ""
+                    if mid and mid.lower() not in ['#n/a', 'n/a', '', 'member id'] and phone:
+                        if mid in contact_lookup:
+                            contact_lookup[mid]['phone'] = phone
+                        else:
+                            contact_lookup[mid] = {'email': '', 'discord': '', 'phone': phone}
+        
+        # Collect all (student, issue_url) pairs from various categories
+        all_student_issues: dict = {}  # (member_id, issue_url) -> {member_id, name, url}
+        
+        # Pattern to extract project path and issue IID from URL
+        ISSUE_URL_PATTERN = re.compile(
+            r'https?://gitlab\.com/([^/]+(?:/[^/]+)*)/-/(?:issues|work_items)/(\d+)',
+            re.IGNORECASE
+        )
+        
+        def add_issue(mid: str, name: str, url: str):
+            """Add a student-issue pair if URL is valid."""
+            if url and ISSUE_URL_PATTERN.match(url):
+                key = (mid, url)
+                if key not in all_student_issues:
+                    all_student_issues[key] = {'member_id': mid, 'name': name, 'url': url}
+        
+        # Gather from students_with_valid_issue
+        for mid, info in data.get('students_with_valid_issue', {}).items():
+            name = info.get('name', 'Unknown')
+            add_issue(mid, name, info.get('issue_url', ''))
+        
+        # Gather from issue_url_in_readme_link
+        for mid, info in data.get('issue_url_in_readme_link', {}).items():
+            name = info.get('name', 'Unknown')
+            add_issue(mid, name, info.get('issue_url', ''))
+        
+        # Gather from issues_found - include ALL issues found
+        for mid, info in data.get('issues_found', {}).items():
+            name = info.get('name', 'Unknown')
+            add_issue(mid, name, info.get('issue_url', ''))
+            for url in info.get('all_issues_found', []):
+                add_issue(mid, name, url)
+        
+        if not all_student_issues:
+            await ctx.send("❌ **No valid issue URLs found in validated data.**")
+            return
+        
+        await ctx.send(f"🔍 **Searching {len(all_student_issues)} student-issue pairs for:** `{search_term}`\n\nThis may take a moment...")
+        
+        # Cache issue titles to avoid re-fetching the same URL
+        issue_title_cache: dict = {}
+        
+        # Search each issue via GitLab API
+        matching_issues: list = []
+        errors: list = []
+        processed = 0
+        
+        for (member_id, issue_url), student_info in all_student_issues.items():
+            processed += 1
+            
+            # Progress update every 20 issues
+            if processed % 20 == 0:
+                await ctx.send(f"⏳ Progress: {processed}/{len(all_student_issues)} checked...")
+            
+            # Check cache first
+            if issue_url in issue_title_cache:
+                cached = issue_title_cache[issue_url]
+                if cached and search_term.lower() in cached['title'].lower():
+                    contact = contact_lookup.get(member_id, {})
+                    matching_issues.append({
+                        'name': student_info['name'],
+                        'member_id': member_id,
+                        'discord': contact.get('discord', ''),
+                        'email': contact.get('email', ''),
+                        'phone': contact.get('phone', ''),
+                        'title': cached['title'],
+                        'url': issue_url,
+                        'state': cached['state']
+                    })
+                continue
+            
+            match = ISSUE_URL_PATTERN.match(issue_url)
+            if not match:
+                issue_title_cache[issue_url] = None
+                continue
+            
+            project_path = match.group(1)
+            issue_iid = match.group(2)
+            
+            await asyncio.sleep(0.3)
+            
+            try:
+                import urllib.parse
+                encoded_project = urllib.parse.quote(project_path, safe="")
+                api_url = f"https://gitlab.com/api/v4/projects/{encoded_project}/issues/{issue_iid}"
+                
+                issue_data = self.gitlab._make_request(api_url)
+                
+                if issue_data and issue_data.get('title'):
+                    title = issue_data.get('title', '')
+                    state = issue_data.get('state', 'unknown')
+                    
+                    issue_title_cache[issue_url] = {'title': title, 'state': state}
+                    
+                    if search_term.lower() in title.lower():
+                        contact = contact_lookup.get(member_id, {})
+                        matching_issues.append({
+                            'name': student_info['name'],
+                            'member_id': member_id,
+                            'discord': contact.get('discord', ''),
+                            'email': contact.get('email', ''),
+                            'phone': contact.get('phone', ''),
+                            'title': title,
+                            'url': issue_url,
+                            'state': state
+                        })
+                else:
+                    issue_title_cache[issue_url] = None
+                    if issue_data is None:
+                        errors.append(f"{student_info['name']} ({member_id}): API error")
+            except Exception as e:
+                issue_title_cache[issue_url] = None
+                errors.append(f"{student_info['name']} ({member_id}): {str(e)}")
+        
+        if not matching_issues:
+            await ctx.send(f"📭 **No issues found with `{search_term}` in the title.**\n\nSearched {len(all_student_issues)} student-issue pairs.")
+            return
+        
+        # Generate CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Header row
+        writer.writerow(['Name', 'Member ID', 'Discord', 'Email', 'Phone', 'Issue Title', 'Issue URL', 'State'])
+        
+        # Data rows (sorted by name)
+        for issue in sorted(matching_issues, key=lambda x: x['name'].lower()):
+            writer.writerow([
+                issue['name'],
+                issue['member_id'],
+                issue['discord'],
+                issue['email'],
+                issue['phone'],
+                issue['title'],
+                issue['url'],
+                issue['state']
+            ])
+        
+        # Find duplicate issues (same URL used by multiple students)
+        # Normalize URLs by removing anchors for comparison
+        def normalize_url(url: str) -> str:
+            """Remove anchor/fragment from URL for comparison."""
+            return url.split('#')[0].rstrip('/')
+        
+        url_to_students: dict = {}  # normalized_url -> [(name, member_id, original_url), ...]
+        for issue in matching_issues:
+            norm_url = normalize_url(issue['url'])
+            if norm_url not in url_to_students:
+                url_to_students[norm_url] = []
+            url_to_students[norm_url].append((issue['name'], issue['member_id'], issue['url']))
+        
+        # Filter to only duplicates (more than one student)
+        duplicates = {url: students for url, students in url_to_students.items() if len(students) > 1}
+        
+        # Add footnote section if there are duplicates
+        if duplicates:
+            writer.writerow([])  # Blank row
+            writer.writerow([])  # Another blank row
+            writer.writerow(['--- DUPLICATE ISSUES (Multiple students on same issue) ---'])
+            writer.writerow([])
+            
+            for norm_url, students in sorted(duplicates.items()):
+                # Get the issue title from one of the matching issues
+                issue_title = next((i['title'] for i in matching_issues if normalize_url(i['url']) == norm_url), 'Unknown')
+                writer.writerow([f'Issue: {issue_title}'])
+                writer.writerow([f'URL: {norm_url}'])
+                writer.writerow([f'Students ({len(students)}):'])
+                for name, member_id, orig_url in sorted(students, key=lambda x: x[0].lower()):
+                    writer.writerow([f'  - {name} ({member_id})'])
+                writer.writerow([])  # Blank row between duplicates
+        
+        # Create file for Discord
+        csv_content = output.getvalue().encode('utf-8')
+        
+        # Generate filename with search term (sanitized)
+        safe_term = re.sub(r'[^\w\-]', '_', search_term)[:30]
+        filename = f"issue_search_{safe_term}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        
+        # Send summary and file
+        summary = (
+            f"✅ **Search Complete for:** `{search_term}`\n\n"
+            f"📊 **Results:** {len(matching_issues)} matching issue(s) found out of {len(all_student_issues)} searched\n"
+        )
+        
+        if duplicates:
+            summary += f"⚠️ **{len(duplicates)} duplicate issue(s)** found (multiple students on same issue) - see footnote in CSV\n"
+        
+        if errors:
+            summary += f"⚠️ {len(errors)} errors occurred during search\n"
+        
+        await ctx.send(
+            summary,
+            file=discord.File(io.BytesIO(csv_content), filename=filename)
+        )
     
     async def _validate_no_issues(self, ctx: commands.Context):
         """Crawl READMEs to find issue URLs for students without one.
