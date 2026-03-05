@@ -41,6 +41,10 @@ VALID_INTERVENTION_TYPES = {
     'BLOCKED',
     'MISSING_SUNDAY',
     'MISSING_WEDNESDAY',
+    'SKIPPED_PREVIOUS_SUBMISSION',
+    # Week-specific missing submission types (WK_1 through WK_10)
+    *[f'MISSING_WEDNESDAY_WK_{i}' for i in range(1, 11)],
+    *[f'MISSING_SUNDAY_WK_{i}' for i in range(1, 11)],
 }
 
 # Prefix for auto-generated DM groups
@@ -339,8 +343,88 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
             await ctx.send("📋 **DM Groups:** None configured\n\nUse `!announce dmgroup create <name>` to create one.")
             return
         
-        embed = EmbedBuilder.dm_groups_embed(self.bot.dm_groups)
-        await ctx.send(embed=embed)
+        # Build plain text output - just show summary since groups can be large
+        await ctx.send("📋 **DM Groups Summary**\n")
+        
+        # Send summary first
+        summary_lines = []
+        for group_name, members in self.bot.dm_groups.items():
+            summary_lines.append(f"• **{group_name}**: {len(members)} members")
+        
+        summary = "\n".join(summary_lines)
+        if len(summary) <= 1900:
+            await ctx.send(summary)
+        else:
+            # Split summary into chunks
+            current = ""
+            for line in summary_lines:
+                if len(current) + len(line) + 1 > 1900:
+                    await ctx.send(current)
+                    current = line
+                else:
+                    current += "\n" + line if current else line
+            if current:
+                await ctx.send(current)
+        
+        await ctx.send("\n💡 Use `!announce dmgroup_show <group_name>` to see members of a specific group.")
+    
+    @commands.command(name='dmgroup_show')
+    async def dmgroup_show(self, ctx: commands.Context, group_name: str = None) -> None:
+        """Show members of a specific DM group."""
+        if not isinstance(ctx.channel, discord.DMChannel):
+            await ctx.send("⚠️ This command only works in DMs for security.")
+            return
+        
+        if not self._check_dm_permission(ctx):
+            await ctx.send("❌ You don't have permission to use announce commands.")
+            return
+        
+        if not group_name:
+            await ctx.send("❌ Please specify a group name: `!announce dmgroup_show <group_name>`")
+            return
+        
+        if group_name not in self.bot.dm_groups:
+            await ctx.send(f"❌ DM group `{group_name}` not found.\n\nUse `!announce dmgroups` to see available groups.")
+            return
+        
+        members = self.bot.dm_groups[group_name]
+        if not members:
+            await ctx.send(f"📋 **{group_name}**: 0 members (empty group)")
+            return
+        
+        # Build member list
+        await ctx.send(f"📋 **{group_name}** ({len(members)} members)\n")
+        
+        member_lines = []
+        for member in members:
+            name = member.get('name', 'Unknown')
+            username = member.get('username', 'unknown')
+            member_id = member.get('member_id', '')
+            user_id = member.get('user_id', '')
+            
+            if name and name != 'Unknown' and username:
+                line = f"• {name} - {username}"
+            elif username:
+                line = f"• {username}"
+            else:
+                line = f"• User ID: {user_id}"
+            
+            if member_id:
+                line += f" (ID: {member_id})"
+            
+            member_lines.append(line)
+        
+        # Send in chunks of 1900 chars max
+        current_chunk = ""
+        for line in member_lines:
+            if len(current_chunk) + len(line) + 1 > 1900:
+                await ctx.send(current_chunk)
+                current_chunk = line
+            else:
+                current_chunk += "\n" + line if current_chunk else line
+        
+        if current_chunk:
+            await ctx.send(current_chunk)
     
     # ==================== Scheduling ====================
     

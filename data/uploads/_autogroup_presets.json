@@ -12,5 +12,12 @@
     ],
     "created_at": "2026-03-02T09:15:03.588831",
     "created_by": "zenocross"
+  },
+  "week2_no_wed": {
+    "intervention_types": [
+      "MISSING_WEDNESDAY_WK_2"
+    ],
+    "created_at": "2026-03-06T00:59:01.151003",
+    "created_by": "zenocross"
   }
 }

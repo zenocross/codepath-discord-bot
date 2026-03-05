@@ -1,17 +1,11 @@
 {
+  "test": [
+    {
+      "user_id": 892348894313340988,
+      "username": "rom__21"
+    }
+  ],
   "auto_phase_1": [
-    {
-      "user_id": 763856555576918066,
-      "username": "k_noodles",
-      "member_id": "38527",
-      "name": "Kimia Naeiji"
-    },
-    {
-      "user_id": 1162238751255314432,
-      "username": "imdesigns",
-      "member_id": "91718",
-      "name": "Lynjai Jimenez"
-    },
     {
       "user_id": 431324804885250048,
       "username": "hayate_kun01",
@@ -19,40 +13,10 @@
       "name": "Ricardo Ortega-Pacheco"
     },
     {
-      "user_id": 1195238926252769372,
-      "username": "rlawton.cs",
-      "member_id": "115965",
-      "name": "Ryan Lawton"
-    },
-    {
-      "user_id": 142460838232457216,
-      "username": ".pead",
-      "member_id": "79141",
-      "name": "Pierre Cuyeu"
-    },
-    {
-      "user_id": 671293616668278784,
-      "username": "beast.op",
-      "member_id": "115747",
-      "name": "Ronak Patel"
-    },
-    {
-      "user_id": 1212272061397860362,
-      "username": "chichizhang0510",
-      "member_id": "148542",
-      "name": "Chichi Zhang"
-    },
-    {
       "user_id": 1392146774378020874,
       "username": "mark063591",
       "member_id": "25888",
       "name": "Mark Falcone"
-    },
-    {
-      "user_id": 384542255178055680,
-      "username": "ninjaboy21",
-      "member_id": "111207",
-      "name": "Kent Tran"
     },
     {
       "user_id": 1194090534348800084,
@@ -73,18 +37,6 @@
       "name": "Evan Nguyen"
     },
     {
-      "user_id": 448620335919529986,
-      "username": "jc_1024",
-      "member_id": "138794",
-      "name": "Jeffrey Chu"
-    },
-    {
-      "user_id": 918298878015569931,
-      "username": ".maxibear",
-      "member_id": "128782",
-      "name": "Sirr Mena"
-    },
-    {
       "user_id": 150378058631610368,
       "username": "ernsanders",
       "member_id": "114951",
@@ -95,12 +47,6 @@
       "username": "_kateee",
       "member_id": "119410",
       "name": "Kate Li"
-    },
-    {
-      "user_id": 340974524759670785,
-      "username": "jewlzt",
-      "member_id": "112646",
-      "name": "Julianne Tomlinson"
     },
     {
       "user_id": 1155401018188759090,
@@ -121,28 +67,10 @@
       "name": "Linxi Xu"
     },
     {
-      "user_id": 1327771577500172312,
-      "username": "vkudala_12769",
-      "member_id": "133008",
-      "name": "Vennela Kudala"
-    },
-    {
-      "user_id": 459750247300726804,
-      "username": "jhnx737",
-      "member_id": "130091",
-      "name": "Simon Huang"
-    },
-    {
       "user_id": 1231072915643174956,
       "username": "oluwatomi06",
       "member_id": "122491",
       "name": "Oluwatomi Adenekan"
-    },
-    {
-      "user_id": 1012711105212203099,
-      "username": "queensydelle",
-      "member_id": "86389",
-      "name": "Sydelle Nyegamo"
     },
     {
       "user_id": 715329702163906591,
@@ -184,7 +112,7 @@
       "user_id": 909461295194079303,
       "username": "ultrasynchd",
       "member_id": "129843",
-      "name": "Matheus Fonseca"
+      "name": "Matheus"
     },
     {
       "user_id": 1029443825229365338,
@@ -193,22 +121,10 @@
       "name": "Mary Odetayo"
     },
     {
-      "user_id": 482100962274574346,
-      "username": "mark2909",
-      "member_id": "136257",
-      "name": "Mark Davletov"
-    },
-    {
       "user_id": 1004632003267788800,
       "username": "tmjc_guech",
       "member_id": "116271",
       "name": "Chhiv Guech Houth"
-    },
-    {
-      "user_id": 239266548106133505,
-      "username": "prabin",
-      "member_id": "77414",
-      "name": "Prabin Bajgai"
     },
     {
       "user_id": 970504899139862600,
@@ -221,12 +137,6 @@
       "username": ".its_tomi",
       "member_id": "86270",
       "name": "Oluwatomisin Sapara-Williams"
-    },
-    {
-      "user_id": 852336343795236924,
-      "username": "hacktivist24",
-      "member_id": "128133",
-      "name": "Olutobi Adeyeri"
     },
     {
       "user_id": 451073895076855818,
@@ -253,12 +163,6 @@
       "name": "Isaac Torres"
     },
     {
-      "user_id": 1145573694211625023,
-      "username": "kalyaan09",
-      "member_id": "148473",
-      "name": "Kalyaan Kanugula"
-    },
-    {
       "user_id": 711821820336013312,
       "username": "sonephyo",
       "member_id": "107718",
@@ -283,24 +187,6 @@
       "name": "Brian Peinado"
     },
     {
-      "user_id": 650169776047652865,
-      "username": "juliettarozin",
-      "member_id": "130252",
-      "name": "Julietta Rozin"
-    },
-    {
-      "user_id": 967249703056064542,
-      "username": "lucyhe09",
-      "member_id": "125691",
-      "name": "Lucy He"
-    },
-    {
-      "user_id": 786598977314226206,
-      "username": "3n0ugh_",
-      "member_id": "138945",
-      "name": "Ahnaf Ahmed"
-    },
-    {
       "user_id": 1214410027381825560,
       "username": "lijunwan",
       "member_id": "132774",
@@ -311,12 +197,6 @@
       "username": "darkbluegreen",
       "member_id": "86562",
       "name": "Chau Phan"
-    },
-    {
-      "user_id": 939452789497671790,
-      "username": "youngfadd",
-      "member_id": "139639",
-      "name": "Oluwaseyi Fadahunsi"
     },
     {
       "user_id": 807177202210177065,
@@ -399,10 +279,28 @@
   ],
   "auto_phase_2": [
     {
-      "user_id": 698578896940957757,
-      "username": "hube2148",
-      "member_id": "79028",
-      "name": "Hubert Huang"
+      "user_id": 763856555576918066,
+      "username": "k_noodles",
+      "member_id": "38527",
+      "name": "Kimia Naeiji"
+    },
+    {
+      "user_id": 1162238751255314432,
+      "username": "imdesigns",
+      "member_id": "91718",
+      "name": "Lynjai Jimenez"
+    },
+    {
+      "user_id": 1195238926252769372,
+      "username": "rlawton.cs",
+      "member_id": "115965",
+      "name": "Ryan Lawton"
+    },
+    {
+      "user_id": 142460838232457216,
+      "username": ".pead",
+      "member_id": "79141",
+      "name": "Pierre Cuyeu"
     },
     {
       "user_id": 667204679364640779,
@@ -411,10 +309,28 @@
       "name": "Arely Martinez Garcia"
     },
     {
+      "user_id": 671293616668278784,
+      "username": "beast.op",
+      "member_id": "115747",
+      "name": "Ronak Patel"
+    },
+    {
       "user_id": 448351526558367754,
       "username": "speedboatwillie",
       "member_id": "56604",
-      "name": "Jose"
+      "name": "Jose Cervantes"
+    },
+    {
+      "user_id": 1212272061397860362,
+      "username": "chichizhang0510",
+      "member_id": "148542",
+      "name": "Chichi Zhang"
+    },
+    {
+      "user_id": 384542255178055680,
+      "username": "ninjaboy21",
+      "member_id": "111207",
+      "name": "Kent Tran"
     },
     {
       "user_id": 734229707884724256,
@@ -426,7 +342,25 @@
       "user_id": 433577031473561600,
       "username": "bpathak",
       "member_id": "125662",
-      "name": "Biraj Pathak"
+      "name": "Biraj"
+    },
+    {
+      "user_id": 448620335919529986,
+      "username": "jc_1024",
+      "member_id": "138794",
+      "name": "Jeffrey Chu"
+    },
+    {
+      "user_id": 918298878015569931,
+      "username": ".maxibear",
+      "member_id": "128782",
+      "name": "Sirr Mena"
+    },
+    {
+      "user_id": 340974524759670785,
+      "username": "jewlzt",
+      "member_id": "112646",
+      "name": "Julianne Tomlinson"
     },
     {
       "user_id": 334702149596610560,
@@ -441,10 +375,34 @@
       "name": "Meirzhan Saparov"
     },
     {
+      "user_id": 1327771577500172312,
+      "username": "vkudala_12769",
+      "member_id": "133008",
+      "name": "Vennela Kudala"
+    },
+    {
+      "user_id": 459750247300726804,
+      "username": "jhnx737",
+      "member_id": "130091",
+      "name": "Simon Huang"
+    },
+    {
+      "user_id": 1012711105212203099,
+      "username": "queensydelle",
+      "member_id": "86389",
+      "name": "Sydelle"
+    },
+    {
       "user_id": 968294700572373012,
       "username": "cran14",
       "member_id": "92595",
       "name": "Chinmayi Ranade"
+    },
+    {
+      "user_id": 482100962274574346,
+      "username": "mark2909",
+      "member_id": "136257",
+      "name": "Mark Davletov"
     },
     {
       "user_id": 757765166954840145,
@@ -453,10 +411,58 @@
       "name": "Topu Saha"
     },
     {
+      "user_id": 239266548106133505,
+      "username": "prabin",
+      "member_id": "77414",
+      "name": "Prabin Bajgai"
+    },
+    {
       "user_id": 154756694813966336,
       "username": "averrie",
       "member_id": "132797",
       "name": "Xingrui Huang"
+    },
+    {
+      "user_id": 852336343795236924,
+      "username": "hacktivist24",
+      "member_id": "128133",
+      "name": "Olutobi Adeyeri"
+    },
+    {
+      "user_id": 1145573694211625023,
+      "username": "kalyaan09",
+      "member_id": "148473",
+      "name": "Kalyaan Kanugula"
+    },
+    {
+      "user_id": 650169776047652865,
+      "username": "juliettarozin",
+      "member_id": "130252",
+      "name": "Julietta Rozin"
+    },
+    {
+      "user_id": 967249703056064542,
+      "username": "lucyhe09",
+      "member_id": "125691",
+      "name": "Lucy He"
+    },
+    {
+      "user_id": 786598977314226206,
+      "username": "3n0ugh_",
+      "member_id": "138945",
+      "name": "Ahnaf Ahmed"
+    },
+    {
+      "user_id": 939452789497671790,
+      "username": "youngfadd",
+      "member_id": "139639",
+      "name": "Oluwaseyi Fadahunsi"
+    },
+    {
+      "user_id": 574991883860836352,
+      "username": "8fenrir89",
+      "member_id": "138701",
+      "name": "Hitansh Paliwal"
     },
     {
       "user_id": 388881946559774723,
@@ -487,20 +493,44 @@
       "username": "mk370z",
       "member_id": "58411",
       "name": "Muhammad Moeez Khan"
+    },
+    {
+      "user_id": 1155564271963471883,
+      "username": "haad_98895",
+      "member_id": "137041",
+      "name": "Haad Imran"
+    },
+    {
+      "user_id": 500173282755215382,
+      "username": "noname.316",
+      "member_id": "138950",
+      "name": "Miller Liu"
     }
   ],
   "auto_phase_3": [
     {
+      "user_id": 698578896940957757,
+      "username": "hube2148",
+      "member_id": "79028",
+      "name": "Hubert Huang"
+    },
+    {
       "user_id": 1446008641412010127,
       "username": "mgadepalli_27526",
       "member_id": "147088",
-      "name": "Sai Manasa Gadepalli"
+      "name": "Manasa Gadepalli"
     },
     {
       "user_id": 479787112665841696,
       "username": "suzkim23",
       "member_id": "81629",
       "name": "Suzuna Kimura"
+    },
+    {
+      "user_id": 463366284940410910,
+      "username": "vietbui99",
+      "member_id": "45164",
+      "name": "Quoc-Viet Bui"
     }
   ],
   "auto_phase_4": [
@@ -531,12 +561,6 @@
   ],
   "auto_stalled": [
     {
-      "user_id": 448620335919529986,
-      "username": "jc_1024",
-      "member_id": "138794",
-      "name": "Jeffrey Chu"
-    },
-    {
       "user_id": 150378058631610368,
       "username": "ernsanders",
       "member_id": "114951",
@@ -549,16 +573,16 @@
       "name": "Linxi Xu"
     },
     {
+      "user_id": 1327771577500172312,
+      "username": "vkudala_12769",
+      "member_id": "133008",
+      "name": "Vennela Kudala"
+    },
+    {
       "user_id": 715329702163906591,
       "username": "mikeng007",
       "member_id": "113097",
       "name": "mike nguyen"
-    },
-    {
-      "user_id": 852336343795236924,
-      "username": "hacktivist24",
-      "member_id": "128133",
-      "name": "Olutobi Adeyeri"
     },
     {
       "user_id": 1350005358151733330,
@@ -573,18 +597,96 @@
       "name": "Kesiena Berezi"
     },
     {
-      "user_id": 1081908179350323270,
-      "username": "bertinir01",
-      "member_id": "130082",
-      "name": "Bertin Iradukunda"
+      "user_id": 967249703056064542,
+      "username": "lucyhe09",
+      "member_id": "125691",
+      "name": "Lucy He"
+    },
+    {
+      "user_id": 786598977314226206,
+      "username": "3n0ugh_",
+      "member_id": "138945",
+      "name": "Ahnaf Ahmed"
     }
   ],
-  "auto_skipped_phase": [
+  "auto_week2_no_wed": [
+    {
+      "user_id": 463366284940410910,
+      "username": "vietbui99",
+      "member_id": "45164",
+      "name": "Quoc-Viet Bui"
+    },
+    {
+      "user_id": 1355883683264991272,
+      "username": "aarzoo_bansal",
+      "member_id": "98506",
+      "name": "Aarzoo Bansal"
+    },
+    {
+      "user_id": 334702149596610560,
+      "username": "notveks",
+      "member_id": "134724",
+      "name": "Ayush Shivhare"
+    },
+    {
+      "user_id": 1231072915643174956,
+      "username": "oluwatomi06",
+      "member_id": "122491",
+      "name": "Oluwatomi Adenekan"
+    },
+    {
+      "user_id": 807768171603820576,
+      "username": "daria_khot",
+      "member_id": "91407",
+      "name": "Daria Khotunitskaya"
+    },
+    {
+      "user_id": 1029443825229365338,
+      "username": "mairsdaily",
+      "member_id": "108743",
+      "name": "Mary Odetayo"
+    },
+    {
+      "user_id": 1004632003267788800,
+      "username": "tmjc_guech",
+      "member_id": "116271",
+      "name": "Chhiv Guech Houth"
+    },
+    {
+      "user_id": 970504899139862600,
+      "username": "shrew5901",
+      "member_id": "87308",
+      "name": "Kailan Mao"
+    },
+    {
+      "user_id": 950865088389185536,
+      "username": ".its_tomi",
+      "member_id": "86270",
+      "name": "Oluwatomisin Sapara-Williams"
+    },
+    {
+      "user_id": 451073895076855818,
+      "username": "mufasa1033",
+      "member_id": "2380",
+      "name": "Ibrahim Mustafa"
+    },
+    {
+      "user_id": 711821820336013312,
+      "username": "sonephyo",
+      "member_id": "107718",
+      "name": "Phone Pyae Sone Phyo"
+    },
     {
       "user_id": 715691481859358911,
       "username": "sbrshkappa",
       "member_id": "12352",
       "name": "Sabareesh Kappagantu"
+    },
+    {
+      "user_id": 808386832558456933,
+      "username": "_b.p_",
+      "member_id": "132738",
+      "name": "Brian Peinado"
     },
     {
       "user_id": 628307683316858899,
@@ -593,10 +695,100 @@
       "name": "Apar Pokhrel"
     },
     {
+      "user_id": 1214410027381825560,
+      "username": "lijunwan",
+      "member_id": "132774",
+      "name": "Lijun Wan"
+    },
+    {
+      "user_id": 807177202210177065,
+      "username": "duckylikesbread",
+      "member_id": "128185",
+      "name": "Duc Duong"
+    },
+    {
+      "user_id": 574991883860836352,
+      "username": "8fenrir89",
+      "member_id": "138701",
+      "name": "Hitansh Paliwal"
+    },
+    {
+      "user_id": 388881946559774723,
+      "username": "titoooo",
+      "member_id": "107460",
+      "name": "Jorge Garcia (Tito)"
+    },
+    {
+      "user_id": 1200517057389789254,
+      "username": "tarzan9199_68367",
+      "member_id": "134208",
+      "name": "Shubham Kulkarni"
+    },
+    {
       "user_id": 362369898032136202,
       "username": "anon0610",
       "member_id": "112871",
       "name": "Taylor Chiu"
+    },
+    {
+      "user_id": 457614453991538692,
+      "username": "amkr6209",
+      "member_id": "119330",
+      "name": "Kaleb Tsegaye"
+    },
+    {
+      "user_id": 1341717644818255872,
+      "username": "annie_74520",
+      "member_id": "132905",
+      "name": "Hsin-Ya Chien"
+    },
+    {
+      "user_id": 1081908179350323270,
+      "username": "bertinir01",
+      "member_id": "130082",
+      "name": "Bertin Iradukunda"
+    },
+    {
+      "user_id": 842500323012116503,
+      "username": "fiston4927",
+      "member_id": "103088",
+      "name": "Theophile NIYOBUZIMA"
+    },
+    {
+      "user_id": 759953905437638668,
+      "username": "balor_aura",
+      "member_id": "109843",
+      "name": "Luke Gearty"
+    },
+    {
+      "user_id": 791688131623387187,
+      "username": "rogernguyen",
+      "member_id": "85567",
+      "name": "Roger"
+    },
+    {
+      "user_id": 1016515194198954065,
+      "username": "mk370z",
+      "member_id": "58411",
+      "name": "Muhammad Moeez Khan"
+    },
+    {
+      "user_id": 546853373983326218,
+      "username": "moo4president",
+      "member_id": "115855",
+      "name": "Moo Muhammad"
+    },
+    {
+      "user_id": 1155564271963471883,
+      "username": "haad_98895",
+      "member_id": "137041",
+      "name": "Haad Imran"
+    },
+    {
+      "user_id": 500173282755215382,
+      "username": "noname.316",
+      "member_id": "138950",
+      "name": "Miller Liu"
     }
   ]
 }
