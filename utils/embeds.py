@@ -558,10 +558,11 @@ class EmbedBuilder:
         )
         
         embed.add_field(
-            name="🔍 Query Commands",
+            name="🔍 Issue Validation Commands",
             value=(
-                "`!tracker no_issues` - List students by issue selection status\n"
-                "  └─ Without issue URL / With issue but no 'Why I Chose' / Complete"
+                "`!tracker no_issues` - Show validated issue status (requires validate first)\n"
+                "`!tracker no_issues quick` - Quick list without validation\n"
+                "`!tracker no_issues validate` - Crawl READMEs to find/validate issue URLs"
             ),
             inline=False
         )

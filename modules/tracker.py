@@ -16,7 +16,9 @@ Commands:
         Options: nofilter, validate_commits, validate_all
     !tracker set_phase_complete <phase> <member_id> - Set a student's completed phase
     !tracker get_member_id <discord_info> - Look up member ID from Discord username/ID
-    !tracker no_issues        - List all unique students without an issue_url
+    !tracker no_issues        - Show issue status from validated data (requires validate first)
+    !tracker no_issues quick  - Quick list of students without issue_url (no validation)
+    !tracker no_issues validate - Crawl READMEs to find/validate issue URLs
     !tracker help             - Show help (handled by bot/events.py)
 """
 
@@ -1258,17 +1260,234 @@ class TrackerCog(commands.Cog, name="Tracker"):
             return None
     
     @commands.command(name='no_issues')
-    async def no_issues(self, ctx: commands.Context):
-        """List students by issue selection status with contact info.
+    async def no_issues(self, ctx: commands.Context, action: str = None):
+        """Show issue status from validated data or run quick check.
         
-        Usage: !tracker no_issues
+        Usage: 
+            !tracker no_issues           - Show issue status from validated data
+            !tracker no_issues quick     - Quick list without validation
+            !tracker no_issues validate  - Crawl READMEs to find/validate issue URLs
         
-        Shows four lists with email, Discord, and phone:
-        1. Students WITHOUT an issue URL
-        2. Students WITHOUT issue URL but HAS 'Why I Chose This' (anomaly)
-        3. Students WITH issue URL but MISSING 'Why I Chose This'
-        4. Students WITH 'Why I Chose This' complete
+        The default command requires running 'validate' first to generate data.
         """
+        if action and action.lower() == 'validate':
+            await self._validate_no_issues(ctx)
+            return
+        
+        if action and action.lower() == 'quick':
+            await self._quick_no_issues(ctx)
+            return
+        
+        # Default: show from validated JSON
+        await self._show_validated_issues(ctx)
+    
+    async def _show_validated_issues(self, ctx: commands.Context):
+        """Show issue status from the validated issues JSON file."""
+        import json
+        import os
+        
+        results_file = os.path.join('data', 'uploads', '_validated_issues.json')
+        
+        # Check if file exists
+        if not os.path.exists(results_file):
+            await ctx.send(
+                "❌ **No validated issues data found.**\n\n"
+                "Run `!tracker no_issues validate` first to crawl READMEs and validate issue URLs.\n\n"
+                "Or use `!tracker no_issues quick` for a quick check without validation."
+            )
+            return
+        
+        # Load the validated data
+        try:
+            with open(results_file, 'r') as f:
+                data = json.load(f)
+        except Exception as e:
+            await ctx.send(f"❌ **Error reading validated issues file:** {str(e)}")
+            return
+        
+        validated_at = data.get('validated_at', 'Unknown')
+        
+        # Show info about cached data
+        await ctx.send(
+            f"📋 **Validated Issues Data**\n"
+            f"Last validated: `{validated_at}`\n\n"
+            f"Showing results from cached data. Run `!tracker no_issues validate` to refresh.\n"
+            f"─────────────────────────────"
+        )
+        
+        # Extract data
+        students_with_valid_issue = data.get('students_with_valid_issue', {})
+        students_with_invalid_issue = data.get('students_with_invalid_issue', {})
+        readme_url_in_issue_field = data.get('readme_url_in_issue_field', {})
+        issue_url_in_readme_link = data.get('issue_url_in_readme_link', {})
+        issues_found = data.get('issues_found', {})
+        no_issue_in_readme = data.get('no_issue_in_readme', {})
+        readme_inaccessible = data.get('readme_inaccessible', {})
+        readme_timeout = data.get('readme_timeout', {})
+        
+        # Build consolidated lists
+        # Students WITH issues (valid from typeform + found in README + issue in readme_link field)
+        students_with_issues: dict = {}
+        
+        # Add students with valid issue URLs from typeform
+        for mid, info in students_with_valid_issue.items():
+            students_with_issues[mid] = {
+                'name': info['name'],
+                'issue_url': info['issue_url'],
+                'source': 'typeform'
+            }
+        
+        # Add students who put issue URL in readme_link field (they have a valid issue, just wrong field)
+        for mid, info in issue_url_in_readme_link.items():
+            if mid not in students_with_issues:
+                students_with_issues[mid] = {
+                    'name': info['name'],
+                    'issue_url': info['issue_url'],
+                    'source': 'readme_link_field',
+                    'needs_attention': True
+                }
+        
+        # Add students where issues were found in README (only if not already in list)
+        for mid, info in issues_found.items():
+            if mid not in students_with_issues:
+                students_with_issues[mid] = {
+                    'name': info['name'],
+                    'issue_url': info['issue_url'],
+                    'source': info.get('source', 'readme')
+                }
+        
+        # Students WITHOUT issues (no issue in README, excluding those with valid issues)
+        students_without_issues: dict = {}
+        for mid, info in no_issue_in_readme.items():
+            if mid not in students_with_issues:
+                students_without_issues[mid] = {
+                    'name': info['name'],
+                    'readme_link': info.get('readme_link', '')
+                }
+        
+        # Build report
+        report = ["📊 **Issue Status Summary**\n"]
+        report.append(f"**Students with Issues:** {len(students_with_issues)}")
+        report.append(f"**Students without Issues:** {len(students_without_issues)}")
+        attention_count = len(students_with_invalid_issue) + len(readme_url_in_issue_field) + len(issue_url_in_readme_link) + len(readme_inaccessible) + len(readme_timeout)
+        report.append(f"**Needs Attention:** {attention_count}\n")
+        
+        # Section 1: Students WITH issues
+        if students_with_issues:
+            report.append("**✅ Students With Issue URLs:**")
+            for mid, info in sorted(students_with_issues.items(), key=lambda x: x[1]['name'].lower()):
+                source = info.get('source', 'typeform')
+                if source == 'readme':
+                    source_tag = " *(from README)*"
+                elif source == 'number_reference':
+                    source_tag = " *(from #number)*"
+                elif source == 'project_shorthand':
+                    source_tag = " *(from project#number)*"
+                elif source == 'readme_link_field':
+                    source_tag = " *(⚠️ in README field!)*"
+                else:
+                    source_tag = ""
+                report.append(f"• **{info['name']}** (`{mid}`){source_tag}")
+                report.append(f"  └─ <{info['issue_url']}>")
+            report.append("")
+        
+        # Section 2: Students WITHOUT issues
+        if students_without_issues:
+            report.append("**❌ Students Without Issue URLs:**")
+            for mid, info in sorted(students_without_issues.items(), key=lambda x: x[1]['name'].lower()):
+                report.append(f"• **{info['name']}** (`{mid}`)")
+                if info.get('readme_link'):
+                    report.append(f"  └─ README: <{info['readme_link']}>")
+                if info.get('issue_numbers_found'):
+                    report.append(f"  └─ ⚠️ Found #{', #'.join(info['issue_numbers_found'])} but couldn't validate")
+            report.append("")
+        
+        # Send main report in chunks
+        full_report = "\n".join(report)
+        if len(full_report) <= 2000:
+            await ctx.send(full_report)
+        else:
+            chunks = []
+            current = ""
+            for line in report:
+                if len(current) + len(line) + 1 > 1900:
+                    chunks.append(current)
+                    current = line
+                else:
+                    current += "\n" + line if current else line
+            if current:
+                chunks.append(current)
+            for chunk in chunks:
+                await ctx.send(chunk)
+        
+        # Section 3: Needs Attention
+        needs_attention = []
+        
+        # README URLs put in issue_url field (wrong field)
+        if readme_url_in_issue_field:
+            needs_attention.append("**⚠️ README URL in Issue Field (wrong field!):**")
+            needs_attention.append("*(These students put a README/repo link in the issue URL field)*")
+            for mid, info in sorted(readme_url_in_issue_field.items(), key=lambda x: x[1]['name'].lower()):
+                needs_attention.append(f"• **{info['name']}** (`{mid}`)")
+                needs_attention.append(f"  └─ README: <{info.get('readme_url', 'N/A')}>")
+            needs_attention.append("")
+        
+        # Issue URLs put in readme_link field (wrong field)
+        if issue_url_in_readme_link:
+            needs_attention.append("**⚠️ Issue URL in README Field (wrong field!):**")
+            needs_attention.append("*(These students have valid issues but put them in the README link field)*")
+            for mid, info in sorted(issue_url_in_readme_link.items(), key=lambda x: x[1]['name'].lower()):
+                needs_attention.append(f"• **{info['name']}** (`{mid}`)")
+                needs_attention.append(f"  └─ Issue: <{info['issue_url']}>")
+            needs_attention.append("")
+        
+        # Invalid issue URLs
+        if students_with_invalid_issue:
+            needs_attention.append("**⚠️ Invalid Issue URLs:**")
+            needs_attention.append("*(Expected: gitlab.com/.../issues/{num} or .../work_items/{num})*")
+            for mid, info in sorted(students_with_invalid_issue.items(), key=lambda x: x[1]['name'].lower()):
+                needs_attention.append(f"• **{info['name']}** (`{mid}`)")
+                needs_attention.append(f"  └─ <{info['issue_url']}>")
+            needs_attention.append("")
+        
+        # Inaccessible READMEs
+        if readme_inaccessible:
+            needs_attention.append("**⚠️ Inaccessible READMEs:**")
+            for mid, info in sorted(readme_inaccessible.items(), key=lambda x: x[1]['name'].lower()):
+                needs_attention.append(f"• **{info['name']}** (`{mid}`)")
+                needs_attention.append(f"  └─ <{info.get('readme_link', 'N/A')}>")
+                needs_attention.append(f"  └─ Error: {info.get('error', 'Unknown')}")
+            needs_attention.append("")
+        
+        # Timed out READMEs
+        if readme_timeout:
+            needs_attention.append("**⏱️ Timed Out (retry later):**")
+            for mid, info in sorted(readme_timeout.items(), key=lambda x: x[1]['name'].lower()):
+                needs_attention.append(f"• **{info['name']}** (`{mid}`)")
+                needs_attention.append(f"  └─ <{info.get('readme_link', 'N/A')}>")
+            needs_attention.append("")
+        
+        if needs_attention:
+            await ctx.send("─────────────────────────────")
+            attention_text = "\n".join(needs_attention)
+            if len(attention_text) <= 2000:
+                await ctx.send(attention_text)
+            else:
+                chunks = []
+                current = ""
+                for line in needs_attention:
+                    if len(current) + len(line) + 1 > 1900:
+                        chunks.append(current)
+                        current = line
+                    else:
+                        current += "\n" + line if current else line
+                if current:
+                    chunks.append(current)
+                for chunk in chunks:
+                    await ctx.send(chunk)
+    
+    async def _quick_no_issues(self, ctx: commands.Context):
+        """Quick list of students by issue selection status (no validation)."""
         # Check for typeform data
         typeform_file = self.storage.get_file("typeform")
         if not typeform_file:
@@ -1522,6 +1741,518 @@ class TrackerCog(commands.Cog, name="Tracker"):
         except Exception as e:
             await ctx.send(f"❌ **Error analyzing data:** {str(e)}")
             print(f"[Tracker] Error in no_issues: {e}")
+    
+    async def _validate_no_issues(self, ctx: commands.Context):
+        """Crawl READMEs to find issue URLs for students without one.
+        
+        For each student without an issue_url, fetches their README and extracts
+        the latest issue URL found. Results are persisted to a JSON file.
+        """
+        import csv
+        import json
+        import re
+        import os
+        from services.tracker_processor import _preprocess_typeform_csv
+        from services.gitlab_service import GitLabService
+        
+        typeform_file = self.storage.get_file("typeform")
+        if not typeform_file:
+            await ctx.send("❌ **No typeform data uploaded.** Upload typeform CSV first with `!tracker upload typeform`")
+            return
+        
+        typeform_data = self.storage.read_file(typeform_file)
+        
+        await ctx.send("🔍 **Validating students without issue URLs - crawling READMEs...**")
+        
+        try:
+            # Parse typeform CSV
+            text = typeform_data.decode('utf-8-sig')
+            text = _preprocess_typeform_csv(text)
+            
+            try:
+                dialect = csv.Sniffer().sniff(text[:4096], delimiters=',\t;|')
+            except csv.Error:
+                dialect = 'excel'
+            
+            reader = csv.DictReader(io.StringIO(text), dialect=dialect)
+            rows = list(reader)
+            
+            if not rows:
+                await ctx.send("❌ **Typeform CSV is empty.**")
+                return
+            
+            # Find relevant columns
+            headers = list(rows[0].keys())
+            
+            member_id_col = next((h for h in headers if "member id" in h.lower() or h.lower() == "member_id"), None)
+            name_col = next((h for h in headers if "name" in h.lower() and "discord" not in h.lower() and "username" not in h.lower()), None)
+            issue_col = next((h for h in headers if "gitlab issue" in h.lower() or "issue url" in h.lower() or "direct link to your gitlab issue" in h.lower()), None)
+            readme_col = next((h for h in headers if "readme" in h.lower() and "link" in h.lower()), None)
+            
+            if not member_id_col:
+                await ctx.send(f"❌ **Could not find Member ID column.**")
+                return
+            if not readme_col:
+                await ctx.send(f"❌ **Could not find README link column.**")
+                return
+            
+            # Valid issue URL pattern (must end with -/issues/{num} or -/work_items/{num}, optionally with anchor like #top or #note_123)
+            VALID_ISSUE_URL_PATTERN = re.compile(
+                r'^https?://gitlab\.com/[^/]+(?:/[^/]+)*/-/(?:issues|work_items)/\d+(?:#[a-zA-Z0-9_-]+)?(?:\?[^#]*)?$',
+                re.IGNORECASE
+            )
+            
+            # README/repo URL pattern - detects when someone put a README link in the issue_url field
+            # Matches: repo root URLs, blob URLs (files), tree URLs (directories)
+            README_URL_PATTERN = re.compile(
+                r'^https?://(?:gitlab|github)\.com/[^/]+/[^/]+(?:/-/(?:blob|tree)/|/?(?:\?|#|$))',
+                re.IGNORECASE
+            )
+            
+            # Collect students with and without issue_url
+            students_no_issue: dict = {}  # member_id -> {name, readme_link}
+            students_with_valid_issue: dict = {}  # member_id -> {name, issue_url}
+            students_with_invalid_issue: dict = {}  # member_id -> {name, issue_url}
+            readme_url_in_issue_field: dict = {}  # member_id -> {name, readme_url} - README in issue field!
+            issue_url_in_readme_link: dict = {}  # member_id -> {name, issue_url, readme_link} - issue in readme field!
+            
+            for row in rows:
+                member_id = str(row.get(member_id_col, "")).strip()
+                if not member_id or member_id.lower() in ['#n/a', 'n/a', '']:
+                    continue
+                
+                name = str(row.get(name_col, "")).strip() if name_col else "Unknown"
+                issue_url = str(row.get(issue_col, "")).strip() if issue_col else ""
+                readme_link = str(row.get(readme_col, "")).strip() if readme_col else ""
+                
+                # Track students who already have issue_url
+                if issue_url and issue_url.lower() not in ['', 'n/a', '#n/a', 'none']:
+                    # Validate the issue URL format
+                    if VALID_ISSUE_URL_PATTERN.match(issue_url):
+                        students_with_valid_issue[member_id] = {'name': name, 'issue_url': issue_url}
+                    # Check if it looks like a README/repo URL (wrong field!)
+                    elif README_URL_PATTERN.match(issue_url):
+                        readme_url_in_issue_field[member_id] = {
+                            'name': name,
+                            'readme_url': issue_url,
+                            'note': 'README/repo URL was incorrectly placed in issue URL field'
+                        }
+                    else:
+                        students_with_invalid_issue[member_id] = {'name': name, 'issue_url': issue_url}
+                    continue
+                
+                # Check if readme_link is actually an issue URL (common mistake!)
+                if readme_link and VALID_ISSUE_URL_PATTERN.match(readme_link):
+                    # This is a special case - issue URL was put in readme_link field
+                    issue_url_in_readme_link[member_id] = {
+                        'name': name,
+                        'issue_url': readme_link,
+                        'readme_link': readme_link,
+                        'note': 'Issue URL was incorrectly placed in README link field'
+                    }
+                    continue
+                
+                # Store/update (later rows = more recent, so overwrite)
+                if readme_link:
+                    students_no_issue[member_id] = {'name': name, 'readme_link': readme_link}
+            
+            if not students_no_issue:
+                await ctx.send("✅ **All students have issue URLs!** Nothing to validate.")
+                return
+            
+            await ctx.send(f"📊 Found **{len(students_no_issue)}** students without issue URL. Crawling their READMEs...")
+            
+            # Initialize GitLab service
+            gitlab_service = GitLabService()
+            
+            # Issue URL pattern for GitLab (for extracting from README)
+            ISSUE_PATTERN = re.compile(
+                r'https?://gitlab\.com/[^/]+(?:/[^/]+)*/-/(?:issues|work_items)/\d+(?:#[a-zA-Z0-9_-]+)?',
+                re.IGNORECASE
+            )
+            
+            # Issue number reference pattern (e.g., #586126, [#586126], Issue: #586126)
+            ISSUE_NUMBER_PATTERN = re.compile(
+                r'(?:issue[:\s]*)?[\[\(]?#(\d{4,})[\]\)]?',
+                re.IGNORECASE
+            )
+            
+            # Project shorthand pattern (e.g., gitlab-org/gitlab#586041, [gitlab-org/gitlab#586041])
+            # Captures: group(1) = project path (e.g., gitlab-org/gitlab), group(2) = issue number
+            PROJECT_ISSUE_SHORTHAND_PATTERN = re.compile(
+                r'[\[\(]?([a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+)#(\d{4,})[\]\)]?',
+                re.IGNORECASE
+            )
+            
+            # Default GitLab project for issue number lookup
+            DEFAULT_GITLAB_PROJECT = "gitlab-org/gitlab"
+            
+            # Results tracking
+            issues_found: dict = {}  # member_id -> {name, readme_link, issue_url}
+            readme_inaccessible: dict = {}  # member_id -> {name, readme_link, error}
+            readme_timeout: dict = {}  # member_id -> {name, readme_link, attempts}
+            no_issue_in_readme: dict = {}  # member_id -> {name, readme_link}
+            
+            processed = 0
+            total = len(students_no_issue)
+            
+            # Rate limiting: 1 second delay between requests to be safe
+            API_DELAY = 1.0
+            MAX_RETRIES = 3
+            
+            for member_id, info in students_no_issue.items():
+                processed += 1
+                name = info['name']
+                readme_link = info['readme_link']
+                
+                # Progress update every 10 students
+                if processed % 10 == 0:
+                    await ctx.send(f"⏳ Progress: {processed}/{total} READMEs checked...")
+                
+                # Extract repo path from readme link
+                repo_path, platform = gitlab_service.extract_repo_from_readme_link(readme_link)
+                
+                if not repo_path:
+                    readme_inaccessible[member_id] = {
+                        'name': name,
+                        'readme_link': readme_link,
+                        'error': 'Could not extract repo path from URL'
+                    }
+                    continue
+                
+                # Extract specific file path from URL (e.g., contribution-1-README.md)
+                file_path = gitlab_service.extract_file_path_from_url(readme_link)
+                
+                # Fetch README content with retry logic for timeouts
+                import socket
+                import ssl
+                import time
+                
+                readme_content = None
+                last_error = None
+                
+                for attempt in range(MAX_RETRIES):
+                    try:
+                        # Add delay between API calls to avoid rate limiting
+                        if attempt > 0 or processed > 1:
+                            await asyncio.sleep(API_DELAY)
+                        
+                        if file_path:
+                            # Fetch the specific file from the URL
+                            readme_content = gitlab_service.fetch_file_content(repo_path, file_path, platform)
+                        else:
+                            # Fall back to fetching README.md from root
+                            if platform == "github":
+                                readme_content = gitlab_service.fetch_readme_from_github(repo_path)
+                            else:
+                                readme_content = gitlab_service.fetch_readme(repo_path)
+                        
+                        break  # Success, exit retry loop
+                        
+                    except (socket.timeout, TimeoutError, ssl.SSLError) as e:
+                        last_error = f'Timeout (attempt {attempt + 1}/{MAX_RETRIES})'
+                        is_timeout = True
+                        print(f"[Validate] Timeout for {name}, attempt {attempt + 1}/{MAX_RETRIES}")
+                        if attempt < MAX_RETRIES - 1:
+                            await asyncio.sleep(2)  # Wait longer before retry
+                        continue
+                    except Exception as e:
+                        last_error = str(e)
+                        is_timeout = False
+                        break  # Non-timeout error, don't retry
+                
+                if readme_content is None:
+                    if last_error and 'Timeout' in last_error:
+                        # Separate category for timeouts
+                        readme_timeout[member_id] = {
+                            'name': name,
+                            'readme_link': readme_link,
+                            'attempts': MAX_RETRIES
+                        }
+                    elif last_error:
+                        readme_inaccessible[member_id] = {
+                            'name': name,
+                            'readme_link': readme_link,
+                            'error': last_error
+                        }
+                    else:
+                        readme_inaccessible[member_id] = {
+                            'name': name,
+                            'readme_link': readme_link,
+                            'error': 'README not found or repository inaccessible'
+                        }
+                    continue
+                
+                # Find all issue URLs in the README
+                issue_matches = ISSUE_PATTERN.findall(readme_content)
+                
+                if issue_matches:
+                    # Take the LAST (latest) issue URL found
+                    latest_issue = issue_matches[-1]
+                    issues_found[member_id] = {
+                        'name': name,
+                        'readme_link': readme_link,
+                        'issue_url': latest_issue,
+                        'all_issues_found': list(set(issue_matches)),
+                        'source': 'url'
+                    }
+                else:
+                    # No full URLs found - try project shorthand pattern (e.g., gitlab-org/gitlab#586041)
+                    shorthand_matches = PROJECT_ISSUE_SHORTHAND_PATTERN.findall(readme_content)
+                    
+                    if shorthand_matches:
+                        # Try to validate shorthand references against GitLab
+                        validated_issue = None
+                        for project_path, issue_num in reversed(shorthand_matches):  # Start from last (most recent)
+                            # Construct potential issue URL
+                            potential_url = f"https://gitlab.com/{project_path}/-/issues/{issue_num}"
+                            
+                            # Verify the issue exists
+                            try:
+                                await asyncio.sleep(0.5)  # Rate limit
+                                import urllib.parse
+                                encoded_project = urllib.parse.quote(project_path, safe="")
+                                check_url = f"https://gitlab.com/api/v4/projects/{encoded_project}/issues/{issue_num}"
+                                issue_data = gitlab_service._make_request(check_url)
+                                
+                                if issue_data and issue_data.get('iid'):
+                                    validated_issue = potential_url
+                                    break
+                            except Exception as e:
+                                print(f"[Validate] Error checking issue {project_path}#{issue_num}: {e}")
+                                continue
+                        
+                        if validated_issue:
+                            issues_found[member_id] = {
+                                'name': name,
+                                'readme_link': readme_link,
+                                'issue_url': validated_issue,
+                                'all_issues_found': [f"{p}#{n}" for p, n in shorthand_matches],
+                                'source': 'project_shorthand'
+                            }
+                        else:
+                            # Try the simpler issue number pattern as fallback
+                            issue_number_matches = ISSUE_NUMBER_PATTERN.findall(readme_content)
+                            if issue_number_matches:
+                                # Fall through to issue number validation below
+                                pass
+                            else:
+                                no_issue_in_readme[member_id] = {
+                                    'name': name,
+                                    'readme_link': readme_link,
+                                    'shorthand_found': [f"{p}#{n}" for p, n in shorthand_matches],
+                                    'note': 'Project shorthand found but could not validate'
+                                }
+                                continue
+                    
+                    # No shorthand found or validation failed - try to find issue number references like #586126
+                    if member_id not in issues_found:
+                        issue_number_matches = ISSUE_NUMBER_PATTERN.findall(readme_content)
+                        
+                        if issue_number_matches:
+                            # Try to validate issue numbers against GitLab
+                            validated_issue = None
+                            for issue_num in reversed(issue_number_matches):  # Start from last (most recent)
+                                # Construct potential issue URL
+                                potential_url = f"https://gitlab.com/{DEFAULT_GITLAB_PROJECT}/-/issues/{issue_num}"
+                                
+                                # Verify the issue exists
+                                try:
+                                    await asyncio.sleep(0.5)  # Rate limit
+                                    import urllib.parse
+                                    encoded_project = urllib.parse.quote(DEFAULT_GITLAB_PROJECT, safe="")
+                                    check_url = f"https://gitlab.com/api/v4/projects/{encoded_project}/issues/{issue_num}"
+                                    issue_data = gitlab_service._make_request(check_url)
+                                    
+                                    if issue_data and issue_data.get('iid'):
+                                        validated_issue = potential_url
+                                        break
+                                except Exception as e:
+                                    print(f"[Validate] Error checking issue #{issue_num}: {e}")
+                                    continue
+                            
+                            if validated_issue:
+                                issues_found[member_id] = {
+                                    'name': name,
+                                    'readme_link': readme_link,
+                                    'issue_url': validated_issue,
+                                    'all_issues_found': [f"#{num}" for num in issue_number_matches],
+                                    'source': 'number_reference'
+                                }
+                            else:
+                                # Found issue numbers but couldn't validate them
+                                no_issue_in_readme[member_id] = {
+                                    'name': name,
+                                    'readme_link': readme_link,
+                                    'issue_numbers_found': list(set(issue_number_matches)),
+                                    'note': 'Issue numbers found but could not validate against gitlab-org/gitlab'
+                                }
+                        else:
+                            no_issue_in_readme[member_id] = {
+                                'name': name,
+                                'readme_link': readme_link
+                            }
+            
+            # Save results to file
+            results = {
+                'validated_at': datetime.now().isoformat(),
+                'students_with_valid_issue': students_with_valid_issue,
+                'students_with_invalid_issue': students_with_invalid_issue,
+                'readme_url_in_issue_field': readme_url_in_issue_field,
+                'issue_url_in_readme_link': issue_url_in_readme_link,
+                'issues_found': issues_found,
+                'no_issue_in_readme': no_issue_in_readme,
+                'readme_inaccessible': readme_inaccessible,
+                'readme_timeout': readme_timeout
+            }
+            
+            results_file = os.path.join('data', 'uploads', '_validated_issues.json')
+            with open(results_file, 'w') as f:
+                json.dump(results, f, indent=2)
+            
+            # Build report
+            report = ["✅ **README Validation Complete**\n"]
+            report.append(f"📊 **Summary:**")
+            report.append(f"• Valid issue URL: **{len(students_with_valid_issue)}**")
+            report.append(f"• ⚠️ Invalid issue URL: **{len(students_with_invalid_issue)}**")
+            report.append(f"• ⚠️ README URL in issue field: **{len(readme_url_in_issue_field)}** (wrong field)")
+            report.append(f"• ⚠️ Issue URL in README field: **{len(issue_url_in_readme_link)}** (wrong field)")
+            report.append(f"• Issues found in README: **{len(issues_found)}**")
+            report.append(f"• No issue in README: **{len(no_issue_in_readme)}**")
+            report.append(f"• README inaccessible: **{len(readme_inaccessible)}**")
+            report.append(f"• Timed out (can retry): **{len(readme_timeout)}**\n")
+            
+            # Students with INVALID issue URLs (show first as these need attention)
+            if students_with_invalid_issue:
+                report.append("**❌ Students With INVALID Issue URL:**")
+                report.append("*(Expected format: gitlab.com/.../issues/{num} or .../work_items/{num})*")
+                for mid, data in sorted(students_with_invalid_issue.items(), key=lambda x: x[1]['name'].lower()):
+                    report.append(f"• **{data['name']}** (`{mid}`)")
+                    report.append(f"  └─ <{data['issue_url']}>")
+                report.append("")
+            
+            # Students who put README URL in issue_url field (wrong field!)
+            if readme_url_in_issue_field:
+                report.append("**⚠️ Students With README URL in Issue Field (wrong field!):**")
+                report.append("*(These students put a README/repo link in the issue URL field)*")
+                for mid, data in sorted(readme_url_in_issue_field.items(), key=lambda x: x[1]['name'].lower()):
+                    report.append(f"• **{data['name']}** (`{mid}`)")
+                    report.append(f"  └─ README: <{data['readme_url']}>")
+                report.append("")
+            
+            # Students who put issue URL in readme_link field (special case - has valid issue but wrong field!)
+            if issue_url_in_readme_link:
+                report.append("**⚠️ Students With Issue URL in README Field (wrong field!):**")
+                report.append("*(These students have valid issues but put them in the README link field instead of issue URL field)*")
+                for mid, data in sorted(issue_url_in_readme_link.items(), key=lambda x: x[1]['name'].lower()):
+                    report.append(f"• **{data['name']}** (`{mid}`)")
+                    report.append(f"  └─ Issue: <{data['issue_url']}>")
+                report.append("")
+            
+            # Students who already have valid issue URLs
+            if students_with_valid_issue:
+                report.append("**✅ Students With Valid Issue URL (in typeform):**")
+                for mid, data in sorted(students_with_valid_issue.items(), key=lambda x: x[1]['name'].lower()):
+                    report.append(f"• **{data['name']}** (`{mid}`)")
+                    report.append(f"  └─ <{data['issue_url']}>")
+                report.append("")
+            
+            # Issues found in README
+            if issues_found:
+                report.append("**🔗 Issues Found in README (extracted):**")
+                for mid, data in sorted(issues_found.items(), key=lambda x: x[1]['name'].lower()):
+                    report.append(f"• **{data['name']}** (`{mid}`)")
+                    report.append(f"  └─ <{data['issue_url']}>")
+                    if data.get('source') == 'project_shorthand':
+                        report.append(f"     *(found via project shorthand: {data.get('all_issues_found', [])})*")
+                report.append("")
+            
+            # No issue found in README
+            if no_issue_in_readme:
+                report.append("**📭 No Issue Found in README:**")
+                for mid, data in sorted(no_issue_in_readme.items(), key=lambda x: x[1]['name'].lower()):
+                    report.append(f"• **{data['name']}** (`{mid}`)")
+                    report.append(f"  └─ <{data['readme_link']}>")
+                    if data.get('shorthand_found'):
+                        report.append(f"     *(unvalidated shorthand found: {data.get('shorthand_found')})*")
+                report.append("")
+            
+            # Send report in chunks
+            full_report = "\n".join(report)
+            if len(full_report) <= 2000:
+                await ctx.send(full_report)
+            else:
+                chunks = []
+                current = ""
+                for line in report:
+                    if len(current) + len(line) + 1 > 1900:
+                        chunks.append(current)
+                        current = line
+                    else:
+                        current += "\n" + line if current else line
+                if current:
+                    chunks.append(current)
+                
+                for chunk in chunks:
+                    await ctx.send(chunk)
+            
+            # Report inaccessible READMEs separately if any
+            if readme_inaccessible:
+                inacc_report = ["**⚠️ READMEs Not Accessible:**"]
+                for mid, data in sorted(readme_inaccessible.items(), key=lambda x: x[1]['name'].lower()):
+                    inacc_report.append(f"• **{data['name']}** (`{mid}`)")
+                    inacc_report.append(f"  └─ Link: <{data['readme_link']}>")
+                    inacc_report.append(f"  └─ Error: {data['error']}")
+                
+                inacc_text = "\n".join(inacc_report)
+                if len(inacc_text) <= 2000:
+                    await ctx.send(inacc_text)
+                else:
+                    chunks = []
+                    current = ""
+                    for line in inacc_report:
+                        if len(current) + len(line) + 1 > 1900:
+                            chunks.append(current)
+                            current = line
+                        else:
+                            current += "\n" + line if current else line
+                    if current:
+                        chunks.append(current)
+                    for chunk in chunks:
+                        await ctx.send(chunk)
+            
+            # Report timed out READMEs separately if any
+            if readme_timeout:
+                timeout_report = ["**⏱️ READMEs Timed Out (can retry later):**"]
+                for mid, data in sorted(readme_timeout.items(), key=lambda x: x[1]['name'].lower()):
+                    timeout_report.append(f"• **{data['name']}** (`{mid}`)")
+                    timeout_report.append(f"  └─ Link: <{data['readme_link']}>")
+                    timeout_report.append(f"  └─ Attempts: {data['attempts']}")
+                
+                timeout_text = "\n".join(timeout_report)
+                if len(timeout_text) <= 2000:
+                    await ctx.send(timeout_text)
+                else:
+                    chunks = []
+                    current = ""
+                    for line in timeout_report:
+                        if len(current) + len(line) + 1 > 1900:
+                            chunks.append(current)
+                            current = line
+                        else:
+                            current += "\n" + line if current else line
+                    if current:
+                        chunks.append(current)
+                    for chunk in chunks:
+                        await ctx.send(chunk)
+            
+            await ctx.send(f"💾 Results saved to `{results_file}`")
+            
+        except Exception as e:
+            await ctx.send(f"❌ **Error validating:** {str(e)}")
+            print(f"[Tracker] Error in validate_no_issues: {e}")
+            import traceback
+            traceback.print_exc()
 
 
 async def setup(bot: commands.Bot):

@@ -1,0 +1,1042 @@
+{
+  "validated_at": "2026-03-06T05:20:50.841296",
+  "students_with_valid_issue": {
+    "38527": {
+      "name": "Kimia Naeiji",
+      "issue_url": "https://gitlab.com/gitlab-org/terraform-provider-gitlab/-/issues/6101"
+    },
+    "115965": {
+      "name": "Ryan Lawton",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586122"
+    },
+    "147088": {
+      "name": "Manasa Gadepalli",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/589830"
+    },
+    "54243": {
+      "name": "Bhagyesh Rathi",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586073"
+    },
+    "84448": {
+      "name": "Arely Martinez Garcia",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/581921"
+    },
+    "115747": {
+      "name": "Ronak Patel",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586035"
+    },
+    "91718": {
+      "name": "Lynjai Jimenez",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/9828"
+    },
+    "79141": {
+      "name": "Pierre Cuyeu",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586143"
+    },
+    "148542": {
+      "name": "Chichi Zhang",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/589183"
+    },
+    "111207": {
+      "name": "Kent Tran",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586049"
+    },
+    "125662": {
+      "name": "Biraj",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/591576"
+    },
+    "125691": {
+      "name": "Lucy He",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/589204"
+    },
+    "138945": {
+      "name": "Ahnaf Ahmed",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586033"
+    },
+    "77414": {
+      "name": "Prabin Bajgai",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/work_items/589855"
+    },
+    "2380": {
+      "name": "Ibrahim Mustafa",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/587001"
+    },
+    "139639": {
+      "name": "Oluwaseyi Fadahunsi",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586870"
+    },
+    "148473": {
+      "name": "Kalyaan Kanugula",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586071"
+    },
+    "133008": {
+      "name": "Vennela Kudala",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/590583"
+    },
+    "130091": {
+      "name": "Simon Huang",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586050"
+    },
+    "86389": {
+      "name": "Sydelle Nyegamo",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/587364#top"
+    },
+    "128133": {
+      "name": "Olutobi Adeyeri",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586046"
+    },
+    "130252": {
+      "name": "Julietta Rozin",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/589410"
+    },
+    "138794": {
+      "name": "Jeffrey Chu",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586097"
+    },
+    "136257": {
+      "name": "Mark Davletov",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/589734"
+    },
+    "112646": {
+      "name": "Julianne Tomlinson",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586124"
+    },
+    "128185": {
+      "name": "Duc Duong",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/587223"
+    },
+    "128782": {
+      "name": "Sirr Mena",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/581990"
+    },
+    "134208": {
+      "name": "Shubham Kulkarni",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586112"
+    },
+    "130082": {
+      "name": "Bertin Iradukunda",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586049"
+    },
+    "132905": {
+      "name": "Hsin-Ya Chien",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586070"
+    },
+    "134915": {
+      "name": "Riad Benyamna",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/590624"
+    },
+    "127346": {
+      "name": "Nathan Zheng",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/584654"
+    },
+    "41423": {
+      "name": "Linxi Xu",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/587667"
+    },
+    "96737": {
+      "name": "Matthew Wyatt",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/work_items/589865"
+    },
+    "108743": {
+      "name": "Mary Odetayo",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/587948"
+    },
+    "25888": {
+      "name": "Mark Falcone",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586029"
+    },
+    "113097": {
+      "name": "mike nguyen",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586117"
+    },
+    "107423": {
+      "name": "Hieu Tran",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/work_items/589869"
+    },
+    "111582": {
+      "name": "Alicia Yu",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586134"
+    },
+    "91407": {
+      "name": "Daria Khotunitskaya",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/582534"
+    },
+    "115855": {
+      "name": "Moo Muhammad",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/509818"
+    },
+    "122491": {
+      "name": "Oluwatomi Adenekan",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586050"
+    },
+    "85567": {
+      "name": "Roger",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586048"
+    },
+    "129243": {
+      "name": "Isaac Torres",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/work_items/589848"
+    },
+    "101792": {
+      "name": "Emanuel Pimentel",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586122#note_3116380915"
+    },
+    "87308": {
+      "name": "Kailan Mao",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586093"
+    },
+    "116271": {
+      "name": "Chhiv Guech Houth",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/588037"
+    },
+    "92377": {
+      "name": "Kesiena Berezi",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586141#note_3122262282"
+    },
+    "119410": {
+      "name": "Kate Li",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/work_items/560850"
+    },
+    "144569": {
+      "name": "Eniola Oludayo",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586078"
+    },
+    "86562": {
+      "name": "Chau Phan",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/583113"
+    },
+    "86270": {
+      "name": "Oluwatomisin Sapara-Williams",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/587364"
+    },
+    "99144": {
+      "name": "Evan Nguyen",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586105"
+    },
+    "115531": {
+      "name": "Anastasia Pupo",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586094"
+    },
+    "82801": {
+      "name": "Anushka Nilangekar",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586017"
+    },
+    "114951": {
+      "name": "Arnav Sareen",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/588650"
+    },
+    "132774": {
+      "name": "Lijun Wan",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/581706"
+    },
+    "109843": {
+      "name": "Luke Gearty",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/587199"
+    },
+    "103088": {
+      "name": "Theophile NIYOBUZIMA",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586100"
+    },
+    "129307": {
+      "name": "Shikha Dodecha",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/work_items/589867"
+    },
+    "138804": {
+      "name": "Junyi He Wu",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586035"
+    },
+    "98506": {
+      "name": "Aarzoo Bansal",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/587656#note_3126439796"
+    },
+    "135126": {
+      "name": "Indu Varshini Jayapal",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586041"
+    }
+  },
+  "students_with_invalid_issue": {
+    "129843": {
+      "name": "Matheus",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/N/A"
+    }
+  },
+  "readme_url_in_issue_field": {
+    "135126": {
+      "name": "Indu Varshini Jayapal",
+      "readme_url": "https://gitlab.com/InduVarshini/sp26-gitlab-contribution-ai-corps/-/blob/main/README.md",
+      "note": "README/repo URL was incorrectly placed in issue URL field"
+    },
+    "119467": {
+      "name": "Brittney Lilly",
+      "readme_url": "https://gitlab.com/coderforever/ai-corps-contribution",
+      "note": "README/repo URL was incorrectly placed in issue URL field"
+    },
+    "100895": {
+      "name": "Manraj Singh",
+      "readme_url": "https://gitlab.com/manrajs1-group/sp26-gitlab-contribution",
+      "note": "README/repo URL was incorrectly placed in issue URL field"
+    }
+  },
+  "issue_url_in_readme_link": {
+    "87308": {
+      "name": "Kailan Mao",
+      "issue_url": "https://gitlab.com/gitlab-community/community-members/onboarding/-/issues/3537",
+      "readme_link": "https://gitlab.com/gitlab-community/community-members/onboarding/-/issues/3537",
+      "note": "Issue URL was incorrectly placed in README link field"
+    },
+    "112871": {
+      "name": "Taylor Chiu",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586098",
+      "readme_link": "https://gitlab.com/gitlab-org/gitlab/-/issues/586098",
+      "note": "Issue URL was incorrectly placed in README link field"
+    }
+  },
+  "issues_found": {
+    "91718": {
+      "name": "Lynjai Jimenez",
+      "readme_link": "https://gitlab.com/imdesigns/sp26-gitlab-contribution/-/blob/0ecae850ecf518bb985bec235af88101f3875f77/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/9828",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/9828"
+      ],
+      "source": "url"
+    },
+    "79028": {
+      "name": "Hubert Huang",
+      "readme_link": "https://gitlab.com/hhubert14/ai-corps-contribution",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/584240",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/584240"
+      ],
+      "source": "url"
+    },
+    "83182": {
+      "name": "Ricardo Ortega-Pacheco",
+      "readme_link": "https://gitlab.com/ricardoortega97/ai-corps/-/blob/main/contribution2/contribution2-README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586871",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586871"
+      ],
+      "source": "url"
+    },
+    "148542": {
+      "name": "Chichi Zhang",
+      "readme_link": "https://gitlab.com/chichizhang0510/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/589183",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/589183"
+      ],
+      "source": "url"
+    },
+    "59602": {
+      "name": "Luciano Scarpaci",
+      "readme_link": "https://gitlab.com/lucianoscarpaci/sp26-ai-corps-contribution/-/blob/main/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586107",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586107"
+      ],
+      "source": "url"
+    },
+    "25888": {
+      "name": "Mark Falcone",
+      "readme_link": "https://gitlab.com/markfalcone1-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=1",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586029",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586029"
+      ],
+      "source": "url"
+    },
+    "111207": {
+      "name": "Kent Tran",
+      "readme_link": "https://gitlab.com/kentvtran/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=0",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586049",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586049"
+      ],
+      "source": "url"
+    },
+    "109632": {
+      "name": "Brittany Chan",
+      "readme_link": "https://gitlab.com/brittanyhailee/sp26-gitlab-contribution",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/582609",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/582609"
+      ],
+      "source": "url"
+    },
+    "45164": {
+      "name": "Quoc-Viet Bui",
+      "readme_link": "https://gitlab.com/vietbui1999ru/ai-corps-contribution-codepath-sp26/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586018",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586018"
+      ],
+      "source": "url"
+    },
+    "96737": {
+      "name": "Matthew Wyatt",
+      "readme_link": "https://gitlab.com/MatthewOscar/sp26-gitlab-contribution/-/blob/main/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/work_items/589865",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/work_items/589865"
+      ],
+      "source": "url"
+    },
+    "111582": {
+      "name": "Alicia Yu",
+      "readme_link": "https://gitlab.com/aliiyuu/sp26-gitlab-contribution/-/blob/main/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586136",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586136"
+      ],
+      "source": "url"
+    },
+    "125662": {
+      "name": "Biraj",
+      "readme_link": "https://gitlab.com/BPATHAK10/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=0",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/591576",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/591576"
+      ],
+      "source": "url"
+    },
+    "99144": {
+      "name": "Evan Nguyen",
+      "readme_link": "https://gitlab.com/NguyenEvan/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586105",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586105"
+      ],
+      "source": "url"
+    },
+    "138794": {
+      "name": "Jeffrey Chu",
+      "readme_link": "https://gitlab.com/jeffreychu0/sp26-gitlab-contribution/-/blob/main/contribution-1-README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/381849",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586097",
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/381849"
+      ],
+      "source": "url"
+    },
+    "128782": {
+      "name": "Sirr Mena",
+      "readme_link": "https://gitlab.com/Maxibear/ai-corps-contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/581990",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/581990"
+      ],
+      "source": "url"
+    },
+    "114951": {
+      "name": "Arnav Sareen",
+      "readme_link": "https://gitlab.com/aesareen/sp26-gitlab-contribution-sareen/-/tree/main",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/588650",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/588650"
+      ],
+      "source": "url"
+    },
+    "119410": {
+      "name": "Kate Li",
+      "readme_link": "https://gitlab.com/likate/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=0",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/work_items/560850",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/work_items/560850"
+      ],
+      "source": "url"
+    },
+    "112646": {
+      "name": "Julianne Tomlinson",
+      "readme_link": "https://gitlab.com/JewlzT/sp26-gitlab-contribution/-/blob/main/contribution-1-README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586124",
+      "all_issues_found": [
+        "gitlab-org/gitlab#586124"
+      ],
+      "source": "project_shorthand"
+    },
+    "129307": {
+      "name": "Shikha Dodecha",
+      "readme_link": "https://gitlab.com/shikha_dodecha/ai-corps-contribution-sd/-/blob/main/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/work_items/589867",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/work_items/589867"
+      ],
+      "source": "url"
+    },
+    "41423": {
+      "name": "Linxi",
+      "readme_link": "https://gitlab.com/linxixu517/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/587667",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/587667"
+      ],
+      "source": "url"
+    },
+    "134724": {
+      "name": "Ayush Shivhare",
+      "readme_link": "https://gitlab.com/Shivhare-Ayush/ai-corps-constribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586015",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586015"
+      ],
+      "source": "url"
+    },
+    "104339": {
+      "name": "Meirzhan Saparov",
+      "readme_link": "https://gitlab.com/Meirzhan05/sp26-gitlab-contribution/-/blob/main/CONTRIBUTION_PLAN.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586050",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586050"
+      ],
+      "source": "url"
+    },
+    "133008": {
+      "name": "Vennela Kudala",
+      "readme_link": "https://gitlab.com/KV721/ai-corps-contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/590583",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/590583"
+      ],
+      "source": "url"
+    },
+    "130091": {
+      "name": "Simon Huang",
+      "readme_link": "https://gitlab.com/shuangusany/codepath-sp26-gitlab-contribution/-/blob/f94d2eb546d03592dd56ce796ef8dc5049106613/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586050",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586050"
+      ],
+      "source": "url"
+    },
+    "122491": {
+      "name": "Oluwatomi Adenekan",
+      "readme_link": "https://gitlab.com/OlUwAtOmI06/ai-corps-contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/525312",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/525312"
+      ],
+      "source": "url"
+    },
+    "86389": {
+      "name": "Sydelle",
+      "readme_link": "https://gitlab.com/sydamani1513/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/587364",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/587364"
+      ],
+      "source": "url"
+    },
+    "91371": {
+      "name": "Andrea Nunoo",
+      "readme_link": "https://gitlab.com/andreanun/ai-corps-contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586024",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586024"
+      ],
+      "source": "url"
+    },
+    "101792": {
+      "name": "Emanuel Pimentel",
+      "readme_link": "https://gitlab.com/ep3100/ai-corps-contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586137",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586137"
+      ],
+      "source": "url"
+    },
+    "127346": {
+      "name": "Nathan Zheng",
+      "readme_link": "https://gitlab.com/nathanz19/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/584654",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/584654"
+      ],
+      "source": "url"
+    },
+    "108743": {
+      "name": "Mary Odetayo",
+      "readme_link": "https://gitlab.com/mary-odetayo/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/587948",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/587948"
+      ],
+      "source": "url"
+    },
+    "92595": {
+      "name": "Chinmayi Ranade",
+      "readme_link": "https://gitlab.com/cranade-group/sp26-gitlab-contribution/-/blob/main/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586082",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586082"
+      ],
+      "source": "url"
+    },
+    "116271": {
+      "name": "Chhiv Guech Houth",
+      "readme_link": "https://gitlab.com/houth1/sp26-gitlab-contribution/-/blob/main/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/588037",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/588037"
+      ],
+      "source": "url"
+    },
+    "76960": {
+      "name": "Topu Saha",
+      "readme_link": "https://gitlab.com/topusaha-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=1",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/work_items/591767",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/work_items/591767"
+      ],
+      "source": "url"
+    },
+    "77414": {
+      "name": "Prabin Bajgai",
+      "readme_link": "https://gitlab.com/prabinb19/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/work_items/589855",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/work_items/589855"
+      ],
+      "source": "url"
+    },
+    "132797": {
+      "name": "Xingrui Huang",
+      "readme_link": "https://gitlab.com/averrie/ai-corps-contribution/-/blob/main/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/545158",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/545158"
+      ],
+      "source": "url"
+    },
+    "128133": {
+      "name": "Olutobi Adeyeri",
+      "readme_link": "https://gitlab.com/TobiA2028/sp26-gitlab-contribution",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586046",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586046"
+      ],
+      "source": "url"
+    },
+    "2380": {
+      "name": "Ibrahim Mustafa",
+      "readme_link": "https://gitlab.com/ibrahimmustafa451/sp26-gitlab-contribution/-/blob/main/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/587001",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/587001"
+      ],
+      "source": "url"
+    },
+    "54243": {
+      "name": "Bhagyesh Rathi",
+      "readme_link": "https://gitlab.com/bhagyeshrathi/fixgitlab-ndjson",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586073",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586073"
+      ],
+      "source": "url"
+    },
+    "147088": {
+      "name": "Sai Manasa Gadepalli",
+      "readme_link": "https://gitlab.com/manasagadepalli08/ai-corps-contribution/-/blob/main/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/589830",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/589830"
+      ],
+      "source": "url"
+    },
+    "84448": {
+      "name": "Arely Martinez Garcia",
+      "readme_link": "https://gitlab.com/arelymartinez741-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/581921",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/581921"
+      ],
+      "source": "url"
+    },
+    "107423": {
+      "name": "Hieu Tran",
+      "readme_link": "https://gitlab.com/hieu_mtran/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/work_items/589869",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/work_items/589869"
+      ],
+      "source": "url"
+    },
+    "129243": {
+      "name": "Isaac Torres",
+      "readme_link": "https://gitlab.com/anon-spec-group/sp26-gitlab-contribution/-/blob/b1f5c9cc7c3caefb57521b961fdb257734f556e5/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/work_items/589848",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/work_items/589848"
+      ],
+      "source": "url"
+    },
+    "148473": {
+      "name": "Kalyaan Kanugula",
+      "readme_link": "https://gitlab.com/kalyaan09/sp26-gitlab-contribution/-/blob/main/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586032",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586032"
+      ],
+      "source": "url"
+    },
+    "92377": {
+      "name": "Kesiena BEREzi",
+      "readme_link": "https://gitlab.com/berezikesiena/codepath-sp26-gitlab",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/work_items/586141",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/work_items/586141"
+      ],
+      "source": "url"
+    },
+    "12352": {
+      "name": "Sabareesh Kappagantu",
+      "readme_link": "https://gitlab.com/sbrshkappa/ai-crops-contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586037",
+      "all_issues_found": [
+        "#586037",
+        "#586037"
+      ],
+      "source": "number_reference"
+    },
+    "82801": {
+      "name": "Anushka Nilangekar",
+      "readme_link": "https://gitlab.com/AnushkaNilangekar/ai-corps-contribution/-/blob/main/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586017",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586017"
+      ],
+      "source": "url"
+    },
+    "130252": {
+      "name": "Julietta Rozin",
+      "readme_link": "https://gitlab.com/juliettarozin/sp26-gitlab-contribution",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/589410",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/589410"
+      ],
+      "source": "url"
+    },
+    "115965": {
+      "name": "Ryan Lawton",
+      "readme_link": "https://gitlab.com/gitrlawton/sp26-gitlab-contribution/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586122",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586122"
+      ],
+      "source": "url"
+    },
+    "61305": {
+      "name": "Apar Pokhrel",
+      "readme_link": "https://gitlab.com/apokhrel.ap/sp26-gitlab-contribution/-/blob/main/contribution-1-README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586074",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586074"
+      ],
+      "source": "url"
+    },
+    "125691": {
+      "name": "Lucy He",
+      "readme_link": "https://gitlab.com/LucyHe09/codepath-sp26-gitlab/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/589204",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/589204"
+      ],
+      "source": "url"
+    },
+    "138945": {
+      "name": "Ahnaf Ahmed",
+      "readme_link": "https://gitlab.com/ahnafahmed/ai-corps-contribution/-/blob/main/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586033",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586033"
+      ],
+      "source": "url"
+    },
+    "86562": {
+      "name": "Chau Phan",
+      "readme_link": "https://gitlab.com/ptbchau/ai-corps-contribution/-/blob/main/contribution-1-README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/583113",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/583113"
+      ],
+      "source": "url"
+    },
+    "139639": {
+      "name": "Oluwaseyi Fadahunsi",
+      "readme_link": "https://gitlab.com/OluwaseyiFad/sp26-gitlab-contribution",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586870",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586870"
+      ],
+      "source": "url"
+    },
+    "128185": {
+      "name": "Duc Duong",
+      "readme_link": "https://gitlab.com/duongduc388222/sp26-gitlab-contribution",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/587223",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/587223"
+      ],
+      "source": "url"
+    },
+    "138701": {
+      "name": "Hitansh Paliwal",
+      "readme_link": "https://gitlab.com/hitansh8/sp26-gitlab-contribution/-/blob/main/contribution-1-README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586126",
+      "all_issues_found": [
+        "#586126"
+      ],
+      "source": "number_reference"
+    },
+    "107460": {
+      "name": "Jorge Garcia (Tito)",
+      "readme_link": "https://gitlab.com/Poiixen/spring-2026-gitlab-ai301/-/blob/main/contributions.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586107",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586107"
+      ],
+      "source": "url"
+    },
+    "134208": {
+      "name": "Shubham",
+      "readme_link": "https://gitlab.com/Shubham91999/ai-corps-contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586112",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586112"
+      ],
+      "source": "url"
+    },
+    "131263": {
+      "name": "Himansh Mudigonda",
+      "readme_link": "https://gitlab.com/himudigonda/sp26-gitlab-contribution",
+      "issue_url": "https://gitlab.com/gitlab-org/terraform-provider-gitlab/-/issues/1213",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/terraform-provider-gitlab/-/issues/1213"
+      ],
+      "source": "url"
+    },
+    "135126": {
+      "name": "Indu Varshini Jayapal",
+      "readme_link": "https://gitlab.com/InduVarshini/sp26-gitlab-contribution-ai-corps/-/blob/main/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586041",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586041"
+      ],
+      "source": "url"
+    },
+    "119330": {
+      "name": "Kaleb Tsegaye",
+      "readme_link": "https://gitlab.com/kfesaha15/sp26-gitlab-contribution/-/blob/1a63ecb986ddac5284f0c82c912953d1820c7ec6/contribution-1-README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586139",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586139"
+      ],
+      "source": "url"
+    },
+    "132905": {
+      "name": "Hsin-Ya Chien",
+      "readme_link": "https://gitlab.com/AnniecTW/sp26-gitlab-contribution/-/blob/main/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586070#note_3118224734",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586070#note_3118224734"
+      ],
+      "source": "url"
+    },
+    "134915": {
+      "name": "Riad Benyamna",
+      "readme_link": "https://gitlab.com/riad.benyamna2020-group/sp26-gitlab-contribution",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/590624",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/590624"
+      ],
+      "source": "url"
+    },
+    "115531": {
+      "name": "Anastasia Pupo",
+      "readme_link": "https://gitlab.com/anastasiapupo/sp26-gitlab-contribution-issue1/-/blob/main/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586094",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586094"
+      ],
+      "source": "url"
+    },
+    "130082": {
+      "name": "Bertin Iradukunda",
+      "readme_link": "https://gitlab.com/Bertin_01/sp26_gitlab_contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586049",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586049"
+      ],
+      "source": "url"
+    },
+    "38527": {
+      "name": "Kimia Naeiji",
+      "readme_link": "https://gitlab.com/bluenoodles/ai-assist",
+      "issue_url": "https://gitlab.com/gitlab-org/modelops/applied-ml/code-suggestions/ai-assist/-/issues/246",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/modelops/applied-ml/code-suggestions/ai-assist/-/issues/246"
+      ],
+      "source": "url"
+    },
+    "103088": {
+      "name": "NIYOBUZIMA Theophile",
+      "readme_link": "https://gitlab.com/theophileniyobuzima/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=1",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586100",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586100"
+      ],
+      "source": "url"
+    },
+    "109843": {
+      "name": "Luke Gearty",
+      "readme_link": "https://gitlab.com/lg3878/sp26-gitlab-contribution/-/blob/main/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/587199",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/587199"
+      ],
+      "source": "url"
+    },
+    "85567": {
+      "name": "Roger Nguyen",
+      "readme_link": "https://gitlab.com/hiepng05/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586048",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586048"
+      ],
+      "source": "url"
+    },
+    "58411": {
+      "name": "Muhammad Moeez Khan",
+      "readme_link": "https://gitlab.com/MuhammadMoeezKhan/sp26-gitlab-contribution/-/blob/main/README.md",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/589289",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/589289"
+      ],
+      "source": "url"
+    },
+    "119467": {
+      "name": "Brittney Lilly",
+      "readme_link": "https://gitlab.com/coderforever/ai-corps-contribution/-/blob/main/README.md?ref_type=heads",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/580800",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/580800"
+      ],
+      "source": "url"
+    },
+    "115855": {
+      "name": "Moo Muhammad",
+      "readme_link": "https://gitlab.com/Moo4president/sp26-gitlab-contribution",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/509818",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/509818"
+      ],
+      "source": "url"
+    },
+    "137041": {
+      "name": "Haad Imran",
+      "readme_link": "https://gitlab.com/haad_9/ai-corps-contribution",
+      "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586043",
+      "all_issues_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/586043"
+      ],
+      "source": "url"
+    }
+  },
+  "no_issue_in_readme": {
+    "98506": {
+      "name": "Aarzoo Bansal",
+      "readme_link": "https://gitlab.com/Aarzoo-Bansal/ai-corps-contribution-1/-/blob/main/README.md"
+    },
+    "113097": {
+      "name": "mike nguyen",
+      "readme_link": "https://gitlab.com/mikeng07/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads"
+    },
+    "100895": {
+      "name": "Manraj Singh",
+      "readme_link": "https://gitlab.com/manrajs1-group/sp26-gitlab-contribution"
+    },
+    "124586": {
+      "name": "Divya Ganesh",
+      "readme_link": "https://gitlab.com/dganesh05/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads"
+    },
+    "129843": {
+      "name": "Matheus Fonseca",
+      "readme_link": "https://gitlab.com/matheusfarocha/sp26-gitlab-contribution"
+    },
+    "107718": {
+      "name": "Phone Pyae Sone Phyo",
+      "readme_link": "https://gitlab.com/sonephyo/sp26-gitlab-contribution"
+    },
+    "132774": {
+      "name": "Lijun Wan",
+      "readme_link": "https://gitlab.com/lietcooper/sp26-gitlab-contribution/-/blob/main/contribution-docs/1.md"
+    },
+    "138804": {
+      "name": "Junyi He Wu",
+      "readme_link": "https://gitlab.com/jhewu/sp26-gitlab-contribution/-/tree/143b756941b5515c6cf3bd9aaa80af436089bdf2/"
+    },
+    "138950": {
+      "name": "Miller Liu",
+      "readme_link": "https://gitlab.com/Miller-Liu/sp26-gitlab-contribution/-/blob/main/README.md"
+    }
+  },
+  "readme_inaccessible": {
+    "79141": {
+      "name": "Pierre Cuyeu",
+      "readme_link": "https://gitlab.com/pcuyeu-group/pcuyeu-project/-/blob/main/README.md?ref_type=heads",
+      "error": "README not found or repository inaccessible"
+    },
+    "56604": {
+      "name": "Jose Cervantes",
+      "readme_link": "https://gitlab.com/cervanj.swe-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "error": "README not found or repository inaccessible"
+    },
+    "81629": {
+      "name": "Suzuna Kimura",
+      "readme_link": "https://gitlab.com/gitlab-community/gitlab-org/gitlab/-/tree/fix-issue-590185?ref_type=heads",
+      "error": "README not found or repository inaccessible"
+    },
+    "91407": {
+      "name": "Daria Khotunitskaya",
+      "readme_link": "https://gitlab.com/DariaKhot/tbd/-/blob/main/README.md?ref_type=heads",
+      "error": "README not found or repository inaccessible"
+    },
+    "136257": {
+      "name": "Mark Davletov",
+      "readme_link": "https://gitlab.com/davmark2909-group/sp26-gitlab-contribution/-/blob/main/README.md",
+      "error": "README not found or repository inaccessible"
+    },
+    "86270": {
+      "name": "Oluwatomisin Sapara-Williams",
+      "readme_link": "https://gitlab.com/codepath-org/ai-corps/spring-2026-gitlab-ai301/-/blob/main/README.md?ref_type=heads",
+      "error": "README not found or repository inaccessible"
+    },
+    "144569": {
+      "name": "Eniola Oludayo",
+      "readme_link": "https://gitlab.com/eniolaolud-group/ai-corps-contribution/-/blob/main/README.md",
+      "error": "README not found or repository inaccessible"
+    },
+    "115747": {
+      "name": "Ronak Patel",
+      "readme_link": "https://gitlab.com/ronp2805-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "error": "README not found or repository inaccessible"
+    },
+    "132738": {
+      "name": "Brian Peinado",
+      "readme_link": "https://gitlab.com/brianhip/codepath-sp26-gitlab#",
+      "error": "README not found or repository inaccessible"
+    },
+    "112871": {
+      "name": "Taylor Chiu",
+      "readme_link": "https://gitlab.com/gitlab-community/community-members",
+      "error": "README not found or repository inaccessible"
+    },
+    "116006": {
+      "name": "Olayinka Vaughan",
+      "readme_link": "https://gitlab.com/Builder106/spring-2026-gitlab-ai301/-/blob/feat/sort-preferences/students/CONTRIBUTION-README.md",
+      "error": "README not found or repository inaccessible"
+    }
+  },
+  "readme_timeout": {}
+}

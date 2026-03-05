@@ -39,7 +39,7 @@
     "notveks": 53,
     "imdesigns": 54,
     "mufasa1033": 30,
-    "junjulyaugustoctober": 16,
+    "junjulyaugustoctober": 17,
     "matthewoscarwyatt": 13,
     "lucianoscarpaci": 89,
     "jewlzt": 12,
@@ -57,7 +57,7 @@
     "mgadepalli_27526": 21,
     "duckylikesbread": 11,
     "beast.op": 5,
-    "_depressed_": 13,
+    "_depressed_": 15,
     "suzkim23": 5,
     "chichizhang0510": 5,
     "jc_1024": 5,
@@ -79,7 +79,7 @@
     "hieu_mtran": 5,
     "ninjaboy21": 16,
     "kalyaan09": 18,
-    "uzumaki3374": 71,
+    "uzumaki3374": 73,
     "lijunwan": 5,
     "darkbluegreen": 5,
     "youngfadd": 13,
@@ -202,6 +202,9 @@
     ],
     "1479174361683329255": [
       "384542255178055680"
+    ],
+    "1479184744821297314": [
+      "475120638160273419"
     ]
   },
   "point_history": {
@@ -530,6 +533,13 @@
         "timestamp": "2026-03-05T17:35:06.447496+00:00",
         "channel_id": "1451043797483131000",
         "message_id": "1479158791122718740"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-05T19:06:46.490334+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1479184744821297314"
       }
     ],
     "matthewoscarwyatt": [
@@ -1623,6 +1633,13 @@
         "timestamp": "2026-03-03T21:53:03.794000+00:00",
         "channel_id": "1471205492540833813",
         "message_id": "1478510546964709432"
+      },
+      {
+        "points": 2,
+        "type": "subsequent_response",
+        "timestamp": "2026-03-05T18:32:05.089000+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1479184744821297314"
       }
     ],
     "suzkim23": [
@@ -2787,6 +2804,13 @@
         "timestamp": "2026-03-05T17:50:49.556000+00:00",
         "channel_id": "1471204453368725565",
         "message_id": "1479174361683329255"
+      },
+      {
+        "points": 2,
+        "type": "subsequent_response",
+        "timestamp": "2026-03-05T17:56:14.248000+00:00",
+        "channel_id": "1471204453368725565",
+        "message_id": "1479175723540549682"
       }
     ],
     "lijunwan": [

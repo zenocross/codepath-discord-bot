@@ -82,6 +82,9 @@ class GitLabService:
         Returns:
             The parsed JSON response, or None on error
         """
+        import socket
+        import ssl
+        
         req = urllib.request.Request(url)
         if self.token:
             req.add_header("PRIVATE-TOKEN", self.token)
@@ -99,6 +102,12 @@ class GitLabService:
             return None
         except urllib.error.URLError as e:
             print(f"[GitLabService] URL error: {e}")
+            return None
+        except (socket.timeout, TimeoutError) as e:
+            print(f"[GitLabService] Timeout: {e}")
+            return None
+        except ssl.SSLError as e:
+            print(f"[GitLabService] SSL error: {e}")
             return None
         except Exception as e:
             print(f"[GitLabService] Request error: {e}")
@@ -317,6 +326,112 @@ class GitLabService:
         
         return None, ""
     
+    def extract_file_path_from_url(self, url: str) -> Optional[str]:
+        """Extract the file path from a GitLab or GitHub blob URL.
+        
+        Args:
+            url: Full URL to a file (e.g., https://gitlab.com/user/repo/-/blob/main/path/to/file.md)
+        
+        Returns:
+            The file path (e.g., "path/to/file.md") or None if not a file URL
+        """
+        if not url:
+            return None
+        
+        url = url.strip()
+        
+        # GitLab pattern: /-/blob/branch/path/to/file
+        gitlab_match = re.search(r'/-/blob/[^/]+/(.+?)(?:\?|$)', url)
+        if gitlab_match:
+            return gitlab_match.group(1)
+        
+        # GitHub pattern: /blob/branch/path/to/file
+        github_match = re.search(r'/blob/[^/]+/(.+?)(?:\?|$)', url)
+        if github_match:
+            return github_match.group(1)
+        
+        return None
+    
+    def fetch_file_content(self, repo_path: str, file_path: str, platform: str = "gitlab") -> Optional[str]:
+        """Fetch content of a specific file from a repository.
+        
+        Args:
+            repo_path: The full path to the repo (e.g., "username/project")
+            file_path: The path to the file within the repo (e.g., "contribution-1-README.md")
+            platform: 'gitlab' or 'github'
+        
+        Returns:
+            The file content as a string, or None if not found.
+        """
+        if platform == "github":
+            return self._fetch_github_file(repo_path, file_path)
+        else:
+            return self._fetch_gitlab_file(repo_path, file_path)
+    
+    def _fetch_gitlab_file(self, repo_path: str, file_path: str) -> Optional[str]:
+        """Fetch a specific file from GitLab."""
+        encoded_path = urllib.parse.quote(repo_path, safe="")
+        
+        # Get default branch
+        project_url = f"{GITLAB_URL}/api/v4/projects/{encoded_path}"
+        project_data = self._make_request(project_url)
+        
+        if not project_data:
+            return None
+        
+        default_branch = project_data.get("default_branch", "main")
+        branches = [default_branch] if default_branch else ["main", "master"]
+        
+        encoded_file = urllib.parse.quote(file_path, safe="")
+        
+        for branch in branches:
+            api_url = f"{GITLAB_URL}/api/v4/projects/{encoded_path}/repository/files/{encoded_file}?ref={branch}"
+            data = self._make_request(api_url)
+            
+            if data and "content" in data:
+                try:
+                    content = base64.b64decode(data["content"]).decode("utf-8")
+                    return content
+                except Exception:
+                    continue
+        
+        return None
+    
+    def _fetch_github_file(self, repo_path: str, file_path: str) -> Optional[str]:
+        """Fetch a specific file from GitHub."""
+        # Get default branch first
+        repo_check_url = f"https://api.github.com/repos/{repo_path}"
+        req = urllib.request.Request(repo_check_url)
+        req.add_header("Accept", "application/vnd.github.v3+json")
+        req.add_header("User-Agent", "Discord-Bot")
+        
+        try:
+            with urllib.request.urlopen(req, timeout=10) as response:
+                repo_data = json.loads(response.read().decode("utf-8"))
+                default_branch = repo_data.get("default_branch", "main")
+        except Exception:
+            default_branch = "main"
+        
+        branches = [default_branch] if default_branch else ["main", "master"]
+        
+        for branch in branches:
+            api_url = f"https://api.github.com/repos/{repo_path}/contents/{file_path}?ref={branch}"
+            
+            req = urllib.request.Request(api_url)
+            req.add_header("Accept", "application/vnd.github.v3+json")
+            req.add_header("User-Agent", "Discord-Bot")
+            
+            try:
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    data = json.loads(response.read().decode("utf-8"))
+                    if data and "content" in data:
+                        content = base64.b64decode(data["content"]).decode("utf-8")
+                        return content
+            except Exception:
+                continue
+        
+        return None
+    
     def get_week_start(self, date: datetime) -> datetime:
         """Get the Monday of the week for a given date."""
         days_since_monday = date.weekday()
@@ -476,6 +591,7 @@ class GitLabService:
             mr_links_found=len(links["merge_requests"]),
             commits_not_owned=commits_not_owned
         )
+
 
 
 
