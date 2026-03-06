@@ -2194,13 +2194,18 @@ class TrackerCog(commands.Cog, name="Tracker"):
             return url.split('#')[0].rstrip('/')
         
         url_to_students: dict = {}  # normalized_url -> [(name, member_id, original_url), ...]
+        seen_url_student: set = set()  # (normalized_url, member_id) to deduplicate same student on same issue
         for issue in matching_issues:
             norm_url = normalize_url(issue['url'])
+            key = (norm_url, issue['member_id'])
+            if key in seen_url_student:
+                continue  # Skip duplicate entry for same student on same issue
+            seen_url_student.add(key)
             if norm_url not in url_to_students:
                 url_to_students[norm_url] = []
             url_to_students[norm_url].append((issue['name'], issue['member_id'], issue['url']))
         
-        # Filter to only duplicates (more than one student)
+        # Filter to only duplicates (more than one unique student)
         duplicates = {url: students for url, students in url_to_students.items() if len(students) > 1}
         
         # Add footnote section if there are duplicates

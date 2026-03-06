@@ -318,4 +318,30 @@ class PersistenceService:
                 json.dump(community_state, f, indent=2)
         except Exception as e:
             print(f"Error saving community state: {e}")
+    
+    @staticmethod
+    def load_dm_feed_channel() -> Optional[int]:
+        """Load DM feed channel ID from JSON file.
+        
+        Returns:
+            Channel ID if set, None otherwise
+        """
+        try:
+            if os.path.exists(Config.DM_FEED_FILE):
+                with open(Config.DM_FEED_FILE, 'r') as f:
+                    data = json.load(f)
+                    return data.get('channel_id')
+        except Exception as e:
+            print(f"Error loading DM feed channel: {e}")
+        
+        return None
+    
+    @staticmethod
+    def save_dm_feed_channel(channel_id: Optional[int]) -> None:
+        """Save DM feed channel ID to JSON file."""
+        try:
+            with open(Config.DM_FEED_FILE, 'w') as f:
+                json.dump({'channel_id': channel_id}, f, indent=2)
+        except Exception as e:
+            print(f"Error saving DM feed channel: {e}")
 

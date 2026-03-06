@@ -55,6 +55,7 @@ class Config:
     TRIVIA_QUESTIONS_FILE: str = 'questions.json'
     TRIVIA_STATE_FILE: str = 'trivia_state.json'
     COMMUNITY_STATE_FILE: str = 'community_state.json'
+    DM_FEED_FILE: str = 'dm_feed.json'
     
     @classmethod
     def validate(cls) -> bool:

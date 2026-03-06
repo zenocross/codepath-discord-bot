@@ -53,6 +53,9 @@ class DiscordBot(commands.Bot):
         # Shared file storage for tracker/game modules
         self.file_storage = FileStorageService()
         
+        # DM feed channel for forwarding DMs from non-allowed users
+        self.dm_feed_channel_id: int | None = None
+        
         # Load all data from files
         self._load_all_data()
     
@@ -64,6 +67,7 @@ class DiscordBot(commands.Bot):
         self.allowed_users = PersistenceService.load_allowed_users()
         self.game_points = PersistenceService.load_game_points()
         self.trivia_state = PersistenceService.load_trivia_state()
+        self.dm_feed_channel_id = PersistenceService.load_dm_feed_channel()
         
         # Ensure trivia_points dict exists
         if 'trivia_points' not in self.trivia_state:
@@ -101,6 +105,10 @@ class DiscordBot(commands.Bot):
     def save_trivia_state(self) -> None:
         """Save trivia state to JSON file."""
         PersistenceService.save_trivia_state(self.trivia_state)
+    
+    def save_dm_feed_channel(self) -> None:
+        """Save DM feed channel to JSON file."""
+        PersistenceService.save_dm_feed_channel(self.dm_feed_channel_id)
     
     # ==================== Permission Checks ====================
     
@@ -330,13 +338,14 @@ class DiscordBot(commands.Bot):
         """Handle DM conversations for multi-step commands.
         
         This overrides the default on_message to handle multi-step DM flows
-        BEFORE command processing occurs.
+        BEFORE command processing occurs. Also forwards DMs from non-allowed
+        users to the configured feed channel.
         """
         # Ignore bot's own messages
         if message.author == self.user:
             return
         
-        # Check if this is a DM and user has an active conversation
+        # Check if this is a DM
         if isinstance(message.channel, discord.DMChannel):
             user_id = message.author.id
             
@@ -348,6 +357,10 @@ class DiscordBot(commands.Bot):
                 if not is_command:
                     await self._handle_dm_conversation(message, user_id)
                     return
+            
+            # Forward DMs from non-allowed users to feed channel
+            if not self.is_user_allowed(user_id) and self.dm_feed_channel_id:
+                await self._forward_dm_to_feed(message)
         
         # Process commands as normal
         await self.process_commands(message)
@@ -501,4 +514,73 @@ class DiscordBot(commands.Bot):
         await message.channel.send(result_msg)
         
         del self.dm_conversations[user_id]
+    
+    async def _forward_dm_to_feed(self, message) -> None:
+        """Forward a DM from a non-allowed user to the feed channel."""
+        if not self.dm_feed_channel_id:
+            return
+        
+        feed_channel = self.get_channel(self.dm_feed_channel_id)
+        if not feed_channel:
+            print(f"DM Feed: Channel {self.dm_feed_channel_id} not found")
+            return
+        
+        # Build the embed for the forwarded DM
+        embed = discord.Embed(
+            title="📬 New DM Received",
+            color=discord.Color.blue(),
+            timestamp=message.created_at
+        )
+        
+        # Add sender info
+        embed.set_author(
+            name=f"{message.author.name} ({message.author.id})",
+            icon_url=message.author.display_avatar.url if message.author.display_avatar else None
+        )
+        
+        # Add message content (if any)
+        if message.content:
+            # Truncate long messages
+            content = message.content
+            if len(content) > 1024:
+                content = content[:1021] + "..."
+            embed.add_field(name="Message", value=content, inline=False)
+        
+        # Add links if any are detected in the message
+        import re
+        url_pattern = re.compile(r'https?://[^\s<>"{}|\\^`\[\]]+')
+        urls = url_pattern.findall(message.content) if message.content else []
+        if urls:
+            urls_text = "\n".join(f"• <{url}>" for url in urls[:10])  # Limit to 10 URLs
+            if len(urls) > 10:
+                urls_text += f"\n... and {len(urls) - 10} more"
+            embed.add_field(name="🔗 Links Detected", value=urls_text, inline=False)
+        
+        # Handle attachments
+        attachment_info = []
+        files_to_send = []
+        
+        for attachment in message.attachments:
+            attachment_info.append(f"• [{attachment.filename}]({attachment.url}) ({attachment.size // 1024}KB)")
+            # Try to download and re-upload small attachments (under 8MB)
+            if attachment.size < 8 * 1024 * 1024:
+                try:
+                    file = await attachment.to_file()
+                    files_to_send.append(file)
+                except Exception as e:
+                    print(f"DM Feed: Failed to download attachment {attachment.filename}: {e}")
+        
+        if attachment_info:
+            embed.add_field(
+                name=f"📎 Attachments ({len(message.attachments)})",
+                value="\n".join(attachment_info[:10]),
+                inline=False
+            )
+        
+        embed.set_footer(text=f"User ID: {message.author.id}")
+        
+        try:
+            await feed_channel.send(embed=embed, files=files_to_send if files_to_send else None)
+        except Exception as e:
+            print(f"DM Feed: Failed to forward message to feed channel: {e}")
 

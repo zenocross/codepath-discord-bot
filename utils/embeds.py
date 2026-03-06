@@ -790,6 +790,14 @@ class EmbedBuilder:
             inline=False
         )
         
+        embed.add_field(
+            name="📬 !app feed (Owner only)",
+            value="`!app feed` - Check current DM feed channel\n"
+                  "`!app set_feed <#channel or ID>` - Set channel for forwarding DMs\n"
+                  "`!app clear_feed` - Stop forwarding DMs",
+            inline=False
+        )
+        
         embed.set_footer(text="Use !app help to see this overview")
         
         return embed
