@@ -563,6 +563,7 @@ class EmbedBuilder:
                 "`!tracker no_issues` - Show validated issue status (requires validate first)\n"
                 "`!tracker no_issues quick` - Quick list without validation\n"
                 "`!tracker no_issues validate` - Crawl READMEs to find/validate issue URLs\n"
+                "`!tracker dl_issues` - Download validated issues as CSV (cached data)\n"
                 "`!tracker search_issues_title <term>` - Search issue titles for a term\n"
                 "`!tracker search_dl_issues_title <term>` - Search + download CSV with contact info"
             ),

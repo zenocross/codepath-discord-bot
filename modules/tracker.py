@@ -2760,6 +2760,296 @@ class TrackerCog(commands.Cog, name="Tracker"):
             print(f"[Tracker] Error in validate_no_issues: {e}")
             import traceback
             traceback.print_exc()
+    
+    # ==================== Download Issues (CSV Export) ====================
+    
+    @commands.command(name='dl_issues')
+    async def download_issues(self, ctx: commands.Context):
+        """Download validated issues as CSV with contact info.
+        
+        Usage: 
+            !tracker dl_issues
+        
+        Downloads a CSV with all students and their issue status:
+        Name, Member ID, Discord, Email, Phone, Status, Issue URL, Source, Notes
+        """
+        import json
+        import os
+        import csv
+        from io import StringIO
+        from datetime import datetime
+        
+        results_file = os.path.join('data', 'uploads', '_validated_issues.json')
+        
+        # Check if file exists
+        if not os.path.exists(results_file):
+            await ctx.send(
+                "❌ **No validated issues data found.**\n\n"
+                "Run `!tracker no_issues validate` first to generate the data."
+            )
+            return
+        
+        # Load the validated data
+        try:
+            with open(results_file, 'r') as f:
+                data = json.load(f)
+        except Exception as e:
+            await ctx.send(f"❌ **Error reading validated issues file:** {str(e)}")
+            return
+        
+        validated_at = data.get('validated_at', 'Unknown')
+        await ctx.send(f"📥 **Exporting validated issues to CSV...**\nData from: `{validated_at}`")
+        
+        # Build contact lookup from master CSV
+        contact_lookup: dict = {}  # member_id -> {email, discord, phone}
+        master_file = self.storage.get_file("master")
+        if master_file:
+            master_data = self.storage.read_file(master_file)
+            master_text = master_data.decode('utf-8-sig')
+            
+            lines = master_text.splitlines()
+            header_row_idx = None
+            for idx, line in enumerate(lines):
+                if "Member ID" in line or "member_id" in line.lower():
+                    header_row_idx = idx
+                    break
+            
+            if header_row_idx is not None:
+                master_text = "\n".join(lines[header_row_idx:])
+            
+            try:
+                m_dialect = csv.Sniffer().sniff(master_text[:4096], delimiters=',\t;|')
+            except csv.Error:
+                m_dialect = 'excel'
+            m_reader = csv.DictReader(io.StringIO(master_text), dialect=m_dialect)
+            m_rows = list(m_reader)
+            if m_rows:
+                m_headers = list(m_rows[0].keys())
+                m_member_col = next((h for h in m_headers if 'member' in h.lower() and 'id' in h.lower()), None)
+                m_email_col = next((h for h in m_headers if 'email' in h.lower() and 'secondary' not in h.lower()), None)
+                m_discord_col = next((h for h in m_headers if 'discord' in h.lower()), None)
+                
+                for row in m_rows:
+                    mid = str(row.get(m_member_col, "")).strip() if m_member_col else ""
+                    if mid and mid.lower() not in ['#n/a', 'n/a', '', 'member id']:
+                        contact_lookup[mid] = {
+                            'email': str(row.get(m_email_col, "")).strip() if m_email_col else "",
+                            'discord': str(row.get(m_discord_col, "")).strip() if m_discord_col else "",
+                            'phone': ""
+                        }
+        
+        # Add phone numbers from app CSV
+        app_file = self.storage.get_file("app")
+        if app_file:
+            app_data = self.storage.read_file(app_file)
+            app_text = app_data.decode('utf-8-sig')
+            
+            lines = app_text.splitlines()
+            header_row_idx = None
+            for idx, line in enumerate(lines):
+                if "Member ID" in line or "member_id" in line.lower():
+                    header_row_idx = idx
+                    break
+            
+            if header_row_idx is not None:
+                app_text = "\n".join(lines[header_row_idx:])
+            
+            try:
+                a_dialect = csv.Sniffer().sniff(app_text[:4096], delimiters=',\t;|')
+            except csv.Error:
+                a_dialect = 'excel'
+            a_reader = csv.DictReader(io.StringIO(app_text), dialect=a_dialect)
+            a_rows = list(a_reader)
+            if a_rows:
+                a_headers = list(a_rows[0].keys())
+                a_member_col = next((h for h in a_headers if 'member' in h.lower() and 'id' in h.lower()), None)
+                a_phone_col = next((h for h in a_headers if 'phone' in h.lower()), None)
+                
+                for row in a_rows:
+                    mid = str(row.get(a_member_col, "")).strip() if a_member_col else ""
+                    phone = str(row.get(a_phone_col, "")).strip() if a_phone_col else ""
+                    if mid and mid.lower() not in ['#n/a', 'n/a', '', 'member id'] and phone:
+                        if mid in contact_lookup:
+                            contact_lookup[mid]['phone'] = phone
+                        else:
+                            contact_lookup[mid] = {'email': '', 'discord': '', 'phone': phone}
+        
+        # Extract all categories from validated data
+        students_with_valid_issue = data.get('students_with_valid_issue', {})
+        students_with_invalid_issue = data.get('students_with_invalid_issue', {})
+        readme_url_in_issue_field = data.get('readme_url_in_issue_field', {})
+        issue_url_in_readme_link = data.get('issue_url_in_readme_link', {})
+        issues_found = data.get('issues_found', {})
+        no_issue_in_readme = data.get('no_issue_in_readme', {})
+        readme_inaccessible = data.get('readme_inaccessible', {})
+        readme_timeout = data.get('readme_timeout', {})
+        
+        # Build list of all students with their info
+        all_students: list = []
+        
+        # Category 1: Students with valid issue from typeform
+        for mid, info in students_with_valid_issue.items():
+            all_students.append({
+                'member_id': mid,
+                'name': info['name'],
+                'status': 'Has Issue',
+                'issue_url': info['issue_url'],
+                'source': 'Typeform',
+                'notes': ''
+            })
+        
+        # Category 2: Issue URL in README link field (wrong field but valid)
+        for mid, info in issue_url_in_readme_link.items():
+            # Skip if already added
+            if any(s['member_id'] == mid for s in all_students):
+                continue
+            all_students.append({
+                'member_id': mid,
+                'name': info['name'],
+                'status': 'Has Issue (Wrong Field)',
+                'issue_url': info['issue_url'],
+                'source': 'README Link Field',
+                'notes': 'Issue URL was placed in README link field'
+            })
+        
+        # Category 3: Issues found in README
+        for mid, info in issues_found.items():
+            # Skip if already added
+            if any(s['member_id'] == mid for s in all_students):
+                continue
+            source = info.get('source', 'readme')
+            source_display = {
+                'readme': 'README',
+                'number_reference': 'README (#number)',
+                'project_shorthand': 'README (project#number)'
+            }.get(source, 'README')
+            all_students.append({
+                'member_id': mid,
+                'name': info['name'],
+                'status': 'Has Issue',
+                'issue_url': info['issue_url'],
+                'source': source_display,
+                'notes': ''
+            })
+        
+        # Category 4: README URL in issue field (wrong field)
+        for mid, info in readme_url_in_issue_field.items():
+            all_students.append({
+                'member_id': mid,
+                'name': info['name'],
+                'status': 'Invalid (Wrong Field)',
+                'issue_url': info.get('readme_url', ''),
+                'source': 'Issue URL Field',
+                'notes': 'README/repo URL was placed in issue URL field'
+            })
+        
+        # Category 5: Invalid issue URLs
+        for mid, info in students_with_invalid_issue.items():
+            all_students.append({
+                'member_id': mid,
+                'name': info['name'],
+                'status': 'Invalid Issue URL',
+                'issue_url': info['issue_url'],
+                'source': 'Typeform',
+                'notes': 'URL does not match expected GitLab issue format'
+            })
+        
+        # Category 6: No issue in README
+        for mid, info in no_issue_in_readme.items():
+            # Skip if already added (has valid issue elsewhere)
+            if any(s['member_id'] == mid for s in all_students):
+                continue
+            all_students.append({
+                'member_id': mid,
+                'name': info['name'],
+                'status': 'No Issue Found',
+                'issue_url': '',
+                'source': 'README',
+                'notes': f"README: {info.get('readme_link', 'N/A')}"
+            })
+        
+        # Category 7: Inaccessible READMEs
+        for mid, info in readme_inaccessible.items():
+            # Skip if already added
+            if any(s['member_id'] == mid for s in all_students):
+                continue
+            all_students.append({
+                'member_id': mid,
+                'name': info['name'],
+                'status': 'README Inaccessible',
+                'issue_url': '',
+                'source': 'N/A',
+                'notes': f"Error: {info.get('error', 'Unknown')} | README: {info.get('readme_link', 'N/A')}"
+            })
+        
+        # Category 8: Timed out READMEs
+        for mid, info in readme_timeout.items():
+            # Skip if already added
+            if any(s['member_id'] == mid for s in all_students):
+                continue
+            all_students.append({
+                'member_id': mid,
+                'name': info['name'],
+                'status': 'README Timeout',
+                'issue_url': '',
+                'source': 'N/A',
+                'notes': f"Timed out after {info.get('attempts', 'N/A')} attempts | README: {info.get('readme_link', 'N/A')}"
+            })
+        
+        # Build CSV
+        output = StringIO()
+        writer = csv.writer(output)
+        
+        # Header row
+        writer.writerow(['Name', 'Member ID', 'Discord', 'Email', 'Phone', 'Status', 'Issue URL', 'Source', 'Notes'])
+        
+        # Sort by name
+        all_students.sort(key=lambda x: x['name'].lower())
+        
+        # Data rows
+        for student in all_students:
+            contact = contact_lookup.get(student['member_id'], {})
+            writer.writerow([
+                student['name'],
+                student['member_id'],
+                contact.get('discord', ''),
+                contact.get('email', ''),
+                contact.get('phone', ''),
+                student['status'],
+                student['issue_url'],
+                student['source'],
+                student['notes']
+            ])
+        
+        # Count statistics
+        has_issue_count = sum(1 for s in all_students if s['status'] in ['Has Issue', 'Has Issue (Wrong Field)'])
+        no_issue_count = sum(1 for s in all_students if s['status'] == 'No Issue Found')
+        needs_attention_count = sum(1 for s in all_students if s['status'] not in ['Has Issue', 'No Issue Found'])
+        
+        # Add summary footer
+        writer.writerow([])
+        writer.writerow(['--- SUMMARY ---'])
+        writer.writerow([f'Total Students: {len(all_students)}'])
+        writer.writerow([f'With Issues: {has_issue_count}'])
+        writer.writerow([f'Without Issues: {no_issue_count}'])
+        writer.writerow([f'Needs Attention: {needs_attention_count}'])
+        writer.writerow([f'Data validated at: {validated_at}'])
+        
+        # Create file for Discord
+        csv_content = output.getvalue().encode('utf-8')
+        filename = f"issues_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        
+        # Send summary and file
+        summary = (
+            f"✅ **Export Complete**\n\n"
+            f"📊 **Summary:**\n"
+            f"• Total Students: {len(all_students)}\n"
+            f"• With Issues: {has_issue_count}\n"
+            f"• Without Issues: {no_issue_count}\n"
+            f"• Needs Attention: {needs_attention_count}\n"
+        )
+        
+        await ctx.send(summary, file=discord.File(io.BytesIO(csv_content), filename=filename))
 
 
 async def setup(bot: commands.Bot):
