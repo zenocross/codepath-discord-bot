@@ -571,6 +571,16 @@ class EmbedBuilder:
         )
         
         embed.add_field(
+            name="🔀 MR Validation Commands",
+            value=(
+                "`!tracker no_mr` - Show validated MR status (requires validate first)\n"
+                "`!tracker no_mr validate` - Crawl READMEs to find/validate MR URLs + author check\n"
+                "`!tracker dl_mr` - Download validated MRs as CSV (cached data)"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
             name="📝 Phase Completion (Admin)",
             value=(
                 "`!tracker get_member_id <discord>` - Look up member ID\n"

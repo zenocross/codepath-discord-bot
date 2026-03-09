@@ -2312,7 +2312,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
             # README/repo URL pattern - detects when someone put a README link in the issue_url field
             # Matches: repo root URLs, blob URLs (files), tree URLs (directories)
             README_URL_PATTERN = re.compile(
-                r'^https?://(?:gitlab|github)\.com/[^/]+/[^/]+(?:/-/(?:blob|tree)/|/?(?:\?|#|$))',
+                r'^https?://gitlab\.com/[^/]+/[^/]+(?:/-/(?:blob|tree)/|/?(?:\?|#|$))',
                 re.IGNORECASE
             )
             
@@ -2446,13 +2446,10 @@ class TrackerCog(commands.Cog, name="Tracker"):
                         
                         if file_path:
                             # Fetch the specific file from the URL
-                            readme_content = gitlab_service.fetch_file_content(repo_path, file_path, platform)
+                            readme_content = gitlab_service.fetch_file_content(repo_path, file_path)
                         else:
                             # Fall back to fetching README.md from root
-                            if platform == "github":
-                                readme_content = gitlab_service.fetch_readme_from_github(repo_path)
-                            else:
-                                readme_content = gitlab_service.fetch_readme(repo_path)
+                            readme_content = gitlab_service.fetch_readme(repo_path)
                         
                         break  # Success, exit retry loop
                         
@@ -3046,6 +3043,1233 @@ class TrackerCog(commands.Cog, name="Tracker"):
             f"• Total Students: {len(all_students)}\n"
             f"• With Issues: {has_issue_count}\n"
             f"• Without Issues: {no_issue_count}\n"
+            f"• Needs Attention: {needs_attention_count}\n"
+        )
+        
+        await ctx.send(summary, file=discord.File(io.BytesIO(csv_content), filename=filename))
+    
+    # ==================== Merge Request Tracking Commands ====================
+    
+    @commands.command(name='no_mr')
+    async def no_mr(self, ctx: commands.Context, action: str = None):
+        """Show MR status from validated data or run validation.
+        
+        Usage: 
+            !tracker no_mr           - Show MR status from validated data
+            !tracker no_mr validate  - Crawl READMEs to find/validate MR URLs
+        
+        The default command requires running 'validate' first to generate data.
+        """
+        if action and action.lower() == 'validate':
+            await self._validate_no_mrs(ctx)
+            return
+        
+        # Default: show from validated JSON
+        await self._show_validated_mrs(ctx)
+    
+    async def _show_validated_mrs(self, ctx: commands.Context):
+        """Show MR status from the validated MRs JSON file."""
+        import json
+        import os
+        
+        results_file = os.path.join('data', 'uploads', '_validated_mrs.json')
+        
+        # Check if file exists
+        if not os.path.exists(results_file):
+            await ctx.send(
+                "❌ **No validated MR data found.**\n\n"
+                "Run `!tracker no_mr validate` first to crawl READMEs and validate MR URLs."
+            )
+            return
+        
+        # Load the validated data
+        try:
+            with open(results_file, 'r') as f:
+                data = json.load(f)
+        except Exception as e:
+            await ctx.send(f"❌ **Error reading validated MRs file:** {str(e)}")
+            return
+        
+        validated_at = data.get('validated_at', 'Unknown')
+        
+        # Show info about cached data
+        await ctx.send(
+            f"📋 **Validated MR Data**\n"
+            f"Last validated: `{validated_at}`\n\n"
+            f"Showing results from cached data. Run `!tracker no_mr validate` to refresh.\n"
+            f"─────────────────────────────"
+        )
+        
+        # Extract data
+        students_with_valid_mr = data.get('students_with_valid_mr', {})
+        students_with_invalid_mr = data.get('students_with_invalid_mr', {})
+        readme_url_in_mr_field = data.get('readme_url_in_mr_field', {})
+        mr_url_in_readme_link = data.get('mr_url_in_readme_link', {})
+        mrs_found = data.get('mrs_found', {})
+        no_mr_in_readme = data.get('no_mr_in_readme', {})
+        readme_inaccessible = data.get('readme_inaccessible', {})
+        readme_timeout = data.get('readme_timeout', {})
+        mr_author_mismatch = data.get('mr_author_mismatch', {})
+        
+        # Count totals
+        total_with_mrs = len(students_with_valid_mr) + len(mr_url_in_readme_link) + len(mrs_found)
+        
+        # Students WITHOUT MRs
+        students_without_mrs: dict = {}
+        for mid, info in no_mr_in_readme.items():
+            if mid not in students_with_valid_mr and mid not in mr_url_in_readme_link and mid not in mrs_found:
+                students_without_mrs[mid] = {
+                    'name': info['name'],
+                    'readme_link': info.get('readme_link', '')
+                }
+        
+        # Build report
+        report = ["📊 **MR Status Summary**\n"]
+        report.append(f"**Students with MRs:** {total_with_mrs}")
+        report.append(f"**Students without MRs:** {len(students_without_mrs)}")
+        attention_count = len(students_with_invalid_mr) + len(readme_url_in_mr_field) + len(mr_author_mismatch) + len(readme_inaccessible) + len(readme_timeout)
+        report.append(f"**Needs Attention:** {attention_count}\n")
+        
+        # Section 1: Students with explicit MR URL (from typeform)
+        if students_with_valid_mr:
+            report.append("**📝 Students With Explicit MR URL (Typeform):**")
+            for mid, info in sorted(students_with_valid_mr.items(), key=lambda x: x[1]['name'].lower()):
+                report.append(f"• **{info['name']}** (`{mid}`)")
+                report.append(f"  └─ MR: <{info['mr_url']}>")
+                expected = info.get('expected_author', '')
+                actual = info.get('actual_author', '')
+                if expected and actual:
+                    match_icon = "✅" if info.get('author_match') else "⚠️"
+                    report.append(f"  └─ {match_icon} Expected: `{expected}` | Actual: `{actual}`")
+                    if info.get('alternate_mr'):
+                        report.append(f"  └─ 🔄 Alt MR in README: <{info['alternate_mr']}>")
+            report.append("")
+        
+        # Section 2: MR URLs in README field (wrong field)
+        if mr_url_in_readme_link:
+            report.append("**⚠️ MR URL in README Field (wrong field!):**")
+            for mid, info in sorted(mr_url_in_readme_link.items(), key=lambda x: x[1]['name'].lower()):
+                report.append(f"• **{info['name']}** (`{mid}`)")
+                report.append(f"  └─ MR: <{info['mr_url']}>")
+                expected = info.get('expected_author', '')
+                actual = info.get('actual_author', '')
+                if expected and actual:
+                    match_icon = "✅" if info.get('author_match') else "⚠️"
+                    report.append(f"  └─ {match_icon} Expected: `{expected}` | Actual: `{actual}`")
+            report.append("")
+        
+        # Section 3: MRs found in README (crawled)
+        if mrs_found:
+            report.append("**🔗 MRs Found in README (Crawled):**")
+            for mid, info in sorted(mrs_found.items(), key=lambda x: x[1]['name'].lower()):
+                note = info.get('note', '')
+                report.append(f"• **{info['name']}** (`{mid}`)")
+                if note:
+                    report.append(f"  └─ MR: <{info['mr_url']}> *(corrected)*")
+                else:
+                    report.append(f"  └─ MR: <{info['mr_url']}>")
+                expected = info.get('expected_author', '')
+                actual = info.get('actual_author', '')
+                if expected and actual:
+                    match_icon = "✅" if info.get('author_match') else "⚠️"
+                    report.append(f"  └─ {match_icon} Expected: `{expected}` | Actual: `{actual}`")
+            report.append("")
+        
+        # Section 4: Students WITHOUT MRs
+        if students_without_mrs:
+            report.append("**❌ Students Without MR URLs:**")
+            for mid, info in sorted(students_without_mrs.items(), key=lambda x: x[1]['name'].lower()):
+                report.append(f"• **{info['name']}** (`{mid}`)")
+                if info.get('readme_link'):
+                    report.append(f"  └─ README: <{info['readme_link']}>")
+            report.append("")
+        
+        # Send main report in chunks
+        full_report = "\n".join(report)
+        if len(full_report) <= 2000:
+            await ctx.send(full_report)
+        else:
+            chunks = []
+            current = ""
+            for line in report:
+                if len(current) + len(line) + 1 > 1900:
+                    chunks.append(current)
+                    current = line
+                else:
+                    current += "\n" + line if current else line
+            if current:
+                chunks.append(current)
+            for chunk in chunks:
+                await ctx.send(chunk)
+        
+        # Section 3: Needs Attention
+        needs_attention = []
+        
+        # README URLs put in mr_url field
+        if readme_url_in_mr_field:
+            needs_attention.append("**⚠️ README URL in MR Field (wrong field!):**")
+            needs_attention.append("*(These students put a README/repo link in the MR URL field)*")
+            for mid, info in sorted(readme_url_in_mr_field.items(), key=lambda x: x[1]['name'].lower()):
+                needs_attention.append(f"• **{info['name']}** (`{mid}`)")
+                needs_attention.append(f"  └─ README: <{info.get('readme_url', 'N/A')}>")
+            needs_attention.append("")
+        
+        # Invalid MR URLs
+        if students_with_invalid_mr:
+            needs_attention.append("**⚠️ Invalid MR URLs:**")
+            needs_attention.append("*(Expected: gitlab.com/.../merge_requests/{num})*")
+            for mid, info in sorted(students_with_invalid_mr.items(), key=lambda x: x[1]['name'].lower()):
+                needs_attention.append(f"• **{info['name']}** (`{mid}`)")
+                needs_attention.append(f"  └─ <{info['mr_url']}>")
+            needs_attention.append("")
+        
+        # MR author mismatch
+        if mr_author_mismatch:
+            needs_attention.append("**⚠️ MR Author Mismatch (not student's MR!):**")
+            needs_attention.append("*(The MR was authored by someone else, no student MR found in README)*")
+            for mid, info in sorted(mr_author_mismatch.items(), key=lambda x: x[1]['name'].lower()):
+                needs_attention.append(f"• **{info['name']}** (`{mid}`) - Expected: `{info['expected_author']}`")
+                all_mrs_details = info.get('all_mrs_details', [])
+                if all_mrs_details:
+                    for i, mr_detail in enumerate(all_mrs_details, 1):
+                        needs_attention.append(f"  └─ MR {i}: <{mr_detail['url']}> by `{mr_detail['author']}`")
+                else:
+                    needs_attention.append(f"  └─ MR: <{info['mr_url']}> by `{info['actual_author']}`")
+            needs_attention.append("")
+        
+        # Inaccessible READMEs
+        if readme_inaccessible:
+            needs_attention.append("**⚠️ Inaccessible READMEs:**")
+            for mid, info in sorted(readme_inaccessible.items(), key=lambda x: x[1]['name'].lower()):
+                needs_attention.append(f"• **{info['name']}** (`{mid}`)")
+                needs_attention.append(f"  └─ <{info.get('readme_link', 'N/A')}>")
+                needs_attention.append(f"  └─ Error: {info.get('error', 'Unknown')}")
+            needs_attention.append("")
+        
+        # Timed out READMEs
+        if readme_timeout:
+            needs_attention.append("**⏱️ Timed Out (retry later):**")
+            for mid, info in sorted(readme_timeout.items(), key=lambda x: x[1]['name'].lower()):
+                needs_attention.append(f"• **{info['name']}** (`{mid}`)")
+                needs_attention.append(f"  └─ <{info.get('readme_link', 'N/A')}>")
+            needs_attention.append("")
+        
+        if needs_attention:
+            await ctx.send("─────────────────────────────")
+            attention_text = "\n".join(needs_attention)
+            if len(attention_text) <= 2000:
+                await ctx.send(attention_text)
+            else:
+                chunks = []
+                current = ""
+                for line in needs_attention:
+                    if len(current) + len(line) + 1 > 1900:
+                        chunks.append(current)
+                        current = line
+                    else:
+                        current += "\n" + line if current else line
+                if current:
+                    chunks.append(current)
+                for chunk in chunks:
+                    await ctx.send(chunk)
+    
+    async def _validate_no_mrs(self, ctx: commands.Context):
+        """Crawl READMEs to find MR URLs for students without one.
+        
+        For each student without an mr_url, fetches their README and extracts
+        the latest MR URL found. Results are persisted to a JSON file.
+        """
+        import csv
+        import json
+        import re
+        import os
+        from services.tracker_processor import _preprocess_typeform_csv
+        from services.gitlab_service import GitLabService
+        
+        typeform_file = self.storage.get_file("typeform")
+        if not typeform_file:
+            await ctx.send("❌ **No typeform data uploaded.** Upload typeform CSV first with `!tracker upload typeform`")
+            return
+        
+        typeform_data = self.storage.read_file(typeform_file)
+        
+        # Load master CSV to get GitLab usernames for author validation
+        master_file = self.storage.get_file("master")
+        gitlab_lookup: dict = {}  # member_id -> gitlab_username
+        
+        if master_file:
+            master_data = self.storage.read_file(master_file)
+            master_text = master_data.decode('utf-8-sig')
+            
+            # Find header row
+            lines = master_text.splitlines()
+            header_idx = 0
+            for i, line in enumerate(lines):
+                if 'member id' in line.lower():
+                    header_idx = i
+                    break
+            
+            master_csv_text = '\n'.join(lines[header_idx:])
+            try:
+                dialect = csv.Sniffer().sniff(master_csv_text[:4096], delimiters=',\t;|')
+            except csv.Error:
+                dialect = 'excel'
+            
+            master_reader = csv.DictReader(io.StringIO(master_csv_text), dialect=dialect)
+            master_rows = list(master_reader)
+            
+            if master_rows:
+                master_headers = list(master_rows[0].keys())
+                
+                # Find columns
+                master_member_id_col = next((h for h in master_headers if 'member id' in h.lower() or h.lower() == 'member_id'), None)
+                gitlab_col = next((h for h in master_headers if 'gitlab' in h.lower() or 'github' in h.lower()), None)
+                
+                if master_member_id_col and gitlab_col:
+                    for row in master_rows:
+                        mid = str(row.get(master_member_id_col, "")).strip()
+                        gitlab_username = str(row.get(gitlab_col, "")).strip().lower()
+                        # Strip @ prefix if present (master CSV may have @username format)
+                        if gitlab_username.startswith('@'):
+                            gitlab_username = gitlab_username[1:]
+                        if mid and gitlab_username and gitlab_username not in ['', 'n/a', '#n/a']:
+                            gitlab_lookup[mid] = gitlab_username
+                    
+                    print(f"[MR Validate] Built GitLab lookup with {len(gitlab_lookup)} entries")
+        
+        await ctx.send("🔍 **Validating MR URLs - crawling READMEs for missing MRs...**")
+        
+        try:
+            # Parse typeform CSV
+            text = typeform_data.decode('utf-8-sig')
+            text = _preprocess_typeform_csv(text)
+            
+            try:
+                dialect = csv.Sniffer().sniff(text[:4096], delimiters=',\t;|')
+            except csv.Error:
+                dialect = 'excel'
+            
+            reader = csv.DictReader(io.StringIO(text), dialect=dialect)
+            rows = list(reader)
+            
+            if not rows:
+                await ctx.send("❌ **Typeform CSV is empty.**")
+                return
+            
+            # Find relevant columns
+            headers = list(rows[0].keys())
+            
+            member_id_col = next((h for h in headers if "member id" in h.lower() or h.lower() == "member_id"), None)
+            name_col = next((h for h in headers if "name" in h.lower() and "discord" not in h.lower() and "username" not in h.lower()), None)
+            mr_col = next((h for h in headers if "merge request" in h.lower() or "mr url" in h.lower() or "mr_url" in h.lower() or "direct link to your merge request" in h.lower()), None)
+            readme_col = next((h for h in headers if "readme" in h.lower() and "link" in h.lower()), None)
+            
+            if not member_id_col:
+                await ctx.send(f"❌ **Could not find Member ID column.**")
+                return
+            if not readme_col:
+                await ctx.send(f"❌ **Could not find README link column.**")
+                return
+            if not mr_col:
+                await ctx.send(f"❌ **Could not find MR URL column.**\n\nSearched for columns containing 'merge request', 'mr url', 'mr_url'\n\nAvailable columns: {', '.join(headers[:15])}...")
+                return
+            
+            # Valid MR URL pattern
+            VALID_MR_URL_PATTERN = re.compile(
+                r'^https?://gitlab\.com/[^/]+(?:/[^/]+)*/-/merge_requests/\d+(?:#[a-zA-Z0-9_-]+)?(?:\?[^#]*)?$',
+                re.IGNORECASE
+            )
+            
+            # README/repo URL pattern
+            README_URL_PATTERN = re.compile(
+                r'^https?://gitlab\.com/[^/]+/[^/]+(?:/-/(?:blob|tree)/|/?(?:\?|#|$))',
+                re.IGNORECASE
+            )
+            
+            # Collect students with and without mr_url
+            students_no_mr: dict = {}
+            students_with_valid_mr: dict = {}
+            students_with_invalid_mr: dict = {}
+            readme_url_in_mr_field: dict = {}
+            mr_url_in_readme_link: dict = {}
+            mr_author_mismatch: dict = {}  # MR author doesn't match student's GitLab username
+            
+            # Pattern for extracting repo path and IID from MR URL
+            MR_EXTRACT_PATTERN = re.compile(
+                r'https?://gitlab\.com/([^/]+(?:/[^/]+)*)/-/merge_requests/(\d+)',
+                re.IGNORECASE
+            )
+            
+            for row in rows:
+                member_id = str(row.get(member_id_col, "")).strip()
+                if not member_id or member_id.lower() in ['#n/a', 'n/a', '']:
+                    continue
+                
+                name = str(row.get(name_col, "")).strip() if name_col else "Unknown"
+                mr_url = str(row.get(mr_col, "")).strip() if mr_col else ""
+                readme_link = str(row.get(readme_col, "")).strip() if readme_col else ""
+                
+                # Track students who already have mr_url
+                if mr_url and mr_url.lower() not in ['', 'n/a', '#n/a', 'none']:
+                    if VALID_MR_URL_PATTERN.match(mr_url):
+                        students_with_valid_mr[member_id] = {'name': name, 'mr_url': mr_url}
+                    elif README_URL_PATTERN.match(mr_url):
+                        readme_url_in_mr_field[member_id] = {
+                            'name': name,
+                            'readme_url': mr_url,
+                            'note': 'README/repo URL was incorrectly placed in MR URL field'
+                        }
+                    else:
+                        students_with_invalid_mr[member_id] = {'name': name, 'mr_url': mr_url}
+                    continue
+                
+                # Check if readme_link is actually an MR URL
+                if readme_link and VALID_MR_URL_PATTERN.match(readme_link):
+                    mr_url_in_readme_link[member_id] = {
+                        'name': name,
+                        'mr_url': readme_link,
+                        'readme_link': readme_link,
+                        'note': 'MR URL was incorrectly placed in README link field'
+                    }
+                    continue
+                
+                # Store/update
+                if readme_link:
+                    students_no_mr[member_id] = {'name': name, 'readme_link': readme_link}
+            
+            if not students_no_mr:
+                await ctx.send("✅ **All students have MR URLs!** Nothing to validate.")
+                return
+            
+            await ctx.send(f"📊 Found **{len(students_no_mr)}** students without MR URL. Crawling their READMEs...")
+            
+            # Initialize GitLab service
+            gitlab_service = GitLabService()
+            
+            # MR URL pattern for extracting from README
+            MR_PATTERN = re.compile(
+                r'https?://gitlab\.com/[^/]+(?:/[^/]+)*/-/merge_requests/\d+(?:#[a-zA-Z0-9_-]+)?',
+                re.IGNORECASE
+            )
+            
+            # Results tracking
+            mrs_found: dict = {}
+            readme_inaccessible: dict = {}
+            readme_timeout: dict = {}
+            no_mr_in_readme: dict = {}
+            
+            processed = 0
+            total = len(students_no_mr)
+            
+            API_DELAY = 1.0
+            MAX_RETRIES = 3
+            
+            for member_id, info in students_no_mr.items():
+                processed += 1
+                name = info['name']
+                readme_link = info['readme_link']
+                
+                if processed % 10 == 0:
+                    await ctx.send(f"⏳ Progress: {processed}/{total} READMEs checked...")
+                
+                repo_path, platform = gitlab_service.extract_repo_from_readme_link(readme_link)
+                
+                if not repo_path:
+                    readme_inaccessible[member_id] = {
+                        'name': name,
+                        'readme_link': readme_link,
+                        'error': 'Could not extract repo path from URL'
+                    }
+                    continue
+                
+                file_path = gitlab_service.extract_file_path_from_url(readme_link)
+                
+                import socket
+                import ssl
+                import time
+                
+                readme_content = None
+                last_error = None
+                
+                for attempt in range(MAX_RETRIES):
+                    try:
+                        if attempt > 0 or processed > 1:
+                            await asyncio.sleep(API_DELAY)
+                        
+                        if file_path:
+                            readme_content = gitlab_service.fetch_file_content(repo_path, file_path)
+                        
+                        if not readme_content:
+                            readme_content = gitlab_service.fetch_readme(repo_path)
+                        
+                        if readme_content:
+                            break
+                            
+                    except (socket.timeout, ssl.SSLError, TimeoutError) as e:
+                        last_error = f"Timeout (attempt {attempt + 1})"
+                        continue
+                    except Exception as e:
+                        last_error = str(e)
+                        break
+                
+                if not readme_content:
+                    if last_error and "timeout" in last_error.lower():
+                        readme_timeout[member_id] = {
+                            'name': name,
+                            'readme_link': readme_link,
+                            'attempts': MAX_RETRIES
+                        }
+                    else:
+                        readme_inaccessible[member_id] = {
+                            'name': name,
+                            'readme_link': readme_link,
+                            'error': last_error or 'README not found or empty'
+                        }
+                    continue
+                
+                # Find MR URLs in README
+                all_mrs_found = MR_PATTERN.findall(readme_content)
+                
+                if all_mrs_found:
+                    latest_mr = all_mrs_found[-1]
+                    mrs_found[member_id] = {
+                        'name': name,
+                        'readme_link': readme_link,
+                        'mr_url': latest_mr,
+                        'all_mrs_found': all_mrs_found,
+                        'source': 'readme'
+                    }
+                else:
+                    no_mr_in_readme[member_id] = {
+                        'name': name,
+                        'readme_link': readme_link
+                    }
+            
+            # Validate MR authors if we have GitLab username lookup
+            if gitlab_lookup:
+                # Collect all MRs to verify: (member_id, mr_url, name, source, all_mrs)
+                mrs_to_verify = []
+                
+                # From students_with_valid_mr (typeform)
+                for mid, info in list(students_with_valid_mr.items()):
+                    # Check if we also have README MRs for this student (from students_no_mr crawl)
+                    all_mrs = mrs_found.get(mid, {}).get('all_mrs_found', [])
+                    mrs_to_verify.append((mid, info['mr_url'], info['name'], 'typeform', all_mrs))
+                
+                # From mrs_found (README)
+                for mid, info in list(mrs_found.items()):
+                    if mid not in students_with_valid_mr:  # Don't duplicate
+                        mrs_to_verify.append((mid, info['mr_url'], info['name'], 'readme', info.get('all_mrs_found', [])))
+                
+                # From mr_url_in_readme_link (MR URL in README field - still valid MR)
+                for mid, info in list(mr_url_in_readme_link.items()):
+                    mrs_to_verify.append((mid, info['mr_url'], info['name'], 'readme_field', []))
+                
+                await ctx.send(f"🔍 **Validating MR authors for {len(mrs_to_verify)} MRs...**")
+                
+                verified_count = 0
+                mismatch_count = 0
+                found_alternate_count = 0
+                total_to_verify = len(mrs_to_verify)
+                
+                for idx, (mid, mr_url, name, source, all_mrs) in enumerate(mrs_to_verify, 1):
+                    if idx % 20 == 0:
+                        await ctx.send(f"⏳ Progress: {idx}/{total_to_verify} MRs checked...")
+                    
+                    expected_gitlab = gitlab_lookup.get(mid, "")
+                    
+                    if not expected_gitlab:
+                        continue  # No GitLab username to compare against
+                    
+                    # Extract repo path and MR IID from URL
+                    mr_match = MR_EXTRACT_PATTERN.search(mr_url)
+                    if not mr_match:
+                        continue
+                    
+                    repo_path = mr_match.group(1)
+                    mr_iid = mr_match.group(2)
+                    
+                    # Add delay to avoid rate limiting
+                    await asyncio.sleep(0.5)
+                    
+                    try:
+                        mr_data = gitlab_service.verify_merge_request(repo_path, mr_iid)
+                        
+                        if mr_data.get('exists'):
+                            actual_author = mr_data.get('author', '').lower()
+                            verified_count += 1
+                            
+                            # Store validation result for all sources
+                            validation_info = {
+                                'expected_author': expected_gitlab,
+                                'actual_author': actual_author,
+                                'author_match': actual_author == expected_gitlab
+                            }
+                            
+                            if actual_author and actual_author != expected_gitlab:
+                                # Primary MR has wrong author - scan all_mrs_found backwards to find one they authored
+                                found_student_mr = None
+                                all_mrs_details = []  # Track all MRs checked with their authors
+                                
+                                # Add the primary MR to the list
+                                all_mrs_details.append({
+                                    'url': mr_url,
+                                    'author': actual_author
+                                })
+                                
+                                if all_mrs:
+                                    # Scan backwards (latest first), skip the one we already checked
+                                    checked_urls = {mr_url.lower().rstrip('/')}
+                                    for alt_mr_url in reversed(all_mrs):
+                                        alt_normalized = alt_mr_url.lower().rstrip('/')
+                                        if alt_normalized in checked_urls:
+                                            continue
+                                        checked_urls.add(alt_normalized)
+                                        
+                                        alt_match = MR_EXTRACT_PATTERN.search(alt_mr_url)
+                                        if not alt_match:
+                                            continue
+                                        
+                                        alt_repo = alt_match.group(1)
+                                        alt_iid = alt_match.group(2)
+                                        
+                                        await asyncio.sleep(0.3)
+                                        
+                                        try:
+                                            alt_mr_data = gitlab_service.verify_merge_request(alt_repo, alt_iid)
+                                            if alt_mr_data.get('exists'):
+                                                alt_author = alt_mr_data.get('author', '').lower()
+                                                all_mrs_details.append({
+                                                    'url': alt_mr_url,
+                                                    'author': alt_author
+                                                })
+                                                if alt_author == expected_gitlab:
+                                                    found_student_mr = {
+                                                        'url': alt_mr_url,
+                                                        'title': alt_mr_data.get('title', ''),
+                                                        'author': alt_author
+                                                    }
+                                                    break
+                                        except Exception:
+                                            continue
+                                
+                                if found_student_mr:
+                                    # Found an MR the student actually authored - update their record
+                                    found_alternate_count += 1
+                                    print(f"[MR Validate] Found alternate MR for {name}: {found_student_mr['url']}")
+                                    
+                                    if source == 'typeform' and mid in students_with_valid_mr:
+                                        # Keep in valid but note we found a different one in README
+                                        students_with_valid_mr[mid]['alternate_mr'] = found_student_mr['url']
+                                        students_with_valid_mr[mid]['note'] = f"Typeform MR by {actual_author}, but found student's MR in README"
+                                        students_with_valid_mr[mid].update(validation_info)
+                                    elif source == 'readme' and mid in mrs_found:
+                                        # Update to the correct MR
+                                        mrs_found[mid]['mr_url'] = found_student_mr['url']
+                                        mrs_found[mid]['original_mr'] = mr_url
+                                        mrs_found[mid]['note'] = f"Original MR by {actual_author}, updated to student's MR"
+                                        mrs_found[mid]['expected_author'] = expected_gitlab
+                                        mrs_found[mid]['actual_author'] = found_student_mr['author']
+                                        mrs_found[mid]['author_match'] = True
+                                    elif source == 'readme_field' and mid in mr_url_in_readme_link:
+                                        mr_url_in_readme_link[mid]['alternate_mr'] = found_student_mr['url']
+                                        mr_url_in_readme_link[mid].update(validation_info)
+                                else:
+                                    # No alternate found - mark as mismatch
+                                    mismatch_count += 1
+                                    mr_author_mismatch[mid] = {
+                                        'name': name,
+                                        'mr_url': mr_url,
+                                        'expected_author': expected_gitlab,
+                                        'actual_author': actual_author,
+                                        'mr_title': mr_data.get('title', ''),
+                                        'source': source,
+                                        'all_mrs_checked': len(all_mrs_details),
+                                        'all_mrs_details': all_mrs_details  # Store all MRs with authors
+                                    }
+                                    
+                                    # Remove from original category
+                                    if source == 'typeform' and mid in students_with_valid_mr:
+                                        del students_with_valid_mr[mid]
+                                    elif source == 'readme' and mid in mrs_found:
+                                        del mrs_found[mid]
+                                    elif source == 'readme_field' and mid in mr_url_in_readme_link:
+                                        del mr_url_in_readme_link[mid]
+                            else:
+                                # Author matches - store validation info
+                                if source == 'typeform' and mid in students_with_valid_mr:
+                                    students_with_valid_mr[mid].update(validation_info)
+                                elif source == 'readme' and mid in mrs_found:
+                                    mrs_found[mid].update(validation_info)
+                                elif source == 'readme_field' and mid in mr_url_in_readme_link:
+                                    mr_url_in_readme_link[mid].update(validation_info)
+                    except Exception as e:
+                        print(f"[MR Validate] Error verifying MR for {name}: {e}")
+                
+                print(f"[MR Validate] Verified {verified_count} MRs, found {mismatch_count} author mismatches, {found_alternate_count} corrected via README scan")
+            else:
+                found_alternate_count = 0
+            
+            # Save results to JSON
+            from datetime import datetime
+            results = {
+                'validated_at': datetime.now().isoformat(),
+                'students_with_valid_mr': students_with_valid_mr,
+                'students_with_invalid_mr': students_with_invalid_mr,
+                'readme_url_in_mr_field': readme_url_in_mr_field,
+                'mr_url_in_readme_link': mr_url_in_readme_link,
+                'mrs_found': mrs_found,
+                'no_mr_in_readme': no_mr_in_readme,
+                'readme_inaccessible': readme_inaccessible,
+                'readme_timeout': readme_timeout,
+                'mr_author_mismatch': mr_author_mismatch
+            }
+            
+            results_file = os.path.join('data', 'uploads', '_validated_mrs.json')
+            with open(results_file, 'w') as f:
+                json.dump(results, f, indent=2)
+            
+            # Build report
+            report = ["✅ **README Validation Complete (MRs)**\n"]
+            report.append(f"📊 **Summary:**")
+            report.append(f"• Valid MR URL: **{len(students_with_valid_mr)}**")
+            report.append(f"• ⚠️ Invalid MR URL: **{len(students_with_invalid_mr)}**")
+            report.append(f"• ⚠️ README URL in MR field: **{len(readme_url_in_mr_field)}** (wrong field)")
+            report.append(f"• ⚠️ MR URL in README field: **{len(mr_url_in_readme_link)}** (wrong field)")
+            report.append(f"• ⚠️ MR author mismatch: **{len(mr_author_mismatch)}** (not student's MR)")
+            if found_alternate_count > 0:
+                report.append(f"• ✅ Auto-corrected: **{found_alternate_count}** (found student's MR in README)")
+            report.append(f"• MRs found in README: **{len(mrs_found)}**")
+            report.append(f"• No MR in README: **{len(no_mr_in_readme)}**")
+            report.append(f"• README inaccessible: **{len(readme_inaccessible)}**")
+            report.append(f"• Timed out (can retry): **{len(readme_timeout)}**\n")
+            
+            # Students with INVALID MR URLs
+            if students_with_invalid_mr:
+                report.append("**❌ Students With INVALID MR URL:**")
+                report.append("*(Expected format: gitlab.com/.../merge_requests/{num})*")
+                for mid, data in sorted(students_with_invalid_mr.items(), key=lambda x: x[1]['name'].lower()):
+                    report.append(f"• **{data['name']}** (`{mid}`)")
+                    report.append(f"  └─ <{data['mr_url']}>")
+                report.append("")
+            
+            # README URLs in MR field
+            if readme_url_in_mr_field:
+                report.append("**⚠️ README URL in MR Field (wrong field!):**")
+                for mid, data in sorted(readme_url_in_mr_field.items(), key=lambda x: x[1]['name'].lower()):
+                    report.append(f"• **{data['name']}** (`{mid}`)")
+                    report.append(f"  └─ <{data['readme_url']}>")
+                report.append("")
+            
+            # Students with explicit MR URL (from typeform) - show validation status
+            if students_with_valid_mr:
+                report.append("**📝 Students With Explicit MR URL (Typeform):**")
+                for mid, data in sorted(students_with_valid_mr.items(), key=lambda x: x[1]['name'].lower()):
+                    report.append(f"• **{data['name']}** (`{mid}`)")
+                    report.append(f"  └─ MR: <{data['mr_url']}>")
+                    expected = data.get('expected_author', '')
+                    actual = data.get('actual_author', '')
+                    if expected and actual:
+                        match_icon = "✅" if data.get('author_match') else "⚠️"
+                        report.append(f"  └─ {match_icon} Expected: `{expected}` | Actual: `{actual}`")
+                        if data.get('alternate_mr'):
+                            report.append(f"  └─ 🔄 Alt MR in README: <{data['alternate_mr']}>")
+                    elif not expected:
+                        report.append(f"  └─ ℹ️ No GitLab username in master CSV")
+                report.append("")
+            
+            # MR URLs in README field (wrong field) - show validation status
+            if mr_url_in_readme_link:
+                report.append("**⚠️ MR URL in README Field (wrong field!):**")
+                for mid, data in sorted(mr_url_in_readme_link.items(), key=lambda x: x[1]['name'].lower()):
+                    report.append(f"• **{data['name']}** (`{mid}`)")
+                    report.append(f"  └─ MR: <{data['mr_url']}>")
+                    expected = data.get('expected_author', '')
+                    actual = data.get('actual_author', '')
+                    if expected and actual:
+                        match_icon = "✅" if data.get('author_match') else "⚠️"
+                        report.append(f"  └─ {match_icon} Expected: `{expected}` | Actual: `{actual}`")
+                        if data.get('alternate_mr'):
+                            report.append(f"  └─ 🔄 Alt MR in README: <{data['alternate_mr']}>")
+                report.append("")
+            
+            # MR author mismatch
+            if mr_author_mismatch:
+                report.append("**⚠️ MR Author Mismatch (not student's MR!):**")
+                report.append("*(The MR was authored by someone else, no student MR found in README)*")
+                for mid, data in sorted(mr_author_mismatch.items(), key=lambda x: x[1]['name'].lower()):
+                    report.append(f"• **{data['name']}** (`{mid}`) - Expected: `{data['expected_author']}`")
+                    all_mrs_details = data.get('all_mrs_details', [])
+                    if all_mrs_details:
+                        for i, mr_detail in enumerate(all_mrs_details, 1):
+                            report.append(f"  └─ MR {i}: <{mr_detail['url']}> by `{mr_detail['author']}`")
+                    else:
+                        report.append(f"  └─ MR: <{data['mr_url']}> by `{data['actual_author']}`")
+                report.append("")
+            
+            # MRs found in README (crawled)
+            if mrs_found:
+                report.append("**🔗 MRs Found in README (Crawled):**")
+                for mid, data in sorted(mrs_found.items(), key=lambda x: x[1]['name'].lower()):
+                    report.append(f"• **{data['name']}** (`{mid}`)")
+                    if data.get('note'):
+                        report.append(f"  └─ MR: <{data['mr_url']}> *(corrected)*")
+                    else:
+                        report.append(f"  └─ MR: <{data['mr_url']}>")
+                    expected = data.get('expected_author', '')
+                    actual = data.get('actual_author', '')
+                    if expected and actual:
+                        match_icon = "✅" if data.get('author_match') else "⚠️"
+                        report.append(f"  └─ {match_icon} Expected: `{expected}` | Actual: `{actual}`")
+                report.append("")
+            
+            # No MR in README
+            if no_mr_in_readme:
+                report.append("**❌ No MR Found in README:**")
+                for mid, data in sorted(no_mr_in_readme.items(), key=lambda x: x[1]['name'].lower()):
+                    report.append(f"• **{data['name']}** (`{mid}`)")
+                    report.append(f"  └─ README: <{data['readme_link']}>")
+                report.append("")
+            
+            # Send report in chunks
+            full_report = "\n".join(report)
+            if len(full_report) <= 2000:
+                await ctx.send(full_report)
+            else:
+                chunks = []
+                current = ""
+                for line in report:
+                    if len(current) + len(line) + 1 > 1900:
+                        chunks.append(current)
+                        current = line
+                    else:
+                        current += "\n" + line if current else line
+                if current:
+                    chunks.append(current)
+                for chunk in chunks:
+                    await ctx.send(chunk)
+            
+            # Report inaccessible READMEs
+            if readme_inaccessible:
+                inacc_report = ["**⚠️ Inaccessible READMEs:**"]
+                for mid, data in sorted(readme_inaccessible.items(), key=lambda x: x[1]['name'].lower()):
+                    inacc_report.append(f"• **{data['name']}** (`{mid}`)")
+                    inacc_report.append(f"  └─ Link: <{data['readme_link']}>")
+                    inacc_report.append(f"  └─ Error: {data['error']}")
+                
+                inacc_text = "\n".join(inacc_report)
+                if len(inacc_text) <= 2000:
+                    await ctx.send(inacc_text)
+                else:
+                    chunks = []
+                    current = ""
+                    for line in inacc_report:
+                        if len(current) + len(line) + 1 > 1900:
+                            chunks.append(current)
+                            current = line
+                        else:
+                            current += "\n" + line if current else line
+                    if current:
+                        chunks.append(current)
+                    for chunk in chunks:
+                        await ctx.send(chunk)
+            
+            # Report timed out READMEs
+            if readme_timeout:
+                timeout_report = ["**⏱️ READMEs Timed Out (can retry later):**"]
+                for mid, data in sorted(readme_timeout.items(), key=lambda x: x[1]['name'].lower()):
+                    timeout_report.append(f"• **{data['name']}** (`{mid}`)")
+                    timeout_report.append(f"  └─ Link: <{data['readme_link']}>")
+                    timeout_report.append(f"  └─ Attempts: {data['attempts']}")
+                
+                timeout_text = "\n".join(timeout_report)
+                if len(timeout_text) <= 2000:
+                    await ctx.send(timeout_text)
+                else:
+                    chunks = []
+                    current = ""
+                    for line in timeout_report:
+                        if len(current) + len(line) + 1 > 1900:
+                            chunks.append(current)
+                            current = line
+                        else:
+                            current += "\n" + line if current else line
+                    if current:
+                        chunks.append(current)
+                    for chunk in chunks:
+                        await ctx.send(chunk)
+            
+            await ctx.send(f"💾 Results saved to `{results_file}`")
+            
+        except Exception as e:
+            await ctx.send(f"❌ **Error validating:** {str(e)}")
+            print(f"[Tracker] Error in validate_no_mrs: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    @commands.command(name='dl_mr')
+    async def download_mrs(self, ctx: commands.Context):
+        """Download validated MRs as CSV with contact info.
+        
+        Usage: 
+            !tracker dl_mr
+        
+        Downloads a CSV with all students and their MR status:
+        Name, Member ID, Discord, Email, Phone, Status, MR URL, Source, Notes
+        """
+        import json
+        import os
+        import csv
+        from io import StringIO
+        from datetime import datetime
+        
+        results_file = os.path.join('data', 'uploads', '_validated_mrs.json')
+        
+        # Check if file exists
+        if not os.path.exists(results_file):
+            await ctx.send(
+                "❌ **No validated MR data found.**\n\n"
+                "Run `!tracker no_mr validate` first to generate the data."
+            )
+            return
+        
+        # Load the validated data
+        try:
+            with open(results_file, 'r') as f:
+                data = json.load(f)
+        except Exception as e:
+            await ctx.send(f"❌ **Error reading validated MRs file:** {str(e)}")
+            return
+        
+        validated_at = data.get('validated_at', 'Unknown')
+        await ctx.send(f"📥 **Exporting validated MRs to CSV...**\nData from: `{validated_at}`")
+        
+        # Build contact lookup from master CSV
+        contact_lookup: dict = {}
+        master_file = self.storage.get_file("master")
+        if master_file:
+            master_data = self.storage.read_file(master_file)
+            master_text = master_data.decode('utf-8-sig')
+            
+            lines = master_text.splitlines()
+            header_row_idx = None
+            for idx, line in enumerate(lines):
+                if "Member ID" in line or "member_id" in line.lower():
+                    header_row_idx = idx
+                    break
+            
+            if header_row_idx is not None:
+                master_text = "\n".join(lines[header_row_idx:])
+            
+            try:
+                m_dialect = csv.Sniffer().sniff(master_text[:4096], delimiters=',\t;|')
+            except csv.Error:
+                m_dialect = 'excel'
+            m_reader = csv.DictReader(io.StringIO(master_text), dialect=m_dialect)
+            m_rows = list(m_reader)
+            if m_rows:
+                m_headers = list(m_rows[0].keys())
+                m_member_col = next((h for h in m_headers if 'member' in h.lower() and 'id' in h.lower()), None)
+                m_email_col = next((h for h in m_headers if 'email' in h.lower() and 'secondary' not in h.lower()), None)
+                m_discord_col = next((h for h in m_headers if 'discord' in h.lower()), None)
+                
+                for row in m_rows:
+                    mid = str(row.get(m_member_col, "")).strip() if m_member_col else ""
+                    if mid and mid.lower() not in ['#n/a', 'n/a', '', 'member id']:
+                        contact_lookup[mid] = {
+                            'email': str(row.get(m_email_col, "")).strip() if m_email_col else "",
+                            'discord': str(row.get(m_discord_col, "")).strip() if m_discord_col else "",
+                            'phone': ""
+                        }
+        
+        # Add phone numbers from app CSV
+        app_file = self.storage.get_file("app")
+        if app_file:
+            app_data = self.storage.read_file(app_file)
+            app_text = app_data.decode('utf-8-sig')
+            
+            lines = app_text.splitlines()
+            header_row_idx = None
+            for idx, line in enumerate(lines):
+                if "Member ID" in line or "member_id" in line.lower():
+                    header_row_idx = idx
+                    break
+            
+            if header_row_idx is not None:
+                app_text = "\n".join(lines[header_row_idx:])
+            
+            try:
+                a_dialect = csv.Sniffer().sniff(app_text[:4096], delimiters=',\t;|')
+            except csv.Error:
+                a_dialect = 'excel'
+            a_reader = csv.DictReader(io.StringIO(app_text), dialect=a_dialect)
+            a_rows = list(a_reader)
+            if a_rows:
+                a_headers = list(a_rows[0].keys())
+                a_member_col = next((h for h in a_headers if 'member' in h.lower() and 'id' in h.lower()), None)
+                a_phone_col = next((h for h in a_headers if 'phone' in h.lower()), None)
+                
+                for row in a_rows:
+                    mid = str(row.get(a_member_col, "")).strip() if a_member_col else ""
+                    phone = str(row.get(a_phone_col, "")).strip() if a_phone_col else ""
+                    if mid and mid.lower() not in ['#n/a', 'n/a', '', 'member id'] and phone:
+                        if mid in contact_lookup:
+                            contact_lookup[mid]['phone'] = phone
+                        else:
+                            contact_lookup[mid] = {'email': '', 'discord': '', 'phone': phone}
+        
+        # Extract all categories from validated data
+        students_with_valid_mr = data.get('students_with_valid_mr', {})
+        students_with_invalid_mr = data.get('students_with_invalid_mr', {})
+        readme_url_in_mr_field = data.get('readme_url_in_mr_field', {})
+        mr_url_in_readme_link = data.get('mr_url_in_readme_link', {})
+        mrs_found = data.get('mrs_found', {})
+        no_mr_in_readme = data.get('no_mr_in_readme', {})
+        readme_inaccessible = data.get('readme_inaccessible', {})
+        readme_timeout = data.get('readme_timeout', {})
+        mr_author_mismatch = data.get('mr_author_mismatch', {})
+        
+        # Build list of all students with sort order
+        # Sort order: 1=Valid+Matching, 2=Valid+Mismatched/Unknown, 3=Wrong Field, 4=Invalid, 5=No MR, 6=Inaccessible
+        all_students: list = []
+        
+        # Category 1: Students with valid MR from typeform
+        for mid, info in students_with_valid_mr.items():
+            author_match = info.get('author_match', None)
+            expected = info.get('expected_author', '')
+            actual = info.get('actual_author', '')
+            
+            if author_match is True:
+                status = 'Valid (Author Verified)'
+                sort_order = 1
+                notes = f"Verified Author: {actual}"
+            elif author_match is False:
+                status = 'Valid (Author Mismatch)'
+                sort_order = 2
+                notes = f"Expected: {expected} | Actual: {actual}"
+                if info.get('alternate_mr'):
+                    notes += f" | Alt MR: {info['alternate_mr']}"
+            else:
+                status = 'Valid (Not Verified)'
+                sort_order = 2
+                notes = 'Author not verified (no GitLab username in master)'
+            
+            all_students.append({
+                'member_id': mid,
+                'name': info['name'],
+                'status': status,
+                'mr_url': info['mr_url'],
+                'source': 'Typeform',
+                'notes': notes,
+                'sort_order': sort_order
+            })
+        
+        # Category 2: MR URL in README link field (wrong field but valid MR)
+        for mid, info in mr_url_in_readme_link.items():
+            if any(s['member_id'] == mid for s in all_students):
+                continue
+            
+            author_match = info.get('author_match', None)
+            expected = info.get('expected_author', '')
+            actual = info.get('actual_author', '')
+            
+            if author_match is True:
+                status = 'Wrong Field (Author Verified)'
+                sort_order = 3
+                notes = f"MR in README field | Verified Author: {actual}"
+            elif author_match is False:
+                status = 'Wrong Field (Author Mismatch)'
+                sort_order = 3
+                notes = f"MR in README field | Expected: {expected} | Actual: {actual}"
+            else:
+                status = 'Wrong Field (Not Verified)'
+                sort_order = 3
+                notes = 'MR URL was placed in README link field'
+            
+            all_students.append({
+                'member_id': mid,
+                'name': info['name'],
+                'status': status,
+                'mr_url': info['mr_url'],
+                'source': 'README Link Field',
+                'notes': notes,
+                'sort_order': sort_order
+            })
+        
+        # Category 3: MRs found in README
+        for mid, info in mrs_found.items():
+            if any(s['member_id'] == mid for s in all_students):
+                continue
+            
+            author_match = info.get('author_match', None)
+            expected = info.get('expected_author', '')
+            actual = info.get('actual_author', '')
+            
+            if author_match is True:
+                status = 'Valid (Author Verified)'
+                sort_order = 1
+                notes = f"Verified Author: {actual}"
+                if info.get('note'):
+                    notes += f" | {info['note']}"
+            elif author_match is False:
+                status = 'Valid (Author Mismatch)'
+                sort_order = 2
+                notes = f"Expected: {expected} | Actual: {actual}"
+            else:
+                status = 'Valid (Not Verified)'
+                sort_order = 2
+                notes = 'Author not verified (no GitLab username in master)'
+            
+            all_students.append({
+                'member_id': mid,
+                'name': info['name'],
+                'status': status,
+                'mr_url': info['mr_url'],
+                'source': 'README',
+                'notes': notes,
+                'sort_order': sort_order
+            })
+        
+        # Category 4: README URL in MR field
+        for mid, info in readme_url_in_mr_field.items():
+            all_students.append({
+                'member_id': mid,
+                'name': info['name'],
+                'status': 'Invalid (README in MR Field)',
+                'mr_url': info.get('readme_url', ''),
+                'source': 'MR URL Field',
+                'notes': 'README/repo URL was placed in MR URL field',
+                'sort_order': 4
+            })
+        
+        # Category 5: Invalid MR URLs
+        for mid, info in students_with_invalid_mr.items():
+            all_students.append({
+                'member_id': mid,
+                'name': info['name'],
+                'status': 'Invalid MR URL',
+                'mr_url': info['mr_url'],
+                'source': 'Typeform',
+                'notes': 'URL does not match expected GitLab MR format',
+                'sort_order': 4
+            })
+        
+        # Category 6: MR author mismatch (not student's MR)
+        for mid, info in mr_author_mismatch.items():
+            # Build detailed notes with all MRs checked
+            all_mrs_details = info.get('all_mrs_details', [])
+            if all_mrs_details:
+                mrs_list = "; ".join([f"{mr['url']} by {mr['author']}" for mr in all_mrs_details])
+                notes = f"Expected: {info['expected_author']} | Checked: {mrs_list}"
+            else:
+                notes = f"Expected: {info['expected_author']} | Actual: {info['actual_author']}"
+            
+            all_students.append({
+                'member_id': mid,
+                'name': info['name'],
+                'status': 'Author Mismatch',
+                'mr_url': info['mr_url'],
+                'source': info.get('source', 'Unknown').title(),
+                'notes': notes,
+                'sort_order': 4
+            })
+        
+        # Category 7: No MR in README
+        for mid, info in no_mr_in_readme.items():
+            if any(s['member_id'] == mid for s in all_students):
+                continue
+            all_students.append({
+                'member_id': mid,
+                'name': info['name'],
+                'status': 'No MR Found',
+                'mr_url': '',
+                'source': 'README',
+                'notes': f"README: {info.get('readme_link', 'N/A')}",
+                'sort_order': 5
+            })
+        
+        # Category 8: Inaccessible READMEs
+        for mid, info in readme_inaccessible.items():
+            if any(s['member_id'] == mid for s in all_students):
+                continue
+            all_students.append({
+                'member_id': mid,
+                'name': info['name'],
+                'status': 'README Inaccessible',
+                'mr_url': '',
+                'source': 'N/A',
+                'notes': f"Error: {info.get('error', 'Unknown')} | README: {info.get('readme_link', 'N/A')}",
+                'sort_order': 6
+            })
+        
+        # Category 9: Timed out READMEs
+        for mid, info in readme_timeout.items():
+            if any(s['member_id'] == mid for s in all_students):
+                continue
+            all_students.append({
+                'member_id': mid,
+                'name': info['name'],
+                'status': 'README Timeout',
+                'mr_url': '',
+                'source': 'N/A',
+                'notes': f"Timed out after {info.get('attempts', 'N/A')} attempts | README: {info.get('readme_link', 'N/A')}",
+                'sort_order': 6
+            })
+        
+        # Build CSV
+        output = StringIO()
+        writer = csv.writer(output)
+        
+        # Header row
+        writer.writerow(['Name', 'Member ID', 'Discord', 'Email', 'Phone', 'Status', 'MR URL', 'Source', 'Notes'])
+        
+        # Sort by: 1) sort_order (valid+matching first), 2) status, 3) name
+        all_students.sort(key=lambda x: (x.get('sort_order', 99), x['status'], x['name'].lower()))
+        
+        # Data rows
+        for student in all_students:
+            contact = contact_lookup.get(student['member_id'], {})
+            writer.writerow([
+                student['name'],
+                student['member_id'],
+                contact.get('discord', ''),
+                contact.get('email', ''),
+                contact.get('phone', ''),
+                student['status'],
+                student['mr_url'],
+                student['source'],
+                student['notes']
+            ])
+        
+        # Count statistics based on new status values
+        valid_statuses = ['Valid (Author Verified)', 'Valid (Not Verified)', 'Valid (Author Mismatch)']
+        wrong_field_statuses = ['Wrong Field (Author Verified)', 'Wrong Field (Not Verified)', 'Wrong Field (Author Mismatch)']
+        no_mr_statuses = ['No MR Found', 'README Inaccessible', 'README Timeout']
+        
+        has_mr_count = sum(1 for s in all_students if s['status'] in valid_statuses + wrong_field_statuses)
+        no_mr_count = sum(1 for s in all_students if s['status'] in no_mr_statuses)
+        needs_attention_count = sum(1 for s in all_students if s['status'] not in valid_statuses + no_mr_statuses)
+        
+        # Add summary footer
+        writer.writerow([])
+        writer.writerow(['--- SUMMARY ---'])
+        writer.writerow([f'Total Students: {len(all_students)}'])
+        writer.writerow([f'With MRs: {has_mr_count}'])
+        writer.writerow([f'Without MRs: {no_mr_count}'])
+        writer.writerow([f'Needs Attention: {needs_attention_count}'])
+        writer.writerow([f'Data validated at: {validated_at}'])
+        
+        # Create file for Discord
+        csv_content = output.getvalue().encode('utf-8')
+        filename = f"mrs_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        
+        # Send summary and file
+        summary = (
+            f"✅ **Export Complete**\n\n"
+            f"📊 **Summary:**\n"
+            f"• Total Students: {len(all_students)}\n"
+            f"• With MRs: {has_mr_count}\n"
+            f"• Without MRs: {no_mr_count}\n"
             f"• Needs Attention: {needs_attention_count}\n"
         )
         

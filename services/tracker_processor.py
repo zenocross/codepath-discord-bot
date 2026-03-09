@@ -187,7 +187,7 @@ MASTER_CSV_COLUMNS = {
     "slack_username": ["Slack Username", "Slack", "slack_username"],
     "status": ["Status", "status"],
     "university": ["University", "university"],
-    "github": ["GitLab Username", "Github", "GitHub", "github", "gitlab_username"],
+    "gitlab": ["GitLab Username", "Github", "GitHub", "github", "gitlab_username"],
     "cohort": ["Cohort Name", "Cohort", "cohort"],
     "location": ["Location", "Section", "location"],
 }
@@ -815,17 +815,17 @@ class TrackerDataProcessor(FileProcessor):
                     validate_mrs = options.get('validate_mrs', False)
                     nofilter = options.get('nofilter', False)
                     
-                    # Build github username lookup from master CSV
-                    github_lookup = {}
+                    # Build GitLab username lookup from master CSV
+                    gitlab_lookup = {}
                     if master_data:
-                        github_lookup = self._build_github_lookup(master_data)
+                        gitlab_lookup = self._build_gitlab_lookup(master_data)
                     
                     self._enrich_with_gitlab(
                         students, gitlab_service, target_date,
                         validate_commits=validate_commits,
                         validate_mrs=validate_mrs,
                         nofilter=nofilter,
-                        github_lookup=github_lookup
+                        gitlab_lookup=gitlab_lookup
                     )
             
             # Create workbook
@@ -1438,16 +1438,16 @@ class TrackerDataProcessor(FileProcessor):
         except Exception as e:
             print(f"[TrackerProcessor] Error checking typeform-only students: {e}")
     
-    def _build_github_lookup(self, master_data: bytes) -> Dict[str, str]:
-        """Build a member_id -> github_username lookup from master roster CSV.
+    def _build_gitlab_lookup(self, master_data: bytes) -> Dict[str, str]:
+        """Build a member_id -> gitlab_username lookup from master roster CSV.
         
         Args:
             master_data: Raw bytes of master CSV file
             
         Returns:
-            Dict mapping member_id to github_username
+            Dict mapping member_id to gitlab_username
         """
-        github_lookup: Dict[str, str] = {}
+        gitlab_lookup: Dict[str, str] = {}
         
         try:
             text_data = master_data.decode('utf-8-sig')
@@ -1462,36 +1462,36 @@ class TrackerDataProcessor(FileProcessor):
             rows = list(csv_reader)
             
             if not rows:
-                return github_lookup
+                return gitlab_lookup
             
             headers = list(rows[0].keys())
             
             # Find member_id column
             member_id_col = self._find_column(headers, MASTER_CSV_COLUMNS["member_id"])
             if not member_id_col:
-                print("[TrackerProcessor] Master CSV: Member ID column not found for GitHub lookup")
-                return github_lookup
+                print("[TrackerProcessor] Master CSV: Member ID column not found for GitLab lookup")
+                return gitlab_lookup
             
-            # Find github username column
-            github_col = self._find_column(headers, MASTER_CSV_COLUMNS["github"])
-            if not github_col:
-                print("[TrackerProcessor] Master CSV: Github column not found")
-                return github_lookup
+            # Find gitlab username column
+            gitlab_col = self._find_column(headers, MASTER_CSV_COLUMNS["gitlab"])
+            if not gitlab_col:
+                print("[TrackerProcessor] Master CSV: GitLab column not found")
+                return gitlab_lookup
             
             # Build lookup
             for row in rows:
                 member_id = str(row.get(member_id_col, "")).strip()
-                github_username = str(row.get(github_col, "")).strip()
+                gitlab_username = str(row.get(gitlab_col, "")).strip()
                 
-                if member_id and github_username:
-                    github_lookup[member_id] = github_username.lower()
+                if member_id and gitlab_username:
+                    gitlab_lookup[member_id] = gitlab_username.lower()
             
-            print(f"[TrackerProcessor] Master CSV: Built GitHub lookup with {len(github_lookup)} entries")
+            print(f"[TrackerProcessor] Master CSV: Built GitLab lookup with {len(gitlab_lookup)} entries")
             
         except Exception as e:
-            print(f"[TrackerProcessor] Error parsing master CSV for GitHub lookup: {e}")
+            print(f"[TrackerProcessor] Error parsing master CSV for GitLab lookup: {e}")
         
-        return github_lookup
+        return gitlab_lookup
     
     def _enrich_with_gitlab(
         self,
@@ -1501,7 +1501,7 @@ class TrackerDataProcessor(FileProcessor):
         validate_commits: bool = False,
         validate_mrs: bool = False,
         nofilter: bool = False,
-        github_lookup: Optional[Dict[str, str]] = None
+        gitlab_lookup: Optional[Dict[str, str]] = None
     ) -> None:
         """Enrich student records with GitLab API data.
         
@@ -1517,7 +1517,7 @@ class TrackerDataProcessor(FileProcessor):
             validate_commits: Whether to validate commit ownership
             validate_mrs: Whether to validate MRs and README ownership
             nofilter: Just check existence without ownership validation
-            github_lookup: Dict mapping member_id to github username for ownership checks
+            gitlab_lookup: Dict mapping member_id to gitlab username for ownership checks
         """
         from datetime import timezone
         
@@ -1525,7 +1525,7 @@ class TrackerDataProcessor(FileProcessor):
         if not hasattr(current_date, 'tzinfo') or current_date.tzinfo is None:
             current_date = current_date.replace(tzinfo=timezone.utc)
         
-        github_lookup = github_lookup or {}
+        gitlab_lookup = gitlab_lookup or {}
         
         # Group students by readme_link to avoid duplicate API calls
         readme_to_students: Dict[str, List[StudentRecord]] = {}
@@ -1556,16 +1556,16 @@ class TrackerDataProcessor(FileProcessor):
         print(f"[TrackerProcessor] Enriching {len(readme_to_students)} unique README links with GitLab data (mode: {mode_str})...")
         
         for readme_link, student_list in readme_to_students.items():
-            # Get the mr_url and github username for ownership checks
+            # Get the mr_url and gitlab username for ownership checks
             mr_url = ""
-            student_github = ""
+            student_gitlab = ""
             student_member_id = ""
             for s in student_list:
                 if s.mr_url and str(s.mr_url).strip():
                     mr_url = str(s.mr_url).strip()
                 if s.member_id:
                     student_member_id = str(s.member_id).strip()
-                    student_github = github_lookup.get(student_member_id, "").lower()
+                    student_gitlab = gitlab_lookup.get(student_member_id, "").lower()
             
             # Fetch GitLab data with ownership info
             result = gitlab_service.enrich_student_data(
@@ -1575,7 +1575,7 @@ class TrackerDataProcessor(FileProcessor):
                 current_date=current_date,
                 validate_commits=True,  # Always fetch commit data
                 validate_mrs=True,  # Always fetch MR data
-                expected_owner=student_github if (validate_commits or validate_mrs) else None
+                expected_owner=student_gitlab if (validate_commits or validate_mrs) else None
             )
             
             if result.success:
@@ -1609,12 +1609,12 @@ class TrackerDataProcessor(FileProcessor):
                                     student.intervention_type = "MR_URL_MISMATCH"
                                 mr_mismatch_count += 1
                     
-                    # Get this student's github username
+                    # Get this student's gitlab username
                     s_member_id = str(student.member_id).strip() if student.member_id else ""
-                    s_github = github_lookup.get(s_member_id, "").lower()
+                    s_gitlab = gitlab_lookup.get(s_member_id, "").lower()
                     
                     # Ownership validation (validate_commits or validate_all)
-                    if (validate_commits or validate_mrs) and s_github:
+                    if (validate_commits or validate_mrs) and s_gitlab:
                         # Check if commits are on repos the student owns
                         if result.commits_not_owned > 0:
                             student.grade_status = "🔴 AT RISK"
@@ -1625,7 +1625,7 @@ class TrackerDataProcessor(FileProcessor):
                             ownership_flagged_count += 1
                     
                     # README location validation (validate_all only)
-                    if validate_mrs and s_github:
+                    if validate_mrs and s_gitlab:
                         # Check if README is on student's own repo
                         if not result.readme_owned_by_student:
                             student.grade_status = "🔴 AT RISK"

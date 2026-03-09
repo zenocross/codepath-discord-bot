@@ -31,9 +31,9 @@ MR_PATTERN = re.compile(
     re.IGNORECASE
 )
 
-# Pattern to extract repo path from README link (GitHub or GitLab)
+# Pattern to extract repo path from README link
 README_REPO_PATTERN = re.compile(
-    r'https?://(?:github|gitlab)\.com/([^/]+/[^/]+)',
+    r'https?://gitlab\.com/([^/]+/[^/]+)',
     re.IGNORECASE
 )
 
@@ -153,57 +153,6 @@ class GitLabService:
         
         return None
     
-    def fetch_readme_from_github(self, repo_path: str) -> Optional[str]:
-        """Fetch README.md content from a GitHub repository.
-        
-        Args:
-            repo_path: The full path to the repo (e.g., "username/project")
-        
-        Returns:
-            The README content as a string, or None if not found.
-        """
-        # First check if repo exists with a single API call
-        repo_check_url = f"https://api.github.com/repos/{repo_path}"
-        req = urllib.request.Request(repo_check_url)
-        req.add_header("Accept", "application/vnd.github.v3+json")
-        req.add_header("User-Agent", "Discord-Bot")
-        
-        try:
-            with urllib.request.urlopen(req, timeout=5) as response:
-                repo_data = json.loads(response.read().decode("utf-8"))
-                default_branch = repo_data.get("default_branch", "main")
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                return None  # Repo doesn't exist, skip all README checks
-            default_branch = "main"
-        except Exception:
-            default_branch = "main"
-        
-        # Try fetching README with default branch first, then fallback
-        readme_files = ["README.md", "readme.md"]
-        branches = [default_branch] if default_branch else ["main", "master"]
-        if default_branch and default_branch not in ["main", "master"]:
-            branches.append("main")
-        
-        for readme_name in readme_files:
-            for branch in branches:
-                api_url = f"https://api.github.com/repos/{repo_path}/contents/{readme_name}?ref={branch}"
-                
-                req = urllib.request.Request(api_url)
-                req.add_header("Accept", "application/vnd.github.v3+json")
-                req.add_header("User-Agent", "Discord-Bot")
-                
-                try:
-                    with urllib.request.urlopen(req, timeout=10) as response:
-                        data = json.loads(response.read().decode("utf-8"))
-                        if data and "content" in data:
-                            content = base64.b64decode(data["content"]).decode("utf-8")
-                            return content
-                except Exception:
-                    continue
-        
-        return None
-    
     def parse_gitlab_links(self, readme_content: str, owner_repo: Optional[str] = None) -> Dict[str, List[Dict]]:
         """Parse GitLab commit and MR links from README content.
         
@@ -302,24 +251,20 @@ class GitLabService:
             return {"iid": mr_iid, "exists": False, "state": "not_found"}
     
     def extract_repo_from_readme_link(self, readme_link: str) -> Tuple[Optional[str], str]:
-        """Extract repository path and platform from a README link.
+        """Extract repository path from a GitLab README link.
         
         Args:
-            readme_link: URL to a README file (GitHub or GitLab)
+            readme_link: URL to a README file on GitLab
         
         Returns:
-            Tuple of (repo_path, platform) where platform is 'github' or 'gitlab'
+            Tuple of (repo_path, platform) where platform is 'gitlab' or empty string
         """
         if not readme_link:
             return None, ""
         
         readme_link = readme_link.strip()
         
-        if "github.com" in readme_link.lower():
-            match = README_REPO_PATTERN.search(readme_link)
-            if match:
-                return match.group(1), "github"
-        elif "gitlab.com" in readme_link.lower():
+        if "gitlab.com" in readme_link.lower():
             match = README_REPO_PATTERN.search(readme_link)
             if match:
                 return match.group(1), "gitlab"
@@ -327,7 +272,7 @@ class GitLabService:
         return None, ""
     
     def extract_file_path_from_url(self, url: str) -> Optional[str]:
-        """Extract the file path from a GitLab or GitHub blob URL.
+        """Extract the file path from a GitLab blob URL.
         
         Args:
             url: Full URL to a file (e.g., https://gitlab.com/user/repo/-/blob/main/path/to/file.md)
@@ -345,28 +290,19 @@ class GitLabService:
         if gitlab_match:
             return gitlab_match.group(1)
         
-        # GitHub pattern: /blob/branch/path/to/file
-        github_match = re.search(r'/blob/[^/]+/(.+?)(?:\?|$)', url)
-        if github_match:
-            return github_match.group(1)
-        
         return None
     
-    def fetch_file_content(self, repo_path: str, file_path: str, platform: str = "gitlab") -> Optional[str]:
-        """Fetch content of a specific file from a repository.
+    def fetch_file_content(self, repo_path: str, file_path: str) -> Optional[str]:
+        """Fetch content of a specific file from a GitLab repository.
         
         Args:
             repo_path: The full path to the repo (e.g., "username/project")
             file_path: The path to the file within the repo (e.g., "contribution-1-README.md")
-            platform: 'gitlab' or 'github'
         
         Returns:
             The file content as a string, or None if not found.
         """
-        if platform == "github":
-            return self._fetch_github_file(repo_path, file_path)
-        else:
-            return self._fetch_gitlab_file(repo_path, file_path)
+        return self._fetch_gitlab_file(repo_path, file_path)
     
     def _fetch_gitlab_file(self, repo_path: str, file_path: str) -> Optional[str]:
         """Fetch a specific file from GitLab."""
@@ -397,41 +333,6 @@ class GitLabService:
         
         return None
     
-    def _fetch_github_file(self, repo_path: str, file_path: str) -> Optional[str]:
-        """Fetch a specific file from GitHub."""
-        # Get default branch first
-        repo_check_url = f"https://api.github.com/repos/{repo_path}"
-        req = urllib.request.Request(repo_check_url)
-        req.add_header("Accept", "application/vnd.github.v3+json")
-        req.add_header("User-Agent", "Discord-Bot")
-        
-        try:
-            with urllib.request.urlopen(req, timeout=10) as response:
-                repo_data = json.loads(response.read().decode("utf-8"))
-                default_branch = repo_data.get("default_branch", "main")
-        except Exception:
-            default_branch = "main"
-        
-        branches = [default_branch] if default_branch else ["main", "master"]
-        
-        for branch in branches:
-            api_url = f"https://api.github.com/repos/{repo_path}/contents/{file_path}?ref={branch}"
-            
-            req = urllib.request.Request(api_url)
-            req.add_header("Accept", "application/vnd.github.v3+json")
-            req.add_header("User-Agent", "Discord-Bot")
-            
-            try:
-                with urllib.request.urlopen(req, timeout=10) as response:
-                    data = json.loads(response.read().decode("utf-8"))
-                    if data and "content" in data:
-                        content = base64.b64decode(data["content"]).decode("utf-8")
-                        return content
-            except Exception:
-                continue
-        
-        return None
-    
     def get_week_start(self, date: datetime) -> datetime:
         """Get the Monday of the week for a given date."""
         days_since_monday = date.weekday()
@@ -458,7 +359,7 @@ class GitLabService:
             current_date: Date to calculate "this week" from (defaults to now)
             validate_commits: Whether to validate commit links
             validate_mrs: Whether to validate MR links
-            expected_owner: Expected GitHub/GitLab username for ownership validation
+            expected_owner: Expected GitLab username for ownership validation
         
         Returns:
             GitLabResult with enriched data
@@ -483,10 +384,7 @@ class GitLabService:
             readme_owned_by_student = (repo_owner == expected_owner.lower())
         
         # Fetch README content
-        if platform == "github":
-            readme_content = self.fetch_readme_from_github(repo_path)
-        else:
-            readme_content = self.fetch_readme(repo_path)
+        readme_content = self.fetch_readme(repo_path)
         
         if not readme_content:
             return GitLabResult(
