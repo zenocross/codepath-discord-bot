@@ -1130,11 +1130,11 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
                     'member_id': s.member_id,
                     'discord_username': s.discord_username,
                     'phase': s.current_phase,
-                    'intervention_type': s.intervention_type,
+                    'intervention_reason': s.intervention_reason,
                     'grade_status': s.grade_status,
                     'week': s.week,
                     'is_sunday': s.sun_submitted,
-                    'bypassed': is_bypassed or s.intervention_type == 'BYPASSED'
+                    'bypassed': is_bypassed or s.intervention_reason == 'BYPASSED'
                 }
         
         # Create phase-based groups
@@ -1160,16 +1160,16 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
         presets = self.storage.get_all_autogroup_presets()
         preset_groups: Dict[str, List[dict]] = {}
         
-        # Debug: collect all unique intervention types found
-        all_intervention_types: Set[str] = set()
+        # Debug: collect all unique intervention reasons found
+        all_intervention_reasons: Set[str] = set()
         for key, data in student_data.items():
-            student_interventions = data.get('intervention_type', '')
+            student_interventions = data.get('intervention_reason', '')
             if student_interventions:
                 student_types = set(student_interventions.replace('\n', ',').split(','))
                 student_types = {t.strip().split(':')[0] for t in student_types if t.strip()}
-                all_intervention_types.update(student_types)
+                all_intervention_reasons.update(student_types)
         
-        print(f"[Autogroup] Found intervention types: {all_intervention_types}")
+        print(f"[Autogroup] Found intervention reasons: {all_intervention_reasons}")
         
         for preset_name, preset_data in presets.items():
             group_name = f"{AUTO_GROUP_PREFIX}{preset_name}"
@@ -1181,8 +1181,8 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
                 if data.get('bypassed'):
                     continue
                 
-                # Check if student has any of the intervention types
-                student_interventions = data.get('intervention_type', '')
+                # Check if student has any of the intervention reasons
+                student_interventions = data.get('intervention_reason', '')
                 if student_interventions:
                     # Split by newline since multiple interventions can be combined
                     student_types = set(student_interventions.replace('\n', ',').split(','))

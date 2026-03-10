@@ -115,6 +115,7 @@ class StudentRecord:
     # Grading and intervention
     grade_status: str = "🟢 ON TRACK"
     intervention_type: str = ""
+    intervention_reason: str = ""
     intervention_sent_date: str = ""
     consecutive_misses: int = 0
     last_week_wed_missing: bool = False  # Missing Wednesday from previous week
@@ -410,25 +411,42 @@ class TrackerDataProcessor(FileProcessor):
         "progress_summary", "next_week_plan", "blocked", "blocker_desc", "support_requested",
         "issue_url_previous_week", "issue_changed", "issue_change_week",
         "issue_swap_detected", "new_contribution_detected",
-        "grade_status", "intervention_type", "intervention_sent_date", "consecutive_misses",
+        "grade_status", "intervention_reason", "intervention_type", "intervention_sent_date", "consecutive_misses",
         "tue_office_hours", "thu_office_hours", "wed_lecture", "cam_notes"
     ]
     
     AT_RISK_COLUMNS = [
         "name", "week", "current_phase", "weeks_in_phase", "timeline_type",
         "sun_submitted", "consecutive_misses", "deliverables_complete",
-        "commits_this_week", "blocked", "intervention_type", "readme_link", "cam_notes"
+        "commits_this_week", "blocked", "intervention_reason", "intervention_type", "readme_link", "cam_notes"
     ]
     
     FLAGGED_COLUMNS = [
         "name", "week", "current_phase", "weeks_in_phase", "timeline_type",
         "deliverables_complete", "commits_this_week", "days_since_commit",
-        "blocked", "intervention_type", "readme_link"
+        "blocked", "intervention_reason", "intervention_type", "readme_link"
     ]
     
     ON_TRACK_COLUMNS = [
         "name", "week", "current_phase", "weeks_in_phase", "submission_count_cumulative",
-        "mr_status", "progress_summary", "cam_notes"
+        "mr_status", "intervention_reason", "intervention_type", "progress_summary", "cam_notes"
+    ]
+    
+    # Intervention type hierarchy (highest priority first)
+    # Each tuple: (trigger_substring, intervention_type)
+    # First match wins based on order
+    INTERVENTION_TYPE_HIERARCHY = [
+        ("JSON_SAFEPARSE_SUPPORT", "IPM_GUIDED_SUPPORT"),
+        ("STALLED", "IPM_DIRECT_OUTREACH"),
+        # ("TRIGGER_FOR_ESCALATION", "ESCALATED_TO_IPM"),  # Add when needed
+        ("MISSING_SUNDAY_WK_", "WARNING_OUTREACH"),
+        ("NO_SUBMISSIONS", "SIMPLE_OUTREACH"),
+    ]
+    
+    # Triggers that append FLAG_FOR_GITLAB_MENTORS to the intervention type
+    FLAG_FOR_GITLAB_MENTORS_TRIGGERS = [
+        # Add trigger substrings here when needed
+        # e.g., "NEEDS_MENTOR_REVIEW"
     ]
     
     @property
@@ -1373,7 +1391,8 @@ class TrackerDataProcessor(FileProcessor):
                         weeks_remaining=0,
                         timeline_type="Critical",
                         grade_status="🔴 AT RISK",
-                        intervention_type="NO_SUBMISSIONS",
+                        intervention_type="SIMPLE_OUTREACH",
+                        intervention_reason="NO_SUBMISSIONS",
                         consecutive_misses=consecutive_misses
                     )
                     
@@ -1436,7 +1455,7 @@ class TrackerDataProcessor(FileProcessor):
                 member_id = str(student.member_id).strip()
                 if member_id and member_id not in master_member_ids:
                     student.grade_status = "🔴 AT RISK"
-                    student.intervention_type = "MISSING_ADMISSION_INFO"
+                    student.intervention_reason = "MISSING_ADMISSION_INFO"
                     marked_count += 1
             
             if marked_count > 0:
@@ -1610,10 +1629,10 @@ class TrackerDataProcessor(FileProcessor):
                             student_mr = str(student.mr_url).strip() if student.mr_url else ""
                             if student_mr and not result.mr_in_readme:
                                 student.grade_status = "🔴 AT RISK"
-                                if student.intervention_type:
-                                    student.intervention_type += "\nMR_URL_MISMATCH"
+                                if student.intervention_reason:
+                                    student.intervention_reason += "\nMR_URL_MISMATCH"
                                 else:
-                                    student.intervention_type = "MR_URL_MISMATCH"
+                                    student.intervention_reason = "MR_URL_MISMATCH"
                                 mr_mismatch_count += 1
                     
                     # Get this student's gitlab username
@@ -1625,10 +1644,10 @@ class TrackerDataProcessor(FileProcessor):
                         # Check if commits are on repos the student owns
                         if result.commits_not_owned > 0:
                             student.grade_status = "🔴 AT RISK"
-                            if student.intervention_type:
-                                student.intervention_type += "\nCOMMITS_NOT_OWNED"
+                            if student.intervention_reason:
+                                student.intervention_reason += "\nCOMMITS_NOT_OWNED"
                             else:
-                                student.intervention_type = "COMMITS_NOT_OWNED"
+                                student.intervention_reason = "COMMITS_NOT_OWNED"
                             ownership_flagged_count += 1
                     
                     # README location validation (validate_all only)
@@ -1636,20 +1655,20 @@ class TrackerDataProcessor(FileProcessor):
                         # Check if README is on student's own repo
                         if not result.readme_owned_by_student:
                             student.grade_status = "🔴 AT RISK"
-                            if student.intervention_type:
-                                student.intervention_type += "\nREADME_NOT_OWNED"
+                            if student.intervention_reason:
+                                student.intervention_reason += "\nREADME_NOT_OWNED"
                             else:
-                                student.intervention_type = "README_NOT_OWNED"
+                                student.intervention_reason = "README_NOT_OWNED"
                             readme_flagged_count += 1
             else:
                 # README exists in link but file not found/accessible - flag as nonexistent
                 print(f"[TrackerProcessor] Could not enrich {readme_link}: {result.error_message}")
                 for student in student_list:
                     student.grade_status = "🔴 AT RISK"
-                    if student.intervention_type:
-                        student.intervention_type += "\nREADME_NONEXISTENT"
+                    if student.intervention_reason:
+                        student.intervention_reason += "\nREADME_NONEXISTENT"
                     else:
-                        student.intervention_type = "README_NONEXISTENT"
+                        student.intervention_reason = "README_NONEXISTENT"
                     readme_nonexistent_count += 1
         
         # Flag students who have no readme_link at all
@@ -1657,10 +1676,10 @@ class TrackerDataProcessor(FileProcessor):
             readme_link = str(student.readme_link).strip() if student.readme_link else ""
             if not readme_link:
                 student.grade_status = "🔴 AT RISK"
-                if student.intervention_type:
-                    student.intervention_type += "\nREADME_LINK_MISSING"
+                if student.intervention_reason:
+                    student.intervention_reason += "\nREADME_LINK_MISSING"
                 else:
-                    student.intervention_type = "README_LINK_MISSING"
+                    student.intervention_reason = "README_LINK_MISSING"
                 readme_link_missing_count += 1
         
         print(f"[TrackerProcessor] GitLab enrichment complete: {enriched_count} READMEs processed")
@@ -2831,11 +2850,7 @@ class TrackerDataProcessor(FileProcessor):
                     flagged = True
                     intervention = "UNEXPECTED_PHASE_CHANGE"
                 
-                # Check for new contribution started (switched contribution numbers)
-                elif student.new_contribution_detected:
-                    flagged = True
-                    intervention = "NEW_CONTRIBUTION"
-                    student._intervention_detail = f"Switched to Contribution {student.contribution_num}"
+                # Note: NEW_CONTRIBUTION is no longer flagged - students switching contributions is allowed
                 
                 # Check for issue change (student switched to a different issue)
                 elif student.issue_changed:
@@ -2891,7 +2906,8 @@ class TrackerDataProcessor(FileProcessor):
                     at_risk = True
             
             # Apply issue-based interventions (from search_issues_title command)
-            # This flags students working on specific issue types (e.g., JSON_SAFEPARSE_SUPPORT)
+            # These are for grouping purposes only (e.g., JSON_SAFEPARSE_SUPPORT)
+            # They do NOT change the student's grade status - just add the intervention reason
             # Only apply to the LATEST record (max submission_num) so it doesn't duplicate across records
             max_sub = student_max_submission.get(student_key, 0)
             is_latest_record = student.submission_num == max_sub
@@ -2905,9 +2921,8 @@ class TrackerDataProcessor(FileProcessor):
                             intervention += f"\n{issue_int_type}"
                         else:
                             intervention = issue_int_type
-                    # Issue-based interventions are FLAGGED level (not AT_RISK)
-                    if not at_risk and not flagged:
-                        flagged = True
+                    # Note: Issue-based interventions do NOT change grade status
+                    # They are ON TRACK interventions used only for grouping
             
             # Set status
             if at_risk:
@@ -2927,7 +2942,23 @@ class TrackerDataProcessor(FileProcessor):
             else:
                 student.grade_status = "🟢 ON TRACK"
             
-            student.intervention_type = intervention
+            # intervention_reason gets all intervention details
+            student.intervention_reason = intervention
+            # intervention_type is set based on INTERVENTION_TYPE_HIERARCHY lookup
+            student.intervention_type = ""
+            for trigger, int_type in self.INTERVENTION_TYPE_HIERARCHY:
+                if trigger in intervention:
+                    student.intervention_type = int_type
+                    break
+            
+            # FLAG_FOR_GITLAB_MENTORS is appended, not replaced
+            for trigger in self.FLAG_FOR_GITLAB_MENTORS_TRIGGERS:
+                if trigger in intervention:
+                    if student.intervention_type:
+                        student.intervention_type += ", FLAG_FOR_GITLAB_MENTORS"
+                    else:
+                        student.intervention_type = "FLAG_FOR_GITLAB_MENTORS"
+                    break
     
     def _create_master_tab(self, wb: Workbook, students: List[StudentRecord]) -> None:
         """Create Tab 1: Master Sheet with all student data."""
@@ -2948,7 +2979,7 @@ class TrackerDataProcessor(FileProcessor):
             "progress_summary", "next_week_plan", "blocked", "blocker_desc", "support_requested",
             "issue_url_previous_week", "issue_changed", "issue_change_week",
             "issue_swap_detected", "new_contribution_detected",
-            "grade_status", "intervention_type", "intervention_sent_date", "consecutive_misses",
+            "grade_status", "intervention_reason", "intervention_type", "intervention_sent_date", "consecutive_misses",
             "tue_office_hours", "thu_office_hours", "wed_lecture", "cam_notes"
         ]
         
@@ -3012,6 +3043,7 @@ class TrackerDataProcessor(FileProcessor):
                 "Yes" if student.issue_swap_detected else "No",
                 "Yes" if student.new_contribution_detected else "No",
                 student.grade_status,
+                student.intervention_reason,
                 student.intervention_type,
                 student.intervention_sent_date,
                 student.consecutive_misses,
@@ -3114,12 +3146,25 @@ class TrackerDataProcessor(FileProcessor):
                 if s.mr_url and str(s.mr_url).strip():
                     student_forced_reason[key] = "Has MR submitted"
         
+        # Build lookup of students who have any AT RISK record
+        # (to avoid forcing ON TRACK when student is missing a submission)
+        students_with_at_risk: set = set()
+        for s in students:
+            key = s.member_id or s.name
+            if s.grade_status == "🔴 AT RISK":
+                students_with_at_risk.add(key)
+        
         # Then check other conditions for students without MR
         for s in students:
             key = s.member_id or s.name
             
             # Skip if already has forced reason (MR takes priority)
             if key in student_forced_reason:
+                continue
+            
+            # Skip if student has any AT RISK record (e.g., missing a recent submission)
+            # Don't force ON TRACK based on old Sunday when they're missing a newer one
+            if key in students_with_at_risk:
                 continue
             
             # Condition 2: LATEST Sunday submission is ON TRACK (natural progression)
@@ -3243,8 +3288,9 @@ class TrackerDataProcessor(FileProcessor):
                 continue
             
             # Collect all issues/interventions for At Risk and Flagged
-            if s.intervention_type:
-                student_map[key]['interventions'].add(s.intervention_type)
+            # Use intervention_reason which contains the full intervention details
+            if s.intervention_reason:
+                student_map[key]['interventions'].add(s.intervention_reason)
             
             # Track if any submission was bypassed but student is still at risk
             if getattr(s, '_bypassed_but_at_risk', False):
@@ -3253,7 +3299,7 @@ class TrackerDataProcessor(FileProcessor):
                 student_map[key]['interventions'].add(bypass_display)
             
             # Add non-submission-related issues
-            if s.intervention_type == "NO_SUBMISSIONS":
+            if s.intervention_reason == "NO_SUBMISSIONS":
                 if s.consecutive_misses > 0:
                     student_map[key]['issues'].add(f"No submissions ({s.consecutive_misses} deadlines missed)")
                 else:
@@ -3275,8 +3321,7 @@ class TrackerDataProcessor(FileProcessor):
             if getattr(s, '_unexpected_phase_change', False):
                 student_map[key]['issues'].add(f"Week {s.week}: Unexpected phase change")
             
-            if s.new_contribution_detected:
-                student_map[key]['issues'].add(f"Week {s.week}: Switched to Contribution {s.contribution_num}")
+            # Note: NEW_CONTRIBUTION is no longer flagged - students switching contributions is allowed
             
             # Missing previous phase (immediate previous phase is missing)
             if getattr(s, '_missing_previous_phase', False):
@@ -3333,16 +3378,50 @@ class TrackerDataProcessor(FileProcessor):
                 return (week_num, day_order, issue)
             
             issues_list = sorted(data['issues'], key=issue_sort_key)
-            # Use newline separator for interventions
-            interventions = "\n".join(sorted(data['interventions'])) if data['interventions'] else "N/A"
+            # Use newline separator for interventions (this becomes intervention_reason)
+            # Sort by priority: NO_SUBMISSIONS, MISSING_SUNDAY_WK_X, STALLED, MISSING_DELIVERABLES, then others
+            def intervention_sort_key(intv: str) -> tuple:
+                if "NO_SUBMISSIONS" in intv:
+                    return (0, intv)
+                elif "MISSING_SUNDAY_WK_" in intv:
+                    return (1, intv)
+                elif "STALLED" in intv:
+                    return (2, intv)
+                elif "MISSING_DELIVERABLES" in intv:
+                    return (3, intv)
+                else:
+                    return (4, intv)
+            
+            interventions = "\n".join(sorted(data['interventions'], key=intervention_sort_key)) if data['interventions'] else "N/A"
             # Use newline separator for better readability
             description = "\n".join(issues_list) if issues_list else "No specific issues identified"
             # Format submission numbers as comma-separated sorted list
             submission_nums_str = ", ".join(str(n) for n in sorted(data['submission_nums'])) if data['submission_nums'] else ""
             
+            # intervention_type is set based on specific intervention reasons
+            # Uses INTERVENTION_TYPE_HIERARCHY lookup (defined at class level)
+            intervention_type_str = ""
+            interventions_joined = " ".join(data['interventions'])
+            
+            # Find highest priority intervention type
+            for trigger, int_type in self.INTERVENTION_TYPE_HIERARCHY:
+                if trigger in interventions_joined:
+                    intervention_type_str = int_type
+                    break
+            
+            # FLAG_FOR_GITLAB_MENTORS is appended, not replaced
+            for trigger in self.FLAG_FOR_GITLAB_MENTORS_TRIGGERS:
+                if trigger in interventions_joined:
+                    if intervention_type_str:
+                        intervention_type_str += ", FLAG_FOR_GITLAB_MENTORS"
+                    else:
+                        intervention_type_str = "FLAG_FOR_GITLAB_MENTORS"
+                    break
+            
             result.append({
                 **data,
                 'interventions_str': interventions,
+                'intervention_type_str': intervention_type_str,
                 'description': description,
                 'submission_nums_str': submission_nums_str
             })
@@ -3362,18 +3441,12 @@ class TrackerDataProcessor(FileProcessor):
         # Get unique students with aggregated issues
         at_risk = self._aggregate_student_issues(students, "🔴 AT RISK", start_date, target_date)
         
-        # Sort: NO_SUBMISSIONS at the end, then by latest week (descending)
-        def at_risk_sort_key(s):
-            is_no_submission = "NO_SUBMISSION" in s.get('interventions_str', '')
-            # Return tuple: (is_no_submission, -latest_week)
-            # False (0) sorts before True (1), so non-NO_SUBMISSION comes first
-            return (is_no_submission, -s['latest_week'])
-        
-        at_risk.sort(key=at_risk_sort_key)
+        # Sort by intervention reason, then by description (same as displayed)
+        at_risk.sort(key=lambda s: (s.get('interventions_str', 'N/A'), s['description']))
         
         # Write header
         headers = ["Submission #", "Name", "Member ID", "Discord", "Email", "Phone", "Latest Week", "Phase", "Timeline",
-                   "Deliverables", "Intervention Types", "Description"]
+                   "Deliverables", "Intervention Reason", "Intervention Type", "Description"]
         
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col, value=header)
@@ -3396,6 +3469,7 @@ class TrackerDataProcessor(FileProcessor):
                 student['timeline'],
                 student['deliverables'],
                 student['interventions_str'],
+                student.get('intervention_type_str', ''),
                 student['description']
             ]
             
@@ -3425,12 +3499,12 @@ class TrackerDataProcessor(FileProcessor):
         # Get unique students with aggregated issues
         flagged = self._aggregate_student_issues(students, "🟡 FLAGGED", start_date, target_date)
         
-        # Sort by intervention type (alphabetically), then by latest week (descending)
-        flagged.sort(key=lambda s: (s.get('interventions_str', 'N/A'), -s['latest_week']))
+        # Sort by intervention reason, then by description (same as displayed)
+        flagged.sort(key=lambda s: (s.get('interventions_str', 'N/A'), s['description']))
         
         # Write header
         headers = ["Submission #", "Name", "Member ID", "Discord", "Email", "Phone", "Latest Week", "Phase", "Timeline",
-                   "Deliverables", "Intervention Types", "Description"]
+                   "Deliverables", "Intervention Reason", "Intervention Type", "Description"]
         
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col, value=header)
@@ -3453,6 +3527,7 @@ class TrackerDataProcessor(FileProcessor):
                 student['timeline'],
                 student['deliverables'],
                 student['interventions_str'],
+                student.get('intervention_type_str', ''),
                 student['description']
             ]
             
@@ -3492,12 +3567,12 @@ class TrackerDataProcessor(FileProcessor):
             else:
                 return "Progressing normally"
         
-        # Sort by description (alphabetically), then by latest week (descending)
-        on_track.sort(key=lambda s: (get_display_description(s), -s['latest_week']))
+        # Sort by intervention reason, then by display description
+        on_track.sort(key=lambda s: (s.get('interventions_str', 'N/A'), get_display_description(s)))
         
         # Write header
         headers = ["Submission #", "Name", "Member ID", "Discord", "Email", "Phone", "Latest Week", "Phase", 
-                   "Total Submissions", "Deliverables", "Description"]
+                   "Total Submissions", "Deliverables", "Intervention Reason", "Intervention Type", "Description"]
         
         for col, header in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col, value=header)
@@ -3522,6 +3597,8 @@ class TrackerDataProcessor(FileProcessor):
                 student['latest_phase'],
                 student['total_submissions'],
                 student['deliverables'],
+                student.get('interventions_str', ''),
+                student.get('intervention_type_str', ''),
                 description
             ]
             
