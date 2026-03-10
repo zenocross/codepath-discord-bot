@@ -1750,18 +1750,42 @@ class TrackerCog(commands.Cog, name="Tracker"):
         
         Usage: 
             !tracker search_issues_title <search_term>
+            !tracker search_issues_title <search_term> intervention:<TYPE>
             
-        Example:
+        Examples:
             !tracker search_issues_title JsonSafeParse
+            !tracker search_issues_title JsonSafeParse intervention:JSON_SAFEPARSE_SUPPORT
+        
+        When intervention parameter is provided, matching students will be saved
+        for automatic flagging during submissions_download.
         """
         import json
         import os
         import re
         import asyncio
+        from datetime import datetime
         
         if not search_term:
             await ctx.send("❌ **Please provide a search term.**\n\nUsage: `!tracker search_issues_title <search_term>`")
             return
+        
+        # Parse intervention parameter if provided
+        intervention_type = None
+        actual_search_term = search_term
+        if 'intervention:' in search_term.lower():
+            parts = search_term.split()
+            intervention_parts = [p for p in parts if p.lower().startswith('intervention:')]
+            search_parts = [p for p in parts if not p.lower().startswith('intervention:')]
+            
+            if intervention_parts:
+                intervention_type = intervention_parts[0].split(':', 1)[1].upper()
+            actual_search_term = ' '.join(search_parts)
+        
+        if not actual_search_term.strip():
+            await ctx.send("❌ **Please provide a search term.**\n\nUsage: `!tracker search_issues_title <search_term> [intervention:TYPE]`")
+            return
+        
+        search_term = actual_search_term.strip()
         
         results_file = os.path.join('data', 'uploads', '_validated_issues.json')
         
@@ -1894,9 +1918,52 @@ class TrackerCog(commands.Cog, name="Tracker"):
                 issue_title_cache[issue_url] = None
                 errors.append(f"{student_info['name']} ({student_info['member_id']}): {str(e)}")
         
+        # If intervention type provided and we have matches, save them
+        intervention_saved = False
+        if intervention_type and matching_issues:
+            interventions_file = os.path.join('data', 'uploads', '_issue_interventions.json')
+            
+            # Load existing interventions
+            existing_interventions = {}
+            if os.path.exists(interventions_file):
+                try:
+                    with open(interventions_file, 'r') as f:
+                        existing_interventions = json.load(f)
+                except:
+                    pass
+            
+            # Remove old entries with this search term (replace mode)
+            keys_to_remove = [k for k, v in existing_interventions.items() 
+                             if v.get('search_term', '').lower() == search_term.lower()]
+            for key in keys_to_remove:
+                del existing_interventions[key]
+            
+            # Add new entries
+            for issue in matching_issues:
+                member_id = str(issue['member_id'])
+                existing_interventions[member_id] = {
+                    'intervention_type': intervention_type,
+                    'issue_url': issue['url'],
+                    'issue_title': issue['title'],
+                    'search_term': search_term,
+                    'added_at': datetime.now().isoformat()
+                }
+            
+            # Save
+            try:
+                with open(interventions_file, 'w') as f:
+                    json.dump(existing_interventions, f, indent=2)
+                intervention_saved = True
+            except Exception as e:
+                await ctx.send(f"⚠️ **Error saving interventions:** {str(e)}")
+        
         # Build report
         report = [f"✅ **Search Complete for:** `{search_term}`\n"]
         report.append(f"📊 **Results:** {len(matching_issues)} matching issue(s) found out of {len(all_student_issues)} searched\n")
+        
+        if intervention_saved:
+            report.append(f"💾 **Intervention Saved:** `{intervention_type}` applied to {len(matching_issues)} student(s)")
+            report.append(f"   └─ These students will be flagged in `!tracker submissions_download`\n")
         
         if matching_issues:
             report.append("**🔗 Matching Issues:**")
@@ -1933,6 +2000,151 @@ class TrackerCog(commands.Cog, name="Tracker"):
                 chunks.append(current)
             for chunk in chunks:
                 await ctx.send(chunk)
+    
+    @commands.command(name='issue_interventions')
+    async def issue_interventions(self, ctx: commands.Context):
+        """List all current issue-based interventions.
+        
+        Usage:
+            !tracker issue_interventions
+        
+        Shows students who will be flagged during submissions_download
+        based on their issue search term matches.
+        """
+        import json
+        import os
+        
+        interventions_file = os.path.join('data', 'uploads', '_issue_interventions.json')
+        
+        if not os.path.exists(interventions_file):
+            await ctx.send("📭 **No issue interventions configured.**\n\nUse `!tracker search_issues_title <term> intervention:<TYPE>` to add some.")
+            return
+        
+        try:
+            with open(interventions_file, 'r') as f:
+                interventions = json.load(f)
+        except Exception as e:
+            await ctx.send(f"❌ **Error reading interventions file:** {str(e)}")
+            return
+        
+        if not interventions:
+            await ctx.send("📭 **No issue interventions configured.**\n\nUse `!tracker search_issues_title <term> intervention:<TYPE>` to add some.")
+            return
+        
+        # Group by intervention type
+        by_type: dict = {}
+        for member_id, info in interventions.items():
+            int_type = info.get('intervention_type', 'UNKNOWN')
+            if int_type not in by_type:
+                by_type[int_type] = []
+            by_type[int_type].append({
+                'member_id': member_id,
+                'issue_title': info.get('issue_title', 'N/A'),
+                'search_term': info.get('search_term', 'N/A'),
+                'added_at': info.get('added_at', 'N/A')
+            })
+        
+        report = ["📋 **Issue-Based Interventions**\n"]
+        report.append(f"Total: {len(interventions)} student(s) across {len(by_type)} intervention type(s)\n")
+        
+        for int_type, students in sorted(by_type.items()):
+            report.append(f"**{int_type}** ({len(students)} students):")
+            # Get the search term (should be same for all in this type)
+            search_term = students[0]['search_term'] if students else 'N/A'
+            report.append(f"  └─ Search term: `{search_term}`")
+            for s in sorted(students, key=lambda x: x['member_id']):
+                report.append(f"  • `{s['member_id']}` - {s['issue_title'][:50]}...")
+            report.append("")
+        
+        # Send report in chunks
+        full_report = "\n".join(report)
+        if len(full_report) <= 2000:
+            await ctx.send(full_report)
+        else:
+            chunks = []
+            current = ""
+            for line in report:
+                if len(current) + len(line) + 1 > 1900:
+                    chunks.append(current)
+                    current = line
+                else:
+                    current += "\n" + line if current else line
+            if current:
+                chunks.append(current)
+            for chunk in chunks:
+                await ctx.send(chunk)
+    
+    @commands.command(name='clear_issue_intervention')
+    async def clear_issue_intervention(self, ctx: commands.Context, *, target: str = None):
+        """Clear issue-based interventions.
+        
+        Usage:
+            !tracker clear_issue_intervention <member_id>  - Clear specific student
+            !tracker clear_issue_intervention clear_all    - Clear all interventions
+            !tracker clear_issue_intervention type:<TYPE>  - Clear all of a specific type
+        
+        Examples:
+            !tracker clear_issue_intervention 123456
+            !tracker clear_issue_intervention clear_all
+            !tracker clear_issue_intervention type:JSON_SAFEPARSE_SUPPORT
+        """
+        import json
+        import os
+        
+        if not target:
+            await ctx.send(
+                "❌ **Please specify what to clear.**\n\n"
+                "Usage:\n"
+                "• `!tracker clear_issue_intervention <member_id>` - Clear specific student\n"
+                "• `!tracker clear_issue_intervention clear_all` - Clear all\n"
+                "• `!tracker clear_issue_intervention type:<TYPE>` - Clear by intervention type"
+            )
+            return
+        
+        interventions_file = os.path.join('data', 'uploads', '_issue_interventions.json')
+        
+        if not os.path.exists(interventions_file):
+            await ctx.send("📭 **No issue interventions to clear.**")
+            return
+        
+        try:
+            with open(interventions_file, 'r') as f:
+                interventions = json.load(f)
+        except Exception as e:
+            await ctx.send(f"❌ **Error reading interventions file:** {str(e)}")
+            return
+        
+        original_count = len(interventions)
+        
+        if target.lower() == 'clear_all':
+            interventions = {}
+            message = f"🗑️ **Cleared all {original_count} issue intervention(s).**"
+        elif target.lower().startswith('type:'):
+            int_type = target.split(':', 1)[1].upper()
+            keys_to_remove = [k for k, v in interventions.items() 
+                             if v.get('intervention_type', '').upper() == int_type]
+            for key in keys_to_remove:
+                del interventions[key]
+            removed_count = len(keys_to_remove)
+            message = f"🗑️ **Cleared {removed_count} intervention(s) of type `{int_type}`.**"
+        else:
+            # Treat as member_id
+            member_id = target.strip()
+            if member_id in interventions:
+                int_type = interventions[member_id].get('intervention_type', 'UNKNOWN')
+                del interventions[member_id]
+                message = f"🗑️ **Cleared intervention for member `{member_id}` (was `{int_type}`).**"
+            else:
+                await ctx.send(f"❌ **No intervention found for member `{member_id}`.**")
+                return
+        
+        # Save
+        try:
+            with open(interventions_file, 'w') as f:
+                json.dump(interventions, f, indent=2)
+            await ctx.send(message)
+        except Exception as e:
+            await ctx.send(f"❌ **Error saving interventions file:** {str(e)}")
     
     @commands.command(name='search_dl_issues_title')
     async def search_dl_issues_title(self, ctx: commands.Context, *, search_term: str = None):

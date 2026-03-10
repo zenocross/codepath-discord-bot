@@ -465,6 +465,9 @@ class TrackerDataProcessor(FileProcessor):
     def _compute_week_from_date(self, submission_date: datetime, start_date: datetime) -> int:
         """Compute the week number based on submission date relative to start date.
         
+        Uses Sunday deadlines to determine which week a submission belongs to.
+        A submission made ON or BEFORE Week N's Sunday deadline belongs to Week N.
+        
         Args:
             submission_date: When the submission was made
             start_date: Program start date
@@ -476,13 +479,16 @@ class TrackerDataProcessor(FileProcessor):
             # Early submission - map to Week 1
             return 1
         
-        # Calculate days since start
+        # Find which week this submission belongs to based on Sunday deadlines
+        # A submission on or before Week N Sunday belongs to Week N
+        for week_num in range(1, 53):  # Check up to 52 weeks
+            _, sun_deadline = self._get_week_deadlines(start_date, week_num)
+            if submission_date.date() <= sun_deadline.date():
+                return week_num
+        
+        # Fallback to day-based calculation (shouldn't normally reach here)
         days_since_start = (submission_date.date() - start_date.date()).days
-        
-        # Week 1 is days 0-6, Week 2 is days 7-13, etc.
-        computed_week = (days_since_start // 7) + 1
-        
-        return max(1, computed_week)
+        return (days_since_start // 7) + 1
     
     def _map_early_submission_week(
         self, 
@@ -742,39 +748,38 @@ class TrackerDataProcessor(FileProcessor):
                 # Transform to StudentRecord objects
                 students = self._transform_records(raw_rows, discord_lookup, name_lookup, contact_lookup)
                 
-                # Apply effective week from early submission mapping
-                # The _effective_week was calculated during filtering based on actual submission date
-                # (not the typeform-entered week which may be incorrect)
-                current_week = options.get('current_week', 1)
-                for i, student in enumerate(students):
-                    # Store original typeform week before overwriting
-                    typeform_week = student.week
-                    
-                    if i < len(raw_rows) and '_effective_week' in raw_rows[i]:
-                        # Use the pre-calculated effective week from visibility filtering
-                        student.week = raw_rows[i]['_effective_week']
-                        # Track if there's a mismatch with what user entered
-                        if raw_rows[i].get('_week_mismatch'):
-                            student.week_input = raw_rows[i]['_week_mismatch']
-                    elif student.week and student.week != current_week:
-                        # No pre-calculated week - compute from typeform input
-                        # Keep their indicated week
-                        pass
-                    else:
-                        # Use computed week
-                        student.week = current_week
-                    
-                    # If typeform week differs from computed week, track it
-                    if typeform_week and typeform_week > 0 and typeform_week != student.week:
-                        student.week_input = typeform_week
-                
                 # Get start_date for sequential numbering (needed to identify early submissions)
                 start_date_for_numbering = options.get('start_date')
                 
                 # Assign sequential submission numbers per student (1, 2, 3, 4...)
                 # and check for skipped submissions (Wed-Sun-Wed-Sun pattern)
                 # Early submissions (before first Wednesday) are exempt from pattern checks
+                # NOTE: This must happen BEFORE week assignment so we can use submission_num
                 self._assign_sequential_submission_numbers(students, start_date_for_numbering)
+                
+                # Apply week based on submission number
+                # Pattern: Submissions 1-2 = Week 1, 3-4 = Week 2, 5-6 = Week 3, etc.
+                # This is more reliable than date-based calculation
+                current_week = options.get('current_week', 1)
+                for i, student in enumerate(students):
+                    # Store original typeform week
+                    typeform_week = student.week
+                    
+                    # Calculate expected week from submission number
+                    # Submission 1-2 = Week 1, 3-4 = Week 2, etc.
+                    if student.submission_num > 0:
+                        expected_week = ((student.submission_num - 1) // 2) + 1
+                        student.week = expected_week
+                        
+                        # Only flag mismatch if student entered a DIFFERENT week than expected
+                        if typeform_week and typeform_week > 0 and typeform_week != expected_week:
+                            student.week_input = typeform_week
+                    else:
+                        # No submission number - fall back to current week or typeform
+                        if typeform_week and typeform_week > 0:
+                            student.week = typeform_week
+                        else:
+                            student.week = current_week
                 
                 # Get phase completions early so we can use them in derived fields
                 phase_completions = options.get('phase_completions', {})
@@ -2502,13 +2507,26 @@ class TrackerDataProcessor(FileProcessor):
                     submission_count += 1
                 submission.submission_count_cumulative = submission_count
             
-            # Calculate consecutive_misses and track which submissions are missing
-            # Build maps of week -> wed_submitted and week -> sun_submitted for this student
+            # Calculate consecutive_misses based on submission_num gaps
+            # This is more reliable than week-based calculations which can have date issues
+            # 
+            # Logic: consecutive_misses counts gaps in the submission sequence BEFORE this record
+            # Example: Student has submission_nums [1, 2, 5] (missing 3, 4)
+            # - Record with submission_num=1: consecutive_misses=0 (nothing before)
+            # - Record with submission_num=2: consecutive_misses=0 (1 exists)
+            # - Record with submission_num=5: consecutive_misses=2 (missing 3 and 4)
+            
+            # Get all submission numbers this student has
+            submission_nums = set()
+            for submission in member_submissions:
+                if submission.submission_num > 0:
+                    submission_nums.add(submission.submission_num)
+            
+            # Also build week maps for last_week_wed/sun_missing tracking
             week_to_wed_submitted: Dict[int, bool] = {}
             week_to_sun_submitted: Dict[int, bool] = {}
             for submission in member_submissions:
                 week = submission.week
-                # Track if any submission for this week has wed/sun submitted
                 if week not in week_to_wed_submitted:
                     week_to_wed_submitted[week] = False
                 if week not in week_to_sun_submitted:
@@ -2518,57 +2536,31 @@ class TrackerDataProcessor(FileProcessor):
                 if submission.sun_submitted:
                     week_to_sun_submitted[week] = True
             
-            # Sort submissions: by week, then Wednesday before Sunday within same week
-            def submission_sort_key(s):
-                # Wednesday (wed_submitted=True) comes before Sunday (sun_submitted=True)
-                # Lower number = earlier in sort
-                sub_type = 0 if s.wed_submitted else 1
-                return (s.week, sub_type)
-            
-            sorted_submissions = sorted(member_submissions, key=submission_sort_key)
-            
-            # Track if we've already "consumed" the consecutive misses for a gap
-            # consecutive_misses should only be set on the FIRST entry after missing ones
-            last_accounted_week = 0  # Week up to which misses have been accounted for
-            
-            for submission in sorted_submissions:
-                current_week = submission.week
+            for submission in member_submissions:
+                submission_num = submission.submission_num
                 consecutive_misses = 0
                 
-                # Check if previous week (current_week - 1) is missing Wed/Sun
-                prev_week = current_week - 1
-                if prev_week >= 1:
-                    # Check if Wednesday was submitted for previous week
-                    wed_submitted_prev = week_to_wed_submitted.get(prev_week, False)
-                    # Check if Sunday was submitted for previous week
-                    sun_submitted_prev = week_to_sun_submitted.get(prev_week, False)
-                    
-                    submission.last_week_wed_missing = not wed_submitted_prev
-                    submission.last_week_sun_missing = not sun_submitted_prev
-                
-                # Only calculate consecutive_misses if we haven't already accounted for this gap
-                if current_week > last_accounted_week:
-                    # Count backwards from previous week
-                    check_week = current_week - 1
-                    while check_week >= 1:
-                        if check_week in week_to_sun_submitted:
-                            # We have data for this week
-                            if not week_to_sun_submitted[check_week]:
-                                # Missed this week's Sunday submission
-                                consecutive_misses += 1
-                            else:
-                                # Found a Sunday submission - stop counting
-                                break
-                        else:
-                            # No submission record for this week - count as a miss
+                # Check for gaps in submission sequence before this one
+                if submission_num > 1:
+                    # Count backwards from submission_num - 1
+                    check_num = submission_num - 1
+                    while check_num >= 1:
+                        if check_num not in submission_nums:
                             consecutive_misses += 1
-                        check_week -= 1
-                    
-                    # Mark that we've accounted for misses up to this week
-                    if consecutive_misses > 0:
-                        last_accounted_week = current_week
+                            check_num -= 1
+                        else:
+                            break  # Found a submission that exists
                 
                 submission.consecutive_misses = consecutive_misses
+                
+                # Track last_week_wed/sun_missing for other purposes
+                current_week = submission.week
+                prev_week = current_week - 1
+                if prev_week >= 1:
+                    wed_submitted_prev = week_to_wed_submitted.get(prev_week, False)
+                    sun_submitted_prev = week_to_sun_submitted.get(prev_week, False)
+                    submission.last_week_wed_missing = not wed_submitted_prev
+                    submission.last_week_sun_missing = not sun_submitted_prev
             
             # Track issue changes and contribution changes
             previous_issue_url = None
@@ -2632,10 +2624,31 @@ class TrackerDataProcessor(FileProcessor):
             return 4
         return 0
     
+    def _load_issue_interventions(self) -> Dict[str, Dict]:
+        """Load issue-based interventions from file.
+        
+        Returns:
+            Dict mapping member_id to intervention info
+        """
+        import os
+        import json
+        interventions_file = os.path.join('data', 'uploads', '_issue_interventions.json')
+        
+        if not os.path.exists(interventions_file):
+            return {}
+        
+        try:
+            with open(interventions_file, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[TrackerProcessor] Error loading issue interventions: {e}")
+            return {}
+    
     def _calculate_grade_status(self, students: List[StudentRecord], 
                                 start_date: Optional[datetime] = None,
                                 target_date: Optional[datetime] = None,
-                                bypasses: Optional[Dict[str, Dict]] = None) -> None:
+                                bypasses: Optional[Dict[str, Dict]] = None,
+                                issue_interventions: Optional[Dict[str, Dict]] = None) -> None:
         """Calculate grade status and intervention type for each student.
         
         Args:
@@ -2643,8 +2656,14 @@ class TrackerDataProcessor(FileProcessor):
             start_date: Program start date (for calculating per-week deadlines)
             target_date: Date the report is being run (for checking if deadlines passed)
             bypasses: Optional dict of bypassed submissions (key: "member_id:week")
+            issue_interventions: Optional dict of issue-based interventions (member_id -> info)
         """
         bypasses = bypasses or {}
+        
+        # Load issue interventions if not provided
+        if issue_interventions is None:
+            issue_interventions = self._load_issue_interventions()
+        
         
         # First pass: Build lookup of each student's maximum submission count
         # Key: member_id -> max_submission_num
@@ -2870,6 +2889,25 @@ class TrackerDataProcessor(FileProcessor):
                 # Invalid Member ID is AT_RISK level
                 if not at_risk:
                     at_risk = True
+            
+            # Apply issue-based interventions (from search_issues_title command)
+            # This flags students working on specific issue types (e.g., JSON_SAFEPARSE_SUPPORT)
+            # Only apply to the LATEST record (max submission_num) so it doesn't duplicate across records
+            max_sub = student_max_submission.get(student_key, 0)
+            is_latest_record = student.submission_num == max_sub
+            if issue_interventions and student_key in issue_interventions and is_latest_record:
+                issue_int = issue_interventions[student_key]
+                issue_int_type = issue_int.get('intervention_type', '')
+                if issue_int_type:
+                    # Only add if not already present in this record's intervention string
+                    if issue_int_type not in intervention:
+                        if intervention:
+                            intervention += f"\n{issue_int_type}"
+                        else:
+                            intervention = issue_int_type
+                    # Issue-based interventions are FLAGGED level (not AT_RISK)
+                    if not at_risk and not flagged:
+                        flagged = True
             
             # Set status
             if at_risk:

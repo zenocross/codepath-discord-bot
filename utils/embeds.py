@@ -571,6 +571,17 @@ class EmbedBuilder:
         )
         
         embed.add_field(
+            name="🏷️ Issue-Based Interventions",
+            value=(
+                "`!tracker search_issues_title <term> intervention:<TYPE>` - Flag students by issue\n"
+                "  Example: `search_issues_title JsonSafe intervention:JSON_SAFEPARSE_SUPPORT`\n"
+                "`!tracker issue_interventions` - List all issue-based interventions\n"
+                "`!tracker clear_issue_intervention <id|type:X|clear_all>` - Clear interventions"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
             name="🔀 MR Validation Commands",
             value=(
                 "`!tracker no_mr` - Show validated MR status (requires validate first)\n"

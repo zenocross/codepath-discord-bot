@@ -42,6 +42,8 @@ VALID_INTERVENTION_TYPES = {
     'MISSING_SUNDAY',
     'MISSING_WEDNESDAY',
     'SKIPPED_PREVIOUS_SUBMISSION',
+    # Issue-based interventions (from search_issues_title command)
+    'JSON_SAFEPARSE_SUPPORT',
     # Week-specific missing submission types (WK_1 through WK_10)
     *[f'MISSING_WEDNESDAY_WK_{i}' for i in range(1, 11)],
     *[f'MISSING_SUNDAY_WK_{i}' for i in range(1, 11)],
