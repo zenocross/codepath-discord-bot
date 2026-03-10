@@ -6,6 +6,8 @@ with multiple tabs for different priority levels and a summary dashboard.
 
 import csv
 import io
+import json
+import os
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -2379,8 +2381,8 @@ class TrackerDataProcessor(FileProcessor):
         
         # For each student, calculate weeks_in_phase and submission_count based on their history
         for member_id, member_submissions in submissions_by_member.items():
-            # Sort by week (ascending)
-            member_submissions.sort(key=lambda s: s.week)
+            # Sort by submission date (chronological order)
+            member_submissions.sort(key=lambda s: s.submission_date_parsed or datetime.min)
             
             # Track phase history PER CONTRIBUTION
             # When contribution_num changes, reset phase tracking
@@ -2630,8 +2632,6 @@ class TrackerDataProcessor(FileProcessor):
         Returns:
             Dict mapping member_id to intervention info
         """
-        import os
-        import json
         interventions_file = os.path.join('data', 'uploads', '_issue_interventions.json')
         
         if not os.path.exists(interventions_file):
@@ -3042,9 +3042,8 @@ class TrackerDataProcessor(FileProcessor):
         """Determine each student's priority status across all their submissions.
         
         Logic: A student is forced to ON TRACK if any of these conditions are met:
-        1. Has a Sunday submission that is ON TRACK
-        2. Has contribution_num > 1 (on second or later contribution)
-        3. Has an mr_url submitted (MR already created)
+        1. Has a valid MR (verified via _validated_mrs.json, or mr_url if file doesn't exist)
+        2. Latest Sunday submission is ON TRACK
         
         Otherwise, use the worst status across all submissions.
         
@@ -3066,28 +3065,68 @@ class TrackerDataProcessor(FileProcessor):
             "🔴 AT RISK": 3
         }
         
+        # First, find each student's latest Sunday submission (by submission date)
+        latest_sunday: Dict[str, StudentRecord] = {}
+        for s in students:
+            key = s.member_id or s.name
+            if s.sun_submitted:
+                if key not in latest_sunday:
+                    latest_sunday[key] = s
+                elif s.submission_date_parsed and latest_sunday[key].submission_date_parsed:
+                    if s.submission_date_parsed > latest_sunday[key].submission_date_parsed:
+                        latest_sunday[key] = s
+        
         # First pass: check if student meets any forced ON TRACK condition
-        # Priority: Sunday ON TRACK > Has MR > Multiple Contributions
+        # Priority: Has valid MR (highest) > Latest Sunday ON TRACK
+        # Having a valid MR means the student has completed the program's main goal
         # Note: BYPASSED is NOT a forced condition - it only applies to that specific submission,
         # other submissions should still be evaluated normally (worst status wins)
+        
+        # Load validated MRs if available
+        validated_mrs: Dict[str, dict] = {}
+        validated_mrs_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 
+                                          "data", "uploads", "_validated_mrs.json")
+        try:
+            if os.path.exists(validated_mrs_path):
+                with open(validated_mrs_path, 'r') as f:
+                    data = json.load(f)
+                    validated_mrs = data.get('students_with_valid_mr', {})
+        except Exception:
+            pass  # Fall back to mr_url check
+        
+        # Check for valid MR first (highest priority - program goal achieved)
+        # Use validated_mrs.json if available, otherwise fall back to mr_url field
+        seen_members: set = set()
+        for s in students:
+            key = s.member_id or s.name
+            if key in seen_members:
+                continue
+            seen_members.add(key)
+            
+            # Check validated MRs first (preferred)
+            if validated_mrs and str(s.member_id) in validated_mrs:
+                mr_data = validated_mrs[str(s.member_id)]
+                # Only count as valid if author matches
+                if mr_data.get('author_match', False):
+                    student_forced_reason[key] = "Has valid MR"
+            # Fall back to mr_url if no validated MRs file
+            elif not validated_mrs:
+                if s.mr_url and str(s.mr_url).strip():
+                    student_forced_reason[key] = "Has MR submitted"
+        
+        # Then check other conditions for students without MR
         for s in students:
             key = s.member_id or s.name
             
-            # Skip if already has a higher-priority reason
+            # Skip if already has forced reason (MR takes priority)
             if key in student_forced_reason:
                 continue
-                
-            # Condition 1: ON TRACK Sunday submission (highest priority - natural progression)
-            if s.sun_submitted and s.grade_status == "🟢 ON TRACK":
-                student_forced_reason[key] = ""  # Empty = natural ON TRACK, no special reason needed
-            # Condition 2: Has submitted an MR (significant progress)
-            elif s.mr_url and str(s.mr_url).strip():
-                if key not in student_forced_reason:
-                    student_forced_reason[key] = "Has MR submitted"
-            # Condition 3: On second or later contribution (completed at least one)
-            elif s.contribution_num > 1:
-                if key not in student_forced_reason:
-                    student_forced_reason[key] = f"On Contribution {s.contribution_num}"
+            
+            # Condition 2: LATEST Sunday submission is ON TRACK (natural progression)
+            # Only check the latest Sunday, not historical ones
+            if key in latest_sunday and latest_sunday[key] is s:
+                if s.grade_status == "🟢 ON TRACK":
+                    student_forced_reason[key] = ""  # Empty = natural ON TRACK, no special reason needed
         
         # Second pass: determine status
         for s in students:
