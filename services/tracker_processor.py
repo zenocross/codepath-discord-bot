@@ -440,9 +440,7 @@ class TrackerDataProcessor(FileProcessor):
         ("STALLED", "IPM_DIRECT_OUTREACH"),
         # ("TRIGGER_FOR_ESCALATION", "ESCALATED_TO_IPM"),  # Add when needed
         ("MISSING_SUNDAY_WK_", "WARNING_OUTREACH"),
-        ("MISSED_CHECKIN_SUN", "WARNING_OUTREACH"),
         ("MISSING_WEDNESDAY_WK_", "SIMPLE_OUTREACH"),
-        ("MISSED_CHECKIN_WED", "SIMPLE_OUTREACH"),
         ("NO_SUBMISSIONS", "SIMPLE_OUTREACH"),
     ]
     
@@ -457,8 +455,6 @@ class TrackerDataProcessor(FileProcessor):
         "MEMBER_ID_MISMATCH": "Member ID mismatch",
         "INVALID_MEMBER_ID": "Invalid Member ID",
         "SKIPPED_PREVIOUS_SUBMISSION": "Skipped previous submission",
-        "MISSED_CHECKIN_WED": "Missed Wednesday check-in",
-        "MISSED_CHECKIN_SUN": "Missed Sunday check-in",
         "MISSING_ADMISSION_INFO": "Missing admission info",
         "STALLED": "Stalled progress",
         "NO_SUBMISSIONS": "No submissions",
@@ -2810,28 +2806,53 @@ class TrackerDataProcessor(FileProcessor):
             # ONLY apply this to the student's LATEST record (highest submission_num) to avoid duplicates
             is_latest_record = student.submission_num == student_total_submissions
             if is_latest_record and has_official_submission and expected_submission_count > 0 and student_total_submissions < expected_submission_count:
-                # Determine what's missing based on the student's LAST submission type
-                # This handles pattern violations correctly:
-                # - If last submission was Sun, next expected is Wed → missing Wednesday
-                # - If last submission was Wed, next expected is Sun → missing Sunday
-                # This is more accurate than assuming perfect pattern based on checkpoint number
-                last_was_sunday = student.sun_submitted
-                next_expected_is_sunday = not last_was_sunday  # Opposite of what they last submitted
+                # Count actual Wednesdays and Sundays submitted by this student
+                # (need to look at all their submissions, not just the latest)
+                wed_count = sum(1 for s in students if (s.member_id or s.name) == student_key and s.wed_submitted)
+                sun_count = sum(1 for s in students if (s.member_id or s.name) == student_key and s.sun_submitted)
                 
-                # Calculate which week they're missing based on their submission count
-                # After sub 1 (Wed) → missing Sun Wk1
-                # After sub 2 (Sun) → missing Wed Wk2
-                # After sub 3 (Wed) → missing Sun Wk2
-                # After sub 3 (Sun, pattern break) → missing Wed Wk2
-                next_submission_num = student_total_submissions + 1
-                missing_week = (next_submission_num + 1) // 2  # Week number for the missing submission
+                # Calculate expected Wednesdays and Sundays by deadline
+                # Pattern: W1 Wed, W1 Sun, W2 Wed, W2 Sun, W3 Wed, W3 Sun...
+                # expected_submission_count = 1 → need 1 Wed
+                # expected_submission_count = 2 → need 1 Wed, 1 Sun
+                # expected_submission_count = 3 → need 2 Wed, 1 Sun
+                # expected_submission_count = 4 → need 2 Wed, 2 Sun
+                expected_wed = (expected_submission_count + 1) // 2
+                expected_sun = expected_submission_count // 2
                 
-                if next_expected_is_sunday:  # Missing Sunday - AT RISK
+                # Determine what's missing based on type count
+                missing_interventions = []
+                
+                # Missing Wednesdays
+                missing_wed_count = max(0, expected_wed - wed_count)
+                # Missing Sundays
+                missing_sun_count = max(0, expected_sun - sun_count)
+                
+                # Add missing Wednesday interventions (starting from latest expected week)
+                # If expected 2 Wed and have 1, missing is Week 2 Wed
+                # Append asterisk (*) to the latest (most recent) missing one
+                for i in range(missing_wed_count):
+                    missing_week = expected_wed - i
+                    suffix = "*" if i == 0 else ""  # Latest gets asterisk
+                    missing_interventions.append(f"MISSING_WEDNESDAY_WK_{missing_week}{suffix}")
+                
+                # Add missing Sunday interventions
+                for i in range(missing_sun_count):
+                    missing_week = expected_sun - i
+                    suffix = "*" if i == 0 else ""  # Latest gets asterisk
+                    missing_interventions.append(f"MISSING_SUNDAY_WK_{missing_week}{suffix}")
+                
+                # Sort interventions by week (already handled by sort key later)
+                
+                # Set status based on whether any Sunday is missing (AT RISK) or only Wednesdays (FLAGGED)
+                if missing_sun_count > 0:
                     at_risk = True
-                    intervention = f"MISSING_SUNDAY_WK_{missing_week}"
-                else:  # Missing Wednesday - FLAGGED (not AT RISK)
+                elif missing_wed_count > 0:
                     flagged = True
-                    intervention = f"MISSING_WEDNESDAY_WK_{missing_week}"
+                
+                # Join all missing interventions
+                if missing_interventions:
+                    intervention = "\n".join(missing_interventions)
             
             # Phase critical (stuck in early phase late in program)
             elif student.week >= 6 and phase_num <= 2:
@@ -2848,25 +2869,11 @@ class TrackerDataProcessor(FileProcessor):
             
             # Check for additional FLAGGED conditions (only if not already at_risk or flagged)
             if not at_risk and not flagged:
-                # Skipped previous submission (expected Wed but got Sun, or vice versa)
-                # Pattern should be: Wed, Sun, Wed, Sun (submission 1=Wed, 2=Sun, 3=Wed, 4=Sun)
-                # Skip this check for students with only early submissions (before start_date)
-                if student.skipped_previous_submission and has_official_submission:
-                    expected = student.expected_submission_type
-                    actual = "Sun" if student.sun_submitted else "Wed"
-                    student._intervention_detail = f"Expected {expected}, got {actual} (submission #{student.submission_num})"
-                    
-                    if expected == "Sun":
-                        # Expected Sunday but got Wednesday - missed Sunday check-in → AT RISK
-                        at_risk = True
-                        intervention = "MISSED_CHECKIN_SUN"
-                    else:
-                        # Expected Wednesday but got Sunday - missed Wednesday check-in → FLAGGED
-                        flagged = True
-                        intervention = "MISSED_CHECKIN_WED"
+                # Note: MISSED_CHECKIN_SUN/WED removed - now handled by MISSING_SUNDAY/WEDNESDAY_WK_X
+                # which counts actual submission types vs expected
                 
                 # Stalled with blockers (moved from At Risk to Flagged)
-                elif student.blocked and student.blocker_desc:
+                if student.blocked and student.blocker_desc:
                     flagged = True
                     intervention = "STALLED"
                 
@@ -3436,38 +3443,44 @@ class TrackerDataProcessor(FileProcessor):
             def intervention_sort_key(intv: str) -> tuple:
                 if status_filter == "🟡 FLAGGED":
                     # P2 Flagged sort order
+                    # For MISSING_WEDNESDAY, sort by week number descending (highest first)
                     if "MISSING_WEDNESDAY_WK" in intv:
-                        return (0, intv)
-                    elif "MISSED_CHECKIN_WED" in intv:
-                        return (1, intv)
+                        match = re.search(r'WK_(\d+)', intv)
+                        week_num = int(match.group(1)) if match else 0
+                        return (0, -week_num, intv)  # Negative for descending order
                     elif "STALLED" in intv:
-                        return (2, intv)
+                        return (1, 0, intv)
                     elif "SKIPPED_PHASE" in intv:
-                        return (3, intv)
+                        return (2, 0, intv)
                     elif "MISSING_PREVIOUS_PHASE" in intv:
-                        return (4, intv)
+                        return (3, 0, intv)
                     elif "UNEXPECTED_PHASE_CHANGE" in intv:
-                        return (5, intv)
+                        return (4, 0, intv)
                     elif "SKIPPED_PREVIOUS_SUBMISSION" in intv:
-                        return (6, intv)
+                        return (5, 0, intv)
                     elif "JSON_SAFEPARSE_ISSUE" in intv:
-                        return (7, intv)
+                        return (6, 0, intv)
                     else:
-                        return (8, intv)
+                        return (7, 0, intv)
                 else:
                     # P1 At Risk sort order (default)
+                    # Sort: NO_SUBMISSIONS, then MISSING by week (highest first), 
+                    # within each week: Sunday before Wednesday
                     if "NO_SUBMISSIONS" in intv:
-                        return (0, intv)
-                    elif "MISSING_SUNDAY_WK_" in intv:
-                        return (1, intv)
-                    elif "MISSED_CHECKIN_SUN" in intv:
-                        return (2, intv)
+                        return (0, 0, 0, intv)
+                    elif "MISSING_SUNDAY_WK_" in intv or "MISSING_WEDNESDAY_WK_" in intv:
+                        # Extract week number, sort descending (highest week first)
+                        # Within same week: Sunday (0) before Wednesday (1)
+                        match = re.search(r'WK_(\d+)', intv)
+                        week_num = int(match.group(1)) if match else 0
+                        day_order = 0 if "SUNDAY" in intv else 1  # Sun=0, Wed=1
+                        return (1, -week_num, day_order, intv)  # Negative week for descending
                     elif "STALLED" in intv:
-                        return (3, intv)
+                        return (2, 0, 0, intv)
                     elif "MISSING_DELIVERABLES" in intv:
-                        return (4, intv)
+                        return (3, 0, 0, intv)
                     else:
-                        return (5, intv)
+                        return (4, 0, 0, intv)
             
             interventions = "\n".join(sorted(data['interventions'], key=intervention_sort_key)) if data['interventions'] else "N/A"
             
@@ -3614,25 +3627,25 @@ class TrackerDataProcessor(FileProcessor):
         def flagged_sort_key(s):
             intv = s.get('interventions_str', 'N/A')
             # Priority order for flagged interventions
+            # For MISSING_WEDNESDAY, sort by week descending (highest first)
             if "MISSING_WEDNESDAY_WK" in intv:
-                priority = 0
-            elif "MISSED_CHECKIN_WED" in intv:
-                priority = 1
+                match = re.search(r'WK_(\d+)', intv)
+                week_num = int(match.group(1)) if match else 0
+                return (0, -week_num, intv, s['description'])  # Negative for descending
             elif "STALLED" in intv:
-                priority = 2
+                return (1, 0, intv, s['description'])
             elif "SKIPPED_PHASE" in intv:
-                priority = 3
+                return (2, 0, intv, s['description'])
             elif "MISSING_PREVIOUS_PHASE" in intv:
-                priority = 4
+                return (3, 0, intv, s['description'])
             elif "UNEXPECTED_PHASE_CHANGE" in intv:
-                priority = 5
+                return (4, 0, intv, s['description'])
             elif "SKIPPED_PREVIOUS_SUBMISSION" in intv:
-                priority = 6
+                return (5, 0, intv, s['description'])
             elif "JSON_SAFEPARSE_ISSUE" in intv:
-                priority = 7
+                return (6, 0, intv, s['description'])
             else:
-                priority = 8
-            return (priority, intv, s['description'])
+                return (7, 0, intv, s['description'])
         
         flagged.sort(key=flagged_sort_key)
         

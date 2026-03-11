@@ -56,7 +56,7 @@
     "hayate_kun01": 84,
     "mgadepalli_27526": 23,
     "duckylikesbread": 11,
-    "beast.op": 5,
+    "beast.op": 10,
     "_depressed_": 23,
     "suzkim23": 12,
     "chichizhang0510": 5,
@@ -2161,6 +2161,13 @@
         "timestamp": "2026-02-23T05:47:33.246000+00:00",
         "channel_id": "1451043797483131000",
         "message_id": "1475368465710846014"
+      },
+      {
+        "points": 5,
+        "type": "first_post",
+        "timestamp": "2026-03-11T22:11:18.586000+00:00",
+        "channel_id": "1471205680806625434",
+        "message_id": "1481414241780240657"
       }
     ],
     "_depressed_": [
