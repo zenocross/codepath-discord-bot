@@ -1754,7 +1754,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
             
         Examples:
             !tracker search_issues_title JsonSafeParse
-            !tracker search_issues_title JsonSafeParse intervention:JSON_SAFEPARSE_SUPPORT
+            !tracker search_issues_title JsonSafeParse intervention:JSON_SAFEPARSE_ISSUE
         
         When intervention parameter is provided, matching students will be saved
         for automatic flagging during submissions_download.
@@ -2086,7 +2086,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
         Examples:
             !tracker clear_issue_intervention 123456
             !tracker clear_issue_intervention clear_all
-            !tracker clear_issue_intervention type:JSON_SAFEPARSE_SUPPORT
+            !tracker clear_issue_intervention type:JSON_SAFEPARSE_ISSUE
         """
         import json
         import os

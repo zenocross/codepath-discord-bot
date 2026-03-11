@@ -1,293 +1,293 @@
 {
   "115965": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586122",
     "issue_title": "Fix Gitlab/JsonSafeParse: ee/app/services/geo/base_batch_bulk_update_service.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.788957"
   },
   "54243": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586073",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/gitlab/import_export/json/ndjson_reader.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.788970"
   },
   "115747": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586035",
     "issue_title": "Fix Gitlab/JsonSafeParse: db/post_migrate/20251202015055_sanitize_ai_catalog_item_definitions.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.788972"
   },
   "79141": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586143",
     "issue_title": "Fix Gitlab/JsonSafeParse: ee/lib/analytics/ai_user_metrics_database_write_buffer.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.788974"
   },
   "111207": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586049",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/gitlab/cache/json_caches/redis_keyed.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.788975"
   },
   "138945": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586033",
     "issue_title": "Fix Gitlab/JsonSafeParse: app/validators/json_schema_validator.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.788977"
   },
   "148473": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586032",
     "issue_title": "Fix Gitlab/JsonSafeParse: app/services/web_hook_service.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789042"
   },
   "130091": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586050",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/gitlab/chat_name_token.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.788981"
   },
   "128133": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586046",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/gitlab/background_migration/migrate_remediations_for_vulnerability_findings.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.788982"
   },
   "138794": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586097",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/tasks/ci/validate_id_token_configuration_task.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.788983"
   },
   "112646": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586124",
     "issue_title": "Fix Gitlab/JsonSafeParse: ee/app/services/gitlab_subscriptions/fetch_subscription_plans_service.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.788985"
   },
   "134208": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586112",
     "issue_title": "Fix Gitlab/JsonSafeParse: ee/app/models/ee/ci/pipeline.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.788987"
   },
   "130082": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586049",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/gitlab/cache/json_caches/redis_keyed.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.788988"
   },
   "132905": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586070#note_3118224734",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/gitlab/graphql/pagination/keyset/connection.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789053"
   },
   "25888": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586029",
     "issue_title": "Fix Gitlab/JsonSafeParse: app/services/packages/npm/process_temporary_package_file_service.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.788991"
   },
   "113097": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586117",
     "issue_title": "Fix Gitlab/JsonSafeParse: ee/app/models/virtual_registries/container/upstream.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.788992"
   },
   "111582": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586136",
     "issue_title": "Fix Gitlab/JsonSafeParse: ee/app/workers/product_analytics/initialize_snowplow_product_analytics_worker.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789020"
   },
   "122491": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586050",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/gitlab/chat_name_token.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.788996"
   },
   "85567": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586048",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/gitlab/cache/json_caches/json_keyed.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.788998"
   },
   "101792": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586137",
     "issue_title": "Fix Gitlab/JsonSafeParse: ee/lib/ai/context/dependencies/config_files/cpp_vcpkg.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789040"
   },
   "87308": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586093",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/gitlab/usage/metric_definition.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789001"
   },
   "92377": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/work_items/586141",
     "issue_title": "Fix Gitlab/JsonSafeParse: ee/lib/ai/context/dependencies/config_files/php_composer_lock.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789044"
   },
   "144569": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586078",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/gitlab/manifest_import/metadata.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789005"
   },
   "99144": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586105",
     "issue_title": "Fix Gitlab/JsonSafeParse: ee/app/graphql/types/json_string_type.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789007"
   },
   "115531": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586094",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/gitlab/webpack/manifest.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789008"
   },
   "82801": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586017",
     "issue_title": "Fix Gitlab/JsonSafeParse: app/presenters/ci/pipeline_artifacts/code_coverage_presenter.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789010"
   },
   "103088": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586100",
     "issue_title": "Fix Gitlab/JsonSafeParse: keeps/delete_old_feature_flags.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789011"
   },
   "138804": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586035",
     "issue_title": "Fix Gitlab/JsonSafeParse: db/post_migrate/20251202015055_sanitize_ai_catalog_item_definitions.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789013"
   },
   "135126": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586041",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/click_house/write_buffer.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789014"
   },
   "112871": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586098",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/tasks/gitlab/background_migrations.rake",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789016"
   },
   "59602": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586107",
     "issue_title": "Fix Gitlab/JsonSafeParse: ee/app/models/ai/conversation/message.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789017"
   },
   "45164": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586018",
     "issue_title": "Fix Gitlab/JsonSafeParse: app/presenters/ci/pipeline_artifacts/code_quality_mr_diff_presenter.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789018"
   },
   "134724": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586015",
     "issue_title": "Fix Gitlab/JsonSafeParse: app/models/concerns/redis_cacheable.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789035"
   },
   "104339": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586050",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/gitlab/chat_name_token.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789037"
   },
   "91371": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586024",
     "issue_title": "Fix Gitlab/JsonSafeParse: app/services/jira/requests/base.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789038"
   },
   "92595": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586082",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/gitlab/performance_bar/stats.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789041"
   },
   "12352": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586037",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/banzai/filter/json_table_filter.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789045"
   },
   "61305": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586074",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/gitlab/import_export/lfs_restorer.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789046"
   },
   "138701": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586126",
     "issue_title": "Fix Gitlab/JsonSafeParse: ee/app/services/sbom/ingestion/vulnerability_data.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789048"
   },
   "107460": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586107",
     "issue_title": "Fix Gitlab/JsonSafeParse: ee/app/models/ai/conversation/message.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789049"
   },
   "119330": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586139",
     "issue_title": "Fix Gitlab/JsonSafeParse: ee/lib/ai/context/dependencies/config_files/javascript_npm_lock.rb",
     "search_term": "JsonSafeparse",
     "added_at": "2026-03-09T23:38:43.789051"
   },
   "137041": {
-    "intervention_type": "JSON_SAFEPARSE_SUPPORT",
+    "intervention_type": "JSON_SAFEPARSE_ISSUE",
     "issue_url": "https://gitlab.com/gitlab-org/gitlab/-/issues/586043",
     "issue_title": "Fix Gitlab/JsonSafeParse: lib/gitlab/auth/otp/strategies/duo_auth/manual_otp.rb",
     "search_term": "JsonSafeparse",

@@ -436,10 +436,13 @@ class TrackerDataProcessor(FileProcessor):
     # Each tuple: (trigger_substring, intervention_type)
     # First match wins based on order
     INTERVENTION_TYPE_HIERARCHY = [
-        ("JSON_SAFEPARSE_SUPPORT", "IPM_GUIDED_SUPPORT"),
+        ("JSON_SAFEPARSE_ISSUE", "IPM_GUIDED_SUPPORT"),
         ("STALLED", "IPM_DIRECT_OUTREACH"),
         # ("TRIGGER_FOR_ESCALATION", "ESCALATED_TO_IPM"),  # Add when needed
         ("MISSING_SUNDAY_WK_", "WARNING_OUTREACH"),
+        ("MISSED_CHECKIN_SUN", "WARNING_OUTREACH"),
+        ("MISSING_WEDNESDAY_WK_", "SIMPLE_OUTREACH"),
+        ("MISSED_CHECKIN_WED", "SIMPLE_OUTREACH"),
         ("NO_SUBMISSIONS", "SIMPLE_OUTREACH"),
     ]
     
@@ -448,6 +451,40 @@ class TrackerDataProcessor(FileProcessor):
         # Add trigger substrings here when needed
         # e.g., "NEEDS_MENTOR_REVIEW"
     ]
+    
+    # Mapping from intervention codes to human-readable descriptions
+    INTERVENTION_READABLE = {
+        "MEMBER_ID_MISMATCH": "Member ID mismatch",
+        "INVALID_MEMBER_ID": "Invalid Member ID",
+        "SKIPPED_PREVIOUS_SUBMISSION": "Skipped previous submission",
+        "MISSED_CHECKIN_WED": "Missed Wednesday check-in",
+        "MISSED_CHECKIN_SUN": "Missed Sunday check-in",
+        "MISSING_ADMISSION_INFO": "Missing admission info",
+        "STALLED": "Stalled progress",
+        "NO_SUBMISSIONS": "No submissions",
+        "JSON_SAFEPARSE_ISSUE": "JSON SafeParse issue",
+        "MR_URL_MISMATCH": "MR URL mismatch",
+        "ISSUE_IN_README": "Issue URL in readme field",
+    }
+    
+    def _intervention_to_readable(self, intervention: str) -> str:
+        """Convert an intervention code to a human-readable description."""
+        # Check for exact matches first
+        if intervention in self.INTERVENTION_READABLE:
+            return self.INTERVENTION_READABLE[intervention]
+        
+        # Check for pattern matches (e.g., MISSING_SUNDAY_WK_3)
+        if intervention.startswith("MISSING_SUNDAY_WK_"):
+            week = intervention.replace("MISSING_SUNDAY_WK_", "")
+            return f"Missing Sunday Week {week}"
+        if intervention.startswith("MISSING_WEDNESDAY_WK_"):
+            week = intervention.replace("MISSING_WEDNESDAY_WK_", "")
+            return f"Missing Wednesday Week {week}"
+        if intervention.startswith("MISSING_DELIVERABLES"):
+            return "Missing deliverables"
+        
+        # Default: replace underscores with spaces and title case
+        return intervention.replace("_", " ").title()
     
     @property
     def input_type(self) -> str:
@@ -2174,30 +2211,37 @@ class TrackerDataProcessor(FileProcessor):
                 key=lambda s: (s.submission_date_parsed is None, s.submission_date_parsed or datetime.max)
             )
             
-            # Separate early submissions from official ones
-            early_submissions = []
-            official_submissions = []
-            for student in sorted_group:
-                is_early = False
-                if first_wednesday and student.submission_date_parsed:
-                    if student.submission_date_parsed.date() < first_wednesday.date():
-                        is_early = True
-                
-                if is_early:
-                    early_submissions.append(student)
-                else:
-                    official_submissions.append(student)
+            # Check if the first submission is an "early Sunday" - a Sunday check-in
+            # submitted before the first Wednesday deadline. This should be ignored
+            # for pattern checking purposes (student got ahead, not a pattern violation)
+            skip_first_for_pattern = False
+            if sorted_group and first_wednesday:
+                first_sub = sorted_group[0]
+                if (first_sub.sun_submitted and 
+                    first_sub.submission_date_parsed and 
+                    first_sub.submission_date_parsed.date() < first_wednesday.date()):
+                    skip_first_for_pattern = True
             
-            # Assign sequential numbers to ALL submissions (early ones get numbers too)
-            # But only check pattern for official submissions
-            all_sorted = early_submissions + official_submissions
-            for idx, student in enumerate(all_sorted, 1):
+            # Assign sequential numbers to ALL submissions in chronological order
+            # Early Wed submissions still count toward the pattern (maps to W1 Wed slot)
+            # But early Sun submissions are exempt from pattern checking
+            pattern_offset = 1 if skip_first_for_pattern else 0
+            
+            for idx, student in enumerate(sorted_group, 1):
                 student.submission_num = idx
-            
-            # Only check pattern for official submissions, numbered starting from 1
-            for official_idx, student in enumerate(official_submissions, 1):
+                
+                # If first submission was an early Sunday, exempt it from pattern checking
+                if idx == 1 and skip_first_for_pattern:
+                    student.expected_submission_type = ""  # No expectation
+                    student.skipped_previous_submission = False
+                    continue
+                
+                # Adjust pattern index if we're skipping the first submission
+                pattern_idx = idx - pattern_offset
+                
                 # Expected pattern: odd = Wednesday, even = Sunday
-                expected_is_sunday = (official_idx % 2 == 0)
+                # Pattern index 1 = Wed, 2 = Sun, 3 = Wed, 4 = Sun...
+                expected_is_sunday = (pattern_idx % 2 == 0)
                 student.expected_submission_type = "Sun" if expected_is_sunday else "Wed"
                 
                 # Check if actual matches expected
@@ -2210,11 +2254,6 @@ class TrackerDataProcessor(FileProcessor):
                 elif not expected_is_sunday and not actual_is_wednesday and actual_is_sunday:
                     # Expected Wednesday but got Sunday - skipped Wednesday
                     student.skipped_previous_submission = True
-            
-            # Early submissions don't get pattern checks - just mark them as exempt
-            for student in early_submissions:
-                student.expected_submission_type = ""  # No expectation for early
-                student.skipped_previous_submission = False  # Never flagged
     
     def _normalize_phase(self, phase_str: str) -> str:
         """Normalize phase string to consistent format (Phase # only)."""
@@ -2403,55 +2442,48 @@ class TrackerDataProcessor(FileProcessor):
             # Sort by submission date (chronological order)
             member_submissions.sort(key=lambda s: s.submission_date_parsed or datetime.min)
             
-            # Track phase history PER CONTRIBUTION
-            # When contribution_num changes, reset phase tracking
-            current_contribution = None
+            # Track phase history globally for the student (not per contribution)
+            # Contribution number changes are ignored to avoid user input errors
             current_phase = None
             phase_start_week = None
-            contribution_start_week = None  # Track when each contribution started
-            phases_submitted_for_contribution: set = set()  # Track which phases have submissions
+            first_submission_week = None  # Track when student first submitted
+            phases_submitted: set = set()  # Track which phases have submissions (global)
             
             for submission in member_submissions:
                 phase_num = self._get_phase_number(submission.current_phase)
                 week = submission.week
-                contrib_num = submission.contribution_num
                 
-                # Check if this is a new contribution
-                if contrib_num != current_contribution:
-                    # New contribution - reset phase tracking
-                    current_contribution = contrib_num
-                    current_phase = None
-                    phase_start_week = None
-                    contribution_start_week = week  # This contribution started this week
-                    phases_submitted_for_contribution = set()  # Reset phases tracking
+                # Track first submission week
+                if first_submission_week is None:
+                    first_submission_week = week
                 
-                # Track this phase as having a submission
+                # Track this phase as having a submission (globally, not per contribution)
                 if phase_num > 0:
-                    phases_submitted_for_contribution.add(phase_num)
+                    phases_submitted.add(phase_num)
                 
                 # Calculate weeks_in_phase
                 if phase_num != current_phase:
-                    # Phase changed (or first submission for this contribution)
+                    # Phase changed (or first submission)
                     previous_phase_num = current_phase
                     current_phase = phase_num
                     
                     if phase_start_week is None:
-                        # First submission for this contribution
-                        # Infer phase_start_week based on contribution_start_week
+                        # First submission for this student
+                        # Infer phase_start_week based on first_submission_week
                         if phase_num == 1:
-                            # Phase 1 - started when contribution started
-                            phase_start_week = contribution_start_week
+                            # Phase 1 - started when student first submitted
+                            phase_start_week = first_submission_week
                         else:
-                            # Higher phase on first submission of contribution
-                            # Estimate based on weeks since contribution started
-                            weeks_in_contribution = week - contribution_start_week + 1
+                            # Higher phase on first submission
+                            # Estimate based on weeks since first submission
+                            weeks_since_start = week - first_submission_week + 1
                             # Assume ~1 week per earlier phase
-                            estimated_phase_start = contribution_start_week + (phase_num - 1)
-                            phase_start_week = min(week, max(contribution_start_week, estimated_phase_start))
+                            estimated_phase_start = first_submission_week + (phase_num - 1)
+                            phase_start_week = min(week, max(first_submission_week, estimated_phase_start))
                         submission.phase_changed_this_week = False
                         submission._unexpected_phase_change = False
                     else:
-                        # We have history for this contribution - phase just changed
+                        # We have history - phase just changed
                         phase_start_week = week
                         submission.phase_changed_this_week = True
                         # Check for illogical phase change (going backwards)
@@ -2465,9 +2497,9 @@ class TrackerDataProcessor(FileProcessor):
                 weeks_in_current_phase = week - phase_start_week + 1
                 submission.weeks_in_phase = max(1, weeks_in_current_phase)
                 
-                # Also track weeks on this contribution
-                submission.weeks_on_contribution = week - contribution_start_week + 1
-                submission.contribution_start_week = contribution_start_week
+                # Track weeks since first submission
+                submission.weeks_on_contribution = week - first_submission_week + 1
+                submission.contribution_start_week = first_submission_week
                 
                 # Check for missing IMMEDIATE previous phase (no submission record)
                 # Only flag if the phase directly before current is missing
@@ -2486,7 +2518,7 @@ class TrackerDataProcessor(FileProcessor):
                         manual_phases = list(range(1, phases_data + 1))
                 
                 # Combine all completed phases (from submissions + manual completions)
-                all_completed_phases = phases_submitted_for_contribution | set(manual_phases)
+                all_completed_phases = phases_submitted | set(manual_phases)
                 
                 # MISSING_PREVIOUS_PHASE: immediate previous phase (current - 1) is missing
                 previous_phase_covered = immediate_previous_phase in all_completed_phases
@@ -2739,8 +2771,9 @@ class TrackerDataProcessor(FileProcessor):
                 _, sun_deadline = self._get_week_deadlines(start_date, student.week)
                 sun_deadline_passed = target_date.date() >= sun_deadline.date()
             
-            # Check for AT RISK conditions
+            # Check for AT RISK and FLAGGED conditions
             at_risk = False
+            flagged = False
             intervention = ""
             
             # Get this student's key for lookups
@@ -2777,14 +2810,27 @@ class TrackerDataProcessor(FileProcessor):
             # ONLY apply this to the student's LATEST record (highest submission_num) to avoid duplicates
             is_latest_record = student.submission_num == student_total_submissions
             if is_latest_record and has_official_submission and expected_submission_count > 0 and student_total_submissions < expected_submission_count:
-                at_risk = True
-                # Determine what's missing based on expected vs actual
-                # expected=1 → Wed Wk1, expected=2 → Sun Wk1, expected=3 → Wed Wk2, etc.
-                if expected_submission_count % 2 == 0:  # Sunday checkpoint
-                    missing_week = expected_submission_count // 2
+                # Determine what's missing based on the student's LAST submission type
+                # This handles pattern violations correctly:
+                # - If last submission was Sun, next expected is Wed → missing Wednesday
+                # - If last submission was Wed, next expected is Sun → missing Sunday
+                # This is more accurate than assuming perfect pattern based on checkpoint number
+                last_was_sunday = student.sun_submitted
+                next_expected_is_sunday = not last_was_sunday  # Opposite of what they last submitted
+                
+                # Calculate which week they're missing based on their submission count
+                # After sub 1 (Wed) → missing Sun Wk1
+                # After sub 2 (Sun) → missing Wed Wk2
+                # After sub 3 (Wed) → missing Sun Wk2
+                # After sub 3 (Sun, pattern break) → missing Wed Wk2
+                next_submission_num = student_total_submissions + 1
+                missing_week = (next_submission_num + 1) // 2  # Week number for the missing submission
+                
+                if next_expected_is_sunday:  # Missing Sunday - AT RISK
+                    at_risk = True
                     intervention = f"MISSING_SUNDAY_WK_{missing_week}"
-                else:  # Wednesday checkpoint
-                    missing_week = (expected_submission_count + 1) // 2
+                else:  # Missing Wednesday - FLAGGED (not AT RISK)
+                    flagged = True
                     intervention = f"MISSING_WEDNESDAY_WK_{missing_week}"
             
             # Phase critical (stuck in early phase late in program)
@@ -2800,19 +2846,24 @@ class TrackerDataProcessor(FileProcessor):
             # Note: Old consecutive_misses/last_week_sun_missing checks removed
             # Now handled by SKIPPED_PREVIOUS_SUBMISSION in flagged section
             
-            # Check for FLAGGED conditions
-            flagged = False
-            
-            if not at_risk:
+            # Check for additional FLAGGED conditions (only if not already at_risk or flagged)
+            if not at_risk and not flagged:
                 # Skipped previous submission (expected Wed but got Sun, or vice versa)
                 # Pattern should be: Wed, Sun, Wed, Sun (submission 1=Wed, 2=Sun, 3=Wed, 4=Sun)
                 # Skip this check for students with only early submissions (before start_date)
                 if student.skipped_previous_submission and has_official_submission:
-                    flagged = True
                     expected = student.expected_submission_type
                     actual = "Sun" if student.sun_submitted else "Wed"
-                    intervention = "SKIPPED_PREVIOUS_SUBMISSION"
                     student._intervention_detail = f"Expected {expected}, got {actual} (submission #{student.submission_num})"
+                    
+                    if expected == "Sun":
+                        # Expected Sunday but got Wednesday - missed Sunday check-in → AT RISK
+                        at_risk = True
+                        intervention = "MISSED_CHECKIN_SUN"
+                    else:
+                        # Expected Wednesday but got Sunday - missed Wednesday check-in → FLAGGED
+                        flagged = True
+                        intervention = "MISSED_CHECKIN_WED"
                 
                 # Stalled with blockers (moved from At Risk to Flagged)
                 elif student.blocked and student.blocker_desc:
@@ -2862,16 +2913,10 @@ class TrackerDataProcessor(FileProcessor):
                     flagged = True
                     intervention = "INCORRECT_PHASE_URL"
                 
-                # Missing deliverables for current phase (only check Sunday submissions)
-                # Wednesday check-ins don't require complete deliverables
-                elif student.sun_submitted and student.deliverables_complete < student.deliverables_expected:
-                    flagged = True
-                    missing_items = self._get_missing_deliverables(student, phase_num)
-                    if missing_items:
-                        items_list = "\n".join(f"-{item}" for item in missing_items)
-                        intervention = f"MISSING_DELIVERABLES:\n{items_list}"
-                    else:
-                        intervention = "MISSING_DELIVERABLES"
+                # Note: Missing deliverables for CURRENT phase is no longer flagged
+                # Students may still be working on their current phase deliverables
+                # Only flag if they've moved to a new phase with incomplete previous phase
+                # (This would require tracking historical phase data - not implemented)
                 
                 # No recent commits
                 elif student.days_since_commit > 7:
@@ -2906,7 +2951,7 @@ class TrackerDataProcessor(FileProcessor):
                     at_risk = True
             
             # Apply issue-based interventions (from search_issues_title command)
-            # These are for grouping purposes only (e.g., JSON_SAFEPARSE_SUPPORT)
+            # These are for grouping purposes only (e.g., JSON_SAFEPARSE_ISSUE)
             # They do NOT change the student's grade status - just add the intervention reason
             # Only apply to the LATEST record (max submission_num) so it doesn't duplicate across records
             max_sub = student_max_submission.get(student_key, 0)
@@ -3240,6 +3285,7 @@ class TrackerDataProcessor(FileProcessor):
                     'timeline': s.timeline_type,
                     'issues': set(),
                     'interventions': set(),
+                    'intervention_submissions': {},  # Track which submissions each intervention applies to
                     'submission_nums': set(),  # Track flagged submission numbers
                     'blocked': s.blocked,
                     'blocker_desc': s.blocker_desc,
@@ -3282,15 +3328,28 @@ class TrackerDataProcessor(FileProcessor):
             if s.sun_submitted:
                 student_map[key]['week_submissions'][s.week]['sun'] = True
             
-            # Only collect issues for At Risk and Flagged students (not On Track)
-            if status_filter == "🟢 ON TRACK":
-                # For On Track students, don't collect issues - just count submissions
-                continue
-            
-            # Collect all issues/interventions for At Risk and Flagged
-            # Use intervention_reason which contains the full intervention details
+            # Collect interventions
+            # For On Track students, only collect JSON_SAFEPARSE_ISSUE (for grouping purposes)
+            # For At Risk/Flagged students, collect all interventions
             if s.intervention_reason:
-                student_map[key]['interventions'].add(s.intervention_reason)
+                for intv in s.intervention_reason.split('\n'):
+                    intv = intv.strip()
+                    if intv:
+                        # For On Track, only collect specific interventions like JSON_SAFEPARSE_ISSUE
+                        if status_filter == "🟢 ON TRACK":
+                            if "JSON_SAFEPARSE_ISSUE" not in intv:
+                                continue
+                        
+                        student_map[key]['interventions'].add(intv)
+                        # Track submission number for this intervention
+                        if intv not in student_map[key]['intervention_submissions']:
+                            student_map[key]['intervention_submissions'][intv] = set()
+                        if s.submission_num > 0:
+                            student_map[key]['intervention_submissions'][intv].add(s.submission_num)
+            
+            # For On Track students, skip collecting other issues
+            if status_filter == "🟢 ON TRACK":
+                continue
             
             # Track if any submission was bypassed but student is still at risk
             if getattr(s, '_bypassed_but_at_risk', False):
@@ -3308,9 +3367,8 @@ class TrackerDataProcessor(FileProcessor):
             if s.consecutive_misses > 0:
                 student_map[key]['issues'].add(f"Week {s.week}: {s.consecutive_misses} consecutive miss(es)")
             
-            # Only flag missing deliverables for Sunday submissions
-            if s.sun_submitted and s.deliverables_complete < s.deliverables_expected and s.week > 0:
-                student_map[key]['issues'].add(f"Week {s.week}: Missing deliverables ({s.deliverables_complete}/{s.deliverables_expected})")
+            # Note: Missing deliverables for current phase is no longer flagged
+            # Students may still be working on their current phase
             
             if s.blocked:
                 student_map[key]['issues'].add(f"Week {s.week}: Blocked - {s.blocker_desc[:50] if s.blocker_desc else 'Unknown'}")
@@ -3343,11 +3401,6 @@ class TrackerDataProcessor(FileProcessor):
             if s.invalid_member_id:
                 student_map[key]['issues'].add(f"Invalid Member ID: {s.member_id or 'empty'}")
             
-            # Track week input mismatches (student entered wrong week in typeform)
-            if s.week_input and s.week_input != s.week:
-                sub_type = "Sun" if s.sun_submitted else "Wed"
-                student_map[key]['issues'].add(f"Week {s.week}: Input mismatch (entered Week {s.week_input} for {sub_type})")
-            
             # Track skipped previous submission (pattern mismatch: expected Wed-Sun-Wed-Sun)
             if s.skipped_previous_submission:
                 expected = s.expected_submission_type
@@ -3379,22 +3432,80 @@ class TrackerDataProcessor(FileProcessor):
             
             issues_list = sorted(data['issues'], key=issue_sort_key)
             # Use newline separator for interventions (this becomes intervention_reason)
-            # Sort by priority: NO_SUBMISSIONS, MISSING_SUNDAY_WK_X, STALLED, MISSING_DELIVERABLES, then others
+            # Sort order depends on status filter (P1 vs P2 have different priorities)
             def intervention_sort_key(intv: str) -> tuple:
-                if "NO_SUBMISSIONS" in intv:
-                    return (0, intv)
-                elif "MISSING_SUNDAY_WK_" in intv:
-                    return (1, intv)
-                elif "STALLED" in intv:
-                    return (2, intv)
-                elif "MISSING_DELIVERABLES" in intv:
-                    return (3, intv)
+                if status_filter == "🟡 FLAGGED":
+                    # P2 Flagged sort order
+                    if "MISSING_WEDNESDAY_WK" in intv:
+                        return (0, intv)
+                    elif "MISSED_CHECKIN_WED" in intv:
+                        return (1, intv)
+                    elif "STALLED" in intv:
+                        return (2, intv)
+                    elif "SKIPPED_PHASE" in intv:
+                        return (3, intv)
+                    elif "MISSING_PREVIOUS_PHASE" in intv:
+                        return (4, intv)
+                    elif "UNEXPECTED_PHASE_CHANGE" in intv:
+                        return (5, intv)
+                    elif "SKIPPED_PREVIOUS_SUBMISSION" in intv:
+                        return (6, intv)
+                    elif "JSON_SAFEPARSE_ISSUE" in intv:
+                        return (7, intv)
+                    else:
+                        return (8, intv)
                 else:
-                    return (4, intv)
+                    # P1 At Risk sort order (default)
+                    if "NO_SUBMISSIONS" in intv:
+                        return (0, intv)
+                    elif "MISSING_SUNDAY_WK_" in intv:
+                        return (1, intv)
+                    elif "MISSED_CHECKIN_SUN" in intv:
+                        return (2, intv)
+                    elif "STALLED" in intv:
+                        return (3, intv)
+                    elif "MISSING_DELIVERABLES" in intv:
+                        return (4, intv)
+                    else:
+                        return (5, intv)
             
             interventions = "\n".join(sorted(data['interventions'], key=intervention_sort_key)) if data['interventions'] else "N/A"
-            # Use newline separator for better readability
-            description = "\n".join(issues_list) if issues_list else "No specific issues identified"
+            
+            # Build enhanced description showing which submissions each intervention applies to
+            # Format: "Member ID mismatch (Submissions 1, 2, 3, 4)"
+            # Skip submission numbers for MISSING interventions (doesn't make sense for missing items)
+            # Skip descriptions entirely for JSON_SAFEPARSE_ISSUE (only used for grouping)
+            intervention_descriptions = []
+            intervention_submissions = data.get('intervention_submissions', {})
+            skip_submission_nums = ("MISSING_WEDNESDAY_WK", "MISSING_SUNDAY_WK", "NO_SUBMISSIONS")
+            skip_description_entirely = ("JSON_SAFEPARSE_ISSUE",)
+            for intv in sorted(data['interventions'], key=intervention_sort_key):
+                # Skip adding description for certain interventions (only used for grouping)
+                if any(skip in intv for skip in skip_description_entirely):
+                    continue
+                
+                readable = self._intervention_to_readable(intv)
+                # Don't show submission numbers for missing-related interventions
+                if any(skip in intv for skip in skip_submission_nums):
+                    intervention_descriptions.append(readable)
+                else:
+                    sub_nums = intervention_submissions.get(intv, set())
+                    if sub_nums:
+                        sub_str = ", ".join(str(n) for n in sorted(sub_nums))
+                        intervention_descriptions.append(f"{readable} (Submissions {sub_str})")
+                    else:
+                        intervention_descriptions.append(readable)
+            
+            # Combine intervention descriptions with original issues
+            # Filter out issues that are already covered by intervention descriptions to avoid duplication
+            # (e.g., don't show "Member ID mismatch" twice if it's already in intervention_descriptions)
+            covered_keywords = {self._intervention_to_readable(intv).lower() for intv in data['interventions']}
+            filtered_issues = [
+                issue for issue in issues_list 
+                if not any(kw in issue.lower() for kw in covered_keywords if kw and len(kw) > 3)
+            ]
+            all_descriptions = intervention_descriptions + filtered_issues
+            description = "\n".join(all_descriptions) if all_descriptions else "No specific issues identified"
             # Format submission numbers as comma-separated sorted list
             submission_nums_str = ", ".join(str(n) for n in sorted(data['submission_nums'])) if data['submission_nums'] else ""
             
@@ -3499,8 +3610,31 @@ class TrackerDataProcessor(FileProcessor):
         # Get unique students with aggregated issues
         flagged = self._aggregate_student_issues(students, "🟡 FLAGGED", start_date, target_date)
         
-        # Sort by intervention reason, then by description (same as displayed)
-        flagged.sort(key=lambda s: (s.get('interventions_str', 'N/A'), s['description']))
+        # Custom sort order for Flagged sheet
+        def flagged_sort_key(s):
+            intv = s.get('interventions_str', 'N/A')
+            # Priority order for flagged interventions
+            if "MISSING_WEDNESDAY_WK" in intv:
+                priority = 0
+            elif "MISSED_CHECKIN_WED" in intv:
+                priority = 1
+            elif "STALLED" in intv:
+                priority = 2
+            elif "SKIPPED_PHASE" in intv:
+                priority = 3
+            elif "MISSING_PREVIOUS_PHASE" in intv:
+                priority = 4
+            elif "UNEXPECTED_PHASE_CHANGE" in intv:
+                priority = 5
+            elif "SKIPPED_PREVIOUS_SUBMISSION" in intv:
+                priority = 6
+            elif "JSON_SAFEPARSE_ISSUE" in intv:
+                priority = 7
+            else:
+                priority = 8
+            return (priority, intv, s['description'])
+        
+        flagged.sort(key=flagged_sort_key)
         
         # Write header
         headers = ["Submission #", "Name", "Member ID", "Discord", "Email", "Phone", "Latest Week", "Phase", "Timeline",
@@ -3567,8 +3701,8 @@ class TrackerDataProcessor(FileProcessor):
             else:
                 return "Progressing normally"
         
-        # Sort by intervention reason, then by display description
-        on_track.sort(key=lambda s: (s.get('interventions_str', 'N/A'), get_display_description(s)))
+        # Sort by description first, then by intervention reason (opposite of At Risk/Flagged)
+        on_track.sort(key=lambda s: (get_display_description(s), s.get('interventions_str', 'N/A')))
         
         # Write header
         headers = ["Submission #", "Name", "Member ID", "Discord", "Email", "Phone", "Latest Week", "Phase", 
@@ -3598,7 +3732,7 @@ class TrackerDataProcessor(FileProcessor):
                 student['total_submissions'],
                 student['deliverables'],
                 student.get('interventions_str', ''),
-                student.get('intervention_type_str', ''),
+                '',  # Intervention Type is always blank for On Track
                 description
             ]
             
