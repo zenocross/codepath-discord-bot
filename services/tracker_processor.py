@@ -3167,6 +3167,7 @@ class TrackerDataProcessor(FileProcessor):
         # other submissions should still be evaluated normally (worst status wins)
         
         # Load validated MRs if available
+        # Includes both typeform MRs (students_with_valid_mr) and README crawled MRs (mrs_found)
         validated_mrs: Dict[str, dict] = {}
         validated_mrs_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 
                                           "data", "uploads", "_validated_mrs.json")
@@ -3174,7 +3175,13 @@ class TrackerDataProcessor(FileProcessor):
             if os.path.exists(validated_mrs_path):
                 with open(validated_mrs_path, 'r') as f:
                     data = json.load(f)
+                    # Merge both sources of validated MRs
                     validated_mrs = data.get('students_with_valid_mr', {})
+                    # Also include MRs found in README crawling
+                    mrs_found = data.get('mrs_found', {})
+                    for mid, info in mrs_found.items():
+                        if mid not in validated_mrs:
+                            validated_mrs[mid] = info
         except Exception:
             pass  # Fall back to mr_url check
         
@@ -3804,16 +3811,111 @@ class TrackerDataProcessor(FileProcessor):
                 phase_dist[phase_num] += 1
         
         # Count unique students with MR URL (once per student)
+        # First, check _validated_mrs.json for accurate counts including merged status
         students_with_mr = set()
         students_with_merged_mr = set()
+        students_with_valid_mr_ids = set()  # member_ids with author match
+        mismatch_students: List[Dict[str, str]] = []  # List of {name, member_id} for mismatch
+        unvalidated_students: List[Dict[str, str]] = []  # List of {name, member_id} for unvalidated
+        
+        # Load validated MRs if available
+        validated_mrs_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 
+                                          "data", "uploads", "_validated_mrs.json")
+        validated_mrs_data: Dict[str, dict] = {}
+        mr_author_mismatch_data: Dict[str, dict] = {}
+        try:
+            if os.path.exists(validated_mrs_path):
+                with open(validated_mrs_path, 'r') as f:
+                    data = json.load(f)
+                    # Merge typeform MRs and README-crawled MRs
+                    for mid, info in data.get('students_with_valid_mr', {}).items():
+                        validated_mrs_data[mid] = info
+                    for mid, info in data.get('mrs_found', {}).items():
+                        if mid not in validated_mrs_data:
+                            validated_mrs_data[mid] = info
+                    for mid, info in data.get('mr_url_in_readme_link', {}).items():
+                        if mid not in validated_mrs_data:
+                            validated_mrs_data[mid] = info
+                    # Get author mismatches
+                    mr_author_mismatch_data = data.get('mr_author_mismatch', {})
+        except Exception:
+            pass
+        
+        # First pass: identify all students with valid MRs (author_match = true)
+        # and those with mismatch (author_match = false)
+        # These students should NOT appear in mismatch list even if they have other invalid MRs
+        mismatch_only_ids = set()  # Has mismatch but no valid MR
+        for mid, info in validated_mrs_data.items():
+            if info.get('author_match') is True:
+                students_with_valid_mr_ids.add(mid)
+            elif info.get('author_match') is False:
+                mismatch_only_ids.add(mid)
+        # Add from mr_author_mismatch
+        for mid in mr_author_mismatch_data.keys():
+            if mid not in students_with_valid_mr_ids:
+                mismatch_only_ids.add(mid)
+        # Remove from mismatch if they have a valid MR
+        mismatch_only_ids -= students_with_valid_mr_ids
+        
+        # Track which member_ids we've already processed
+        processed_member_ids = set()
+        
         for s in students:
             key = s.member_id or s.name
-            if s.mr_url and str(s.mr_url).strip():
+            member_id_str = str(s.member_id) if s.member_id else ""
+            
+            # Skip if already processed this student
+            if member_id_str and member_id_str in processed_member_ids:
+                continue
+            if member_id_str:
+                processed_member_ids.add(member_id_str)
+            
+            # Check validated MRs first
+            if member_id_str in validated_mrs_data:
                 students_with_mr.add(key)
-            if s.mr_status and "merged" in s.mr_status.lower():
-                students_with_merged_mr.add(key)
+                mr_info = validated_mrs_data[member_id_str]
+                if mr_info.get('is_merged'):
+                    students_with_merged_mr.add(key)
+                    
+                # Check author_match status
+                author_match = mr_info.get('author_match')
+                if author_match is True:
+                    pass  # Valid - counted in students_with_valid_mr_ids
+                elif author_match is False:
+                    # Only add to mismatch if they don't have ANY valid MR
+                    if member_id_str in mismatch_only_ids:
+                        mismatch_students.append({
+                            'name': mr_info.get('name', s.name),
+                            'member_id': member_id_str
+                        })
+                        mismatch_only_ids.discard(member_id_str)  # Remove so we don't add again
+                elif author_match is None:
+                    # Unvalidated - has MR but no author validation
+                    if member_id_str not in students_with_valid_mr_ids and member_id_str not in mismatch_only_ids:
+                        unvalidated_students.append({
+                            'name': mr_info.get('name', s.name),
+                            'member_id': member_id_str
+                        })
+            # Check author mismatch list
+            elif member_id_str in mr_author_mismatch_data:
+                students_with_mr.add(key)
+                # Only add to mismatch if they don't have ANY valid MR
+                if member_id_str in mismatch_only_ids:
+                    mismatch_students.append({
+                        'name': mr_author_mismatch_data[member_id_str].get('name', s.name),
+                        'member_id': member_id_str
+                    })
+                    mismatch_only_ids.discard(member_id_str)
+            # Fall back to student record
+            elif s.mr_url and str(s.mr_url).strip():
+                students_with_mr.add(key)
+                if s.mr_status and "merged" in s.mr_status.lower():
+                    students_with_merged_mr.add(key)
+        
         mr_submitted = len(students_with_mr)
         mr_merged = len(students_with_merged_mr)
+        mr_valid = len(students_with_valid_mr_ids)
+        mr_mismatch = len(mismatch_students)
         
         # Interventions needed = At Risk + Flagged students (those who need attention)
         interventions_needed = at_risk + flagged
@@ -3883,12 +3985,24 @@ class TrackerDataProcessor(FileProcessor):
         
         # MR section (unique students with MR URL)
         row += 2
-        ws.cell(row=row, column=2, value="Students with MR:").font = Styles.BOLD_FONT
+        ws.merge_cells(f'B{row}:C{row}')
+        section = ws.cell(row=row, column=2, value="Merge Requests")
+        section.fill = Styles.DASHBOARD_SECTION_FILL
+        section.font = Styles.BOLD_FONT
+        
+        row += 1
+        ws.cell(row=row, column=2, value="└─ Students with MR:")
         ws.cell(row=row, column=3, value=f"{mr_submitted}/{total} ({mr_submitted/total*100:.1f}%)" if total else "0")
         
         row += 1
-        ws.cell(row=row, column=2, value="MRs Merged:").font = Styles.BOLD_FONT
+        ws.cell(row=row, column=2, value="└─ Valid MRs (author match):")
+        ws.cell(row=row, column=3, value=f"{mr_valid}/{total} ({mr_valid/total*100:.1f}%)" if total else "0")
+        ws.cell(row=row, column=3).fill = Styles.GREEN_FILL
+        
+        row += 1
+        ws.cell(row=row, column=2, value="└─ MRs Merged:")
         ws.cell(row=row, column=3, value=f"{mr_merged} ({mr_merged/total*100:.1f}%)" if total else "0")
+        ws.cell(row=row, column=3).fill = Styles.GREEN_FILL
         
         # Interventions
         row += 2
@@ -3896,10 +4010,39 @@ class TrackerDataProcessor(FileProcessor):
         ws.cell(row=row, column=3, value=interventions_needed)
         
         # Add border around dashboard
-        for r in range(2, row + 1):
+        dashboard_end_row = row
+        for r in range(2, dashboard_end_row + 1):
             for c in [2, 3]:
                 cell = ws.cell(row=r, column=c)
                 cell.border = Styles.THIN_BORDER
+        
+        # Add footnotes section at the bottom
+        if mismatch_students or unvalidated_students:
+            row += 3  # Leave gap after dashboard
+            
+        if mismatch_students:
+            ws.merge_cells(f'B{row}:C{row}')
+            footnote_header = ws.cell(row=row, column=2, value="⚠️ MR Author Mismatch (not student's MR):")
+            footnote_header.font = Font(bold=True, size=10, color="FF6600")
+            
+            # Sort by name and list each student
+            for student in sorted(mismatch_students, key=lambda x: x['name'].lower()):
+                row += 1
+                ws.cell(row=row, column=2, value=f"  • {student['name']} ({student['member_id']})")
+                ws.cell(row=row, column=2).font = Font(size=9)
+        
+        if unvalidated_students:
+            if mismatch_students:
+                row += 2  # Add gap between sections
+            ws.merge_cells(f'B{row}:C{row}')
+            footnote_header = ws.cell(row=row, column=2, value="ℹ️ MR Pending Validation:")
+            footnote_header.font = Font(bold=True, size=10, color="0066CC")
+            
+            # Sort by name and list each student
+            for student in sorted(unvalidated_students, key=lambda x: x['name'].lower()):
+                row += 1
+                ws.cell(row=row, column=2, value=f"  • {student['name']} ({student['member_id']})")
+                ws.cell(row=row, column=2).font = Font(size=9)
     
     def _auto_fit_columns(self, ws) -> None:
         """Auto-fit column widths."""

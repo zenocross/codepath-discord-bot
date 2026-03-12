@@ -2571,9 +2571,11 @@ class TrackerCog(commands.Cog, name="Tracker"):
                     }
                     continue
                 
-                # Store/update (later rows = more recent, so overwrite)
+                # Collect ALL unique readme URLs for each student (not just the latest)
                 if readme_link:
-                    students_no_issue[member_id] = {'name': name, 'readme_link': readme_link}
+                    if member_id not in students_no_issue:
+                        students_no_issue[member_id] = {'name': name, 'readme_links': set()}
+                    students_no_issue[member_id]['readme_links'].add(readme_link)
             
             if not students_no_issue:
                 await ctx.send("✅ **All students have issue URLs!** Nothing to validate.")
@@ -2619,102 +2621,131 @@ class TrackerCog(commands.Cog, name="Tracker"):
             API_DELAY = 1.0
             MAX_RETRIES = 3
             
+            import socket
+            import ssl
+            import time
+            
             for member_id, info in students_no_issue.items():
                 processed += 1
                 name = info['name']
-                readme_link = info['readme_link']
+                readme_links = list(info['readme_links'])  # Convert set to list
                 
                 # Progress update every 10 students
                 if processed % 10 == 0:
-                    await ctx.send(f"⏳ Progress: {processed}/{total} READMEs checked...")
+                    await ctx.send(f"⏳ Progress: {processed}/{total} students checked...")
                 
-                # Extract repo path from readme link
-                repo_path, platform = gitlab_service.extract_repo_from_readme_link(readme_link)
+                # Track all issues found across all README URLs for this student
+                student_all_issues: list = []
+                student_readme_links_crawled: list = []
+                student_errors: list = []
+                repos_crawled: set = set()  # Track repos already fully crawled
                 
-                if not repo_path:
-                    readme_inaccessible[member_id] = {
-                        'name': name,
-                        'readme_link': readme_link,
-                        'error': 'Could not extract repo path from URL'
-                    }
-                    continue
-                
-                # Extract specific file path from URL (e.g., contribution-1-README.md)
-                file_path = gitlab_service.extract_file_path_from_url(readme_link)
-                
-                # Fetch README content with retry logic for timeouts
-                import socket
-                import ssl
-                import time
-                
-                readme_content = None
-                last_error = None
-                
-                for attempt in range(MAX_RETRIES):
-                    try:
-                        # Add delay between API calls to avoid rate limiting
-                        if attempt > 0 or processed > 1:
-                            await asyncio.sleep(API_DELAY)
-                        
-                        if file_path:
-                            # Fetch the specific file from the URL
-                            readme_content = gitlab_service.fetch_file_content(repo_path, file_path)
-                        else:
-                            # Fall back to fetching README.md from root
-                            readme_content = gitlab_service.fetch_readme(repo_path)
-                        
-                        break  # Success, exit retry loop
-                        
-                    except (socket.timeout, TimeoutError, ssl.SSLError) as e:
-                        last_error = f'Timeout (attempt {attempt + 1}/{MAX_RETRIES})'
-                        is_timeout = True
-                        print(f"[Validate] Timeout for {name}, attempt {attempt + 1}/{MAX_RETRIES}")
-                        if attempt < MAX_RETRIES - 1:
-                            await asyncio.sleep(2)  # Wait longer before retry
+                for readme_link in readme_links:
+                    repo_path, platform = gitlab_service.extract_repo_from_readme_link(readme_link)
+                    
+                    if not repo_path:
+                        student_errors.append(f"{readme_link}: Could not extract repo path")
                         continue
-                    except Exception as e:
-                        last_error = str(e)
-                        is_timeout = False
-                        break  # Non-timeout error, don't retry
-                
-                if readme_content is None:
-                    if last_error and 'Timeout' in last_error:
-                        # Separate category for timeouts
-                        readme_timeout[member_id] = {
-                            'name': name,
-                            'readme_link': readme_link,
-                            'attempts': MAX_RETRIES
-                        }
+                    
+                    file_path = gitlab_service.extract_file_path_from_url(readme_link)
+                    is_tree = gitlab_service.is_tree_url(readme_link)
+                    
+                    readme_content = None
+                    all_readme_contents = []
+                    last_error = None
+                    
+                    for attempt in range(MAX_RETRIES):
+                        try:
+                            if attempt > 0 or processed > 1:
+                                await asyncio.sleep(API_DELAY)
+                            
+                            if is_tree or not file_path:
+                                # Tree URL or repo root: fetch ALL README files in the repo
+                                # Only do this once per repo
+                                if repo_path not in repos_crawled:
+                                    all_readme_contents = gitlab_service.fetch_all_readme_contents(repo_path)
+                                    repos_crawled.add(repo_path)
+                                    if all_readme_contents:
+                                        readme_content = "\n\n".join([content for _, content in all_readme_contents])
+                                        student_readme_links_crawled.append(f"{readme_link} (all READMEs)")
+                                        break
+                                else:
+                                    # Already crawled this repo
+                                    break
+                            else:
+                                # Specific file URL
+                                readme_content = gitlab_service.fetch_file_content(repo_path, file_path)
+                                if readme_content:
+                                    student_readme_links_crawled.append(readme_link)
+                            
+                            if not readme_content and repo_path not in repos_crawled:
+                                # Fall back to fetching all READMEs
+                                all_readme_contents = gitlab_service.fetch_all_readme_contents(repo_path)
+                                repos_crawled.add(repo_path)
+                                if all_readme_contents:
+                                    readme_content = "\n\n".join([content for _, content in all_readme_contents])
+                                    student_readme_links_crawled.append(f"{readme_link} (all READMEs)")
+                            
+                            if readme_content:
+                                break
+                            
+                        except (socket.timeout, TimeoutError, ssl.SSLError) as e:
+                            last_error = f'Timeout (attempt {attempt + 1}/{MAX_RETRIES})'
+                            print(f"[Validate] Timeout for {name}, attempt {attempt + 1}/{MAX_RETRIES}")
+                            if attempt < MAX_RETRIES - 1:
+                                await asyncio.sleep(2)
+                            continue
+                        except Exception as e:
+                            last_error = str(e)
+                            break
+                    
+                    if readme_content:
+                        # Find issue URLs in this README content
+                        issues_in_readme = ISSUE_PATTERN.findall(readme_content)
+                        for issue in issues_in_readme:
+                            if issue not in student_all_issues:
+                                student_all_issues.append(issue)
                     elif last_error:
-                        readme_inaccessible[member_id] = {
-                            'name': name,
-                            'readme_link': readme_link,
-                            'error': last_error
-                        }
-                    else:
-                        readme_inaccessible[member_id] = {
-                            'name': name,
-                            'readme_link': readme_link,
-                            'error': 'README not found or repository inaccessible'
-                        }
-                    continue
+                        student_errors.append(f"{readme_link}: {last_error}")
                 
-                # Find all issue URLs in the README
-                issue_matches = ISSUE_PATTERN.findall(readme_content)
-                
-                if issue_matches:
-                    # Take the LAST (latest) issue URL found
-                    latest_issue = issue_matches[-1]
+                # After crawling all README URLs for this student
+                if student_all_issues:
+                    latest_issue = student_all_issues[-1]
                     issues_found[member_id] = {
                         'name': name,
-                        'readme_link': readme_link,
-                        'issue_url': latest_issue,
-                        'all_issues_found': list(set(issue_matches)),
+                        'readme_link': readme_links[0] if len(readme_links) == 1 else ', '.join(readme_links[:3]),
+                        'readme_links_crawled': student_readme_links_crawled,
+                        'all_issues_found': student_all_issues,
                         'source': 'url'
                     }
                 else:
-                    # No full URLs found - try project shorthand pattern (e.g., gitlab-org/gitlab#586041)
-                    shorthand_matches = PROJECT_ISSUE_SHORTHAND_PATTERN.findall(readme_content)
+                    # No full URLs found - need to search through all README content
+                    # Combine all README content for pattern searching
+                    combined_content = ""
+                    for readme_link in readme_links:
+                        repo_path, _ = gitlab_service.extract_repo_from_readme_link(readme_link)
+                        if repo_path and repo_path in repos_crawled:
+                            # We already have content from this repo
+                            continue
+                    
+                    # Try to fetch content if we don't have any yet
+                    if not combined_content and readme_links:
+                        for readme_link in readme_links:
+                            repo_path, _ = gitlab_service.extract_repo_from_readme_link(readme_link)
+                            if repo_path:
+                                try:
+                                    all_readme_contents = gitlab_service.fetch_all_readme_contents(repo_path)
+                                    if all_readme_contents:
+                                        combined_content = "\n\n".join([content for _, content in all_readme_contents])
+                                        break
+                                except Exception:
+                                    continue
+                    
+                    if not combined_content:
+                        combined_content = ""
+                    
+                    # Try project shorthand pattern (e.g., gitlab-org/gitlab#586041)
+                    shorthand_matches = PROJECT_ISSUE_SHORTHAND_PATTERN.findall(combined_content) if combined_content else []
                     
                     if shorthand_matches:
                         # Try to validate shorthand references against GitLab
@@ -2741,21 +2772,23 @@ class TrackerCog(commands.Cog, name="Tracker"):
                         if validated_issue:
                             issues_found[member_id] = {
                                 'name': name,
-                                'readme_link': readme_link,
+                                'readme_link': readme_links[0] if len(readme_links) == 1 else ', '.join(readme_links[:3]),
+                                'readme_links': list(readme_links),
                                 'issue_url': validated_issue,
                                 'all_issues_found': [f"{p}#{n}" for p, n in shorthand_matches],
                                 'source': 'project_shorthand'
                             }
                         else:
                             # Try the simpler issue number pattern as fallback
-                            issue_number_matches = ISSUE_NUMBER_PATTERN.findall(readme_content)
+                            issue_number_matches = ISSUE_NUMBER_PATTERN.findall(combined_content) if combined_content else []
                             if issue_number_matches:
                                 # Fall through to issue number validation below
                                 pass
                             else:
                                 no_issue_in_readme[member_id] = {
                                     'name': name,
-                                    'readme_link': readme_link,
+                                    'readme_link': readme_links[0] if readme_links else '',
+                                    'readme_links': list(readme_links),
                                     'shorthand_found': [f"{p}#{n}" for p, n in shorthand_matches],
                                     'note': 'Project shorthand found but could not validate'
                                 }
@@ -2763,7 +2796,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
                     
                     # No shorthand found or validation failed - try to find issue number references like #586126
                     if member_id not in issues_found:
-                        issue_number_matches = ISSUE_NUMBER_PATTERN.findall(readme_content)
+                        issue_number_matches = ISSUE_NUMBER_PATTERN.findall(combined_content) if combined_content else []
                         
                         if issue_number_matches:
                             # Try to validate issue numbers against GitLab
@@ -2790,7 +2823,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
                             if validated_issue:
                                 issues_found[member_id] = {
                                     'name': name,
-                                    'readme_link': readme_link,
+                                    'readme_link': readme_links[0] if len(readme_links) == 1 else ', '.join(readme_links[:3]),
+                                    'readme_links': list(readme_links),
                                     'issue_url': validated_issue,
                                     'all_issues_found': [f"#{num}" for num in issue_number_matches],
                                     'source': 'number_reference'
@@ -2799,14 +2833,30 @@ class TrackerCog(commands.Cog, name="Tracker"):
                                 # Found issue numbers but couldn't validate them
                                 no_issue_in_readme[member_id] = {
                                     'name': name,
-                                    'readme_link': readme_link,
+                                    'readme_link': readme_links[0] if readme_links else '',
+                                    'readme_links': list(readme_links),
                                     'issue_numbers_found': list(set(issue_number_matches)),
                                     'note': 'Issue numbers found but could not validate against gitlab-org/gitlab'
                                 }
+                        elif student_errors and all("timeout" in e.lower() for e in student_errors):
+                            readme_timeout[member_id] = {
+                                'name': name,
+                                'readme_link': readme_links[0] if readme_links else '',
+                                'readme_links': list(readme_links),
+                                'attempts': MAX_RETRIES
+                            }
+                        elif student_errors:
+                            readme_inaccessible[member_id] = {
+                                'name': name,
+                                'readme_link': readme_links[0] if readme_links else '',
+                                'readme_links': list(readme_links),
+                                'error': '; '.join(student_errors[:3])
+                            }
                         else:
                             no_issue_in_readme[member_id] = {
                                 'name': name,
-                                'readme_link': readme_link
+                                'readme_link': readme_links[0] if readme_links else '',
+                                'readme_links': list(readme_links)
                             }
             
             # Save results to file
@@ -3346,7 +3396,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
         if students_with_valid_mr:
             report.append("**📝 Students With Explicit MR URL (Typeform):**")
             for mid, info in sorted(students_with_valid_mr.items(), key=lambda x: x[1]['name'].lower()):
-                report.append(f"• **{info['name']}** (`{mid}`)")
+                merged_tag = " **(MERGED)**" if info.get('is_merged') else ""
+                report.append(f"• **{info['name']}** (`{mid}`){merged_tag}")
                 report.append(f"  └─ MR: <{info['mr_url']}>")
                 expected = info.get('expected_author', '')
                 actual = info.get('actual_author', '')
@@ -3361,7 +3412,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
         if mr_url_in_readme_link:
             report.append("**⚠️ MR URL in README Field (wrong field!):**")
             for mid, info in sorted(mr_url_in_readme_link.items(), key=lambda x: x[1]['name'].lower()):
-                report.append(f"• **{info['name']}** (`{mid}`)")
+                merged_tag = " **(MERGED)**" if info.get('is_merged') else ""
+                report.append(f"• **{info['name']}** (`{mid}`){merged_tag}")
                 report.append(f"  └─ MR: <{info['mr_url']}>")
                 expected = info.get('expected_author', '')
                 actual = info.get('actual_author', '')
@@ -3375,7 +3427,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
             report.append("**🔗 MRs Found in README (Crawled):**")
             for mid, info in sorted(mrs_found.items(), key=lambda x: x[1]['name'].lower()):
                 note = info.get('note', '')
-                report.append(f"• **{info['name']}** (`{mid}`)")
+                merged_tag = " **(MERGED)**" if info.get('is_merged') else ""
+                report.append(f"• **{info['name']}** (`{mid}`){merged_tag}")
                 if note:
                     report.append(f"  └─ MR: <{info['mr_url']}> *(corrected)*")
                 else:
@@ -3645,9 +3698,11 @@ class TrackerCog(commands.Cog, name="Tracker"):
                     }
                     continue
                 
-                # Store/update
+                # Collect ALL unique readme URLs for each student (not just the latest)
                 if readme_link:
-                    students_no_mr[member_id] = {'name': name, 'readme_link': readme_link}
+                    if member_id not in students_no_mr:
+                        students_no_mr[member_id] = {'name': name, 'readme_links': set()}
+                    students_no_mr[member_id]['readme_links'].add(readme_link)
             
             if not students_no_mr:
                 await ctx.send("✅ **All students have MR URLs!** Nothing to validate.")
@@ -3673,88 +3728,125 @@ class TrackerCog(commands.Cog, name="Tracker"):
             processed = 0
             total = len(students_no_mr)
             
+            # Count total README URLs to crawl
+            total_readme_urls = sum(len(info['readme_links']) for info in students_no_mr.values())
+            
             API_DELAY = 1.0
             MAX_RETRIES = 3
+            
+            import socket
+            import ssl
+            import time
             
             for member_id, info in students_no_mr.items():
                 processed += 1
                 name = info['name']
-                readme_link = info['readme_link']
+                readme_links = list(info['readme_links'])  # Convert set to list
                 
                 if processed % 10 == 0:
-                    await ctx.send(f"⏳ Progress: {processed}/{total} READMEs checked...")
+                    await ctx.send(f"⏳ Progress: {processed}/{total} students checked...")
                 
-                repo_path, platform = gitlab_service.extract_repo_from_readme_link(readme_link)
+                # Track all MRs found across all README URLs for this student
+                student_all_mrs: list = []
+                student_readme_links_crawled: list = []
+                student_errors: list = []
+                repos_crawled: set = set()  # Track repos already fully crawled
                 
-                if not repo_path:
-                    readme_inaccessible[member_id] = {
-                        'name': name,
-                        'readme_link': readme_link,
-                        'error': 'Could not extract repo path from URL'
-                    }
-                    continue
-                
-                file_path = gitlab_service.extract_file_path_from_url(readme_link)
-                
-                import socket
-                import ssl
-                import time
-                
-                readme_content = None
-                last_error = None
-                
-                for attempt in range(MAX_RETRIES):
-                    try:
-                        if attempt > 0 or processed > 1:
-                            await asyncio.sleep(API_DELAY)
-                        
-                        if file_path:
-                            readme_content = gitlab_service.fetch_file_content(repo_path, file_path)
-                        
-                        if not readme_content:
-                            readme_content = gitlab_service.fetch_readme(repo_path)
-                        
-                        if readme_content:
-                            break
-                            
-                    except (socket.timeout, ssl.SSLError, TimeoutError) as e:
-                        last_error = f"Timeout (attempt {attempt + 1})"
+                for readme_link in readme_links:
+                    repo_path, platform = gitlab_service.extract_repo_from_readme_link(readme_link)
+                    
+                    if not repo_path:
+                        student_errors.append(f"{readme_link}: Could not extract repo path")
                         continue
-                    except Exception as e:
-                        last_error = str(e)
-                        break
+                    
+                    file_path = gitlab_service.extract_file_path_from_url(readme_link)
+                    is_tree = gitlab_service.is_tree_url(readme_link)
+                    
+                    readme_content = None
+                    all_readme_contents = []
+                    last_error = None
+                    
+                    for attempt in range(MAX_RETRIES):
+                        try:
+                            if attempt > 0 or processed > 1:
+                                await asyncio.sleep(API_DELAY)
+                            
+                            if is_tree or not file_path:
+                                # Tree URL or repo root: fetch ALL README files in the repo
+                                # Only do this once per repo
+                                if repo_path not in repos_crawled:
+                                    all_readme_contents = gitlab_service.fetch_all_readme_contents(repo_path)
+                                    repos_crawled.add(repo_path)
+                                    if all_readme_contents:
+                                        readme_content = "\n\n".join([content for _, content in all_readme_contents])
+                                        student_readme_links_crawled.append(f"{readme_link} (all READMEs)")
+                                        break
+                                else:
+                                    # Already crawled this repo
+                                    break
+                            else:
+                                # Specific file URL
+                                readme_content = gitlab_service.fetch_file_content(repo_path, file_path)
+                                if readme_content:
+                                    student_readme_links_crawled.append(readme_link)
+                            
+                            if not readme_content and repo_path not in repos_crawled:
+                                # Fall back to fetching all READMEs
+                                all_readme_contents = gitlab_service.fetch_all_readme_contents(repo_path)
+                                repos_crawled.add(repo_path)
+                                if all_readme_contents:
+                                    readme_content = "\n\n".join([content for _, content in all_readme_contents])
+                                    student_readme_links_crawled.append(f"{readme_link} (all READMEs)")
+                            
+                            if readme_content:
+                                break
+                                
+                        except (socket.timeout, ssl.SSLError, TimeoutError) as e:
+                            last_error = f"Timeout (attempt {attempt + 1})"
+                            continue
+                        except Exception as e:
+                            last_error = str(e)
+                            break
+                    
+                    if readme_content:
+                        # Find MR URLs in this README content
+                        mrs_in_readme = MR_PATTERN.findall(readme_content)
+                        for mr in mrs_in_readme:
+                            if mr not in student_all_mrs:
+                                student_all_mrs.append(mr)
+                    elif last_error:
+                        student_errors.append(f"{readme_link}: {last_error}")
                 
-                if not readme_content:
-                    if last_error and "timeout" in last_error.lower():
-                        readme_timeout[member_id] = {
-                            'name': name,
-                            'readme_link': readme_link,
-                            'attempts': MAX_RETRIES
-                        }
-                    else:
-                        readme_inaccessible[member_id] = {
-                            'name': name,
-                            'readme_link': readme_link,
-                            'error': last_error or 'README not found or empty'
-                        }
-                    continue
-                
-                # Find MR URLs in README
-                all_mrs_found = MR_PATTERN.findall(readme_content)
-                
-                if all_mrs_found:
-                    latest_mr = all_mrs_found[-1]
+                # After crawling all README URLs for this student
+                if student_all_mrs:
+                    latest_mr = student_all_mrs[-1]
                     mrs_found[member_id] = {
                         'name': name,
-                        'readme_link': readme_link,
+                        'readme_link': readme_links[0] if len(readme_links) == 1 else ', '.join(readme_links[:3]),
+                        'readme_links_crawled': student_readme_links_crawled,
                         'mr_url': latest_mr,
-                        'all_mrs_found': all_mrs_found,
+                        'all_mrs_found': student_all_mrs,
                         'source': 'readme'
+                    }
+                elif student_errors and all("timeout" in e.lower() for e in student_errors):
+                    readme_timeout[member_id] = {
+                        'name': name,
+                        'readme_link': readme_links[0] if readme_links else '',
+                        'readme_links': list(readme_links),
+                        'attempts': MAX_RETRIES
+                    }
+                elif student_errors:
+                    readme_inaccessible[member_id] = {
+                        'name': name,
+                        'readme_link': readme_links[0] if readme_links else '',
+                        'readme_links': list(readme_links),
+                        'error': '; '.join(student_errors[:3])
                     }
                 else:
                     no_mr_in_readme[member_id] = {
                         'name': name,
-                        'readme_link': readme_link
+                        'readme_link': readme_links[0] if readme_links else '',
+                        'readme_links': list(readme_links)
                     }
             
             # Validate MR authors if we have GitLab username lookup
@@ -3809,13 +3901,18 @@ class TrackerCog(commands.Cog, name="Tracker"):
                         
                         if mr_data.get('exists'):
                             actual_author = mr_data.get('author', '').lower()
+                            mr_state = mr_data.get('state', '')
+                            is_merged = mr_state == 'merged'
                             verified_count += 1
                             
                             # Store validation result for all sources
                             validation_info = {
                                 'expected_author': expected_gitlab,
                                 'actual_author': actual_author,
-                                'author_match': actual_author == expected_gitlab
+                                'author_match': actual_author == expected_gitlab,
+                                'mr_state': mr_state,
+                                'is_merged': is_merged,
+                                'merged_at': mr_data.get('merged_at', '')
                             }
                             
                             if actual_author and actual_author != expected_gitlab:
@@ -3851,15 +3948,22 @@ class TrackerCog(commands.Cog, name="Tracker"):
                                             alt_mr_data = gitlab_service.verify_merge_request(alt_repo, alt_iid)
                                             if alt_mr_data.get('exists'):
                                                 alt_author = alt_mr_data.get('author', '').lower()
+                                                alt_state = alt_mr_data.get('state', '')
+                                                alt_merged = alt_state == 'merged'
                                                 all_mrs_details.append({
                                                     'url': alt_mr_url,
-                                                    'author': alt_author
+                                                    'author': alt_author,
+                                                    'mr_state': alt_state,
+                                                    'is_merged': alt_merged
                                                 })
                                                 if alt_author == expected_gitlab:
                                                     found_student_mr = {
                                                         'url': alt_mr_url,
                                                         'title': alt_mr_data.get('title', ''),
-                                                        'author': alt_author
+                                                        'author': alt_author,
+                                                        'mr_state': alt_state,
+                                                        'is_merged': alt_merged,
+                                                        'merged_at': alt_mr_data.get('merged_at', '')
                                                     }
                                                     break
                                         except Exception:
@@ -3883,6 +3987,9 @@ class TrackerCog(commands.Cog, name="Tracker"):
                                         mrs_found[mid]['expected_author'] = expected_gitlab
                                         mrs_found[mid]['actual_author'] = found_student_mr['author']
                                         mrs_found[mid]['author_match'] = True
+                                        mrs_found[mid]['mr_state'] = found_student_mr.get('mr_state', '')
+                                        mrs_found[mid]['is_merged'] = found_student_mr.get('is_merged', False)
+                                        mrs_found[mid]['merged_at'] = found_student_mr.get('merged_at', '')
                                     elif source == 'readme_field' and mid in mr_url_in_readme_link:
                                         mr_url_in_readme_link[mid]['alternate_mr'] = found_student_mr['url']
                                         mr_url_in_readme_link[mid].update(validation_info)
@@ -3977,7 +4084,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
             if students_with_valid_mr:
                 report.append("**📝 Students With Explicit MR URL (Typeform):**")
                 for mid, data in sorted(students_with_valid_mr.items(), key=lambda x: x[1]['name'].lower()):
-                    report.append(f"• **{data['name']}** (`{mid}`)")
+                    merged_tag = " **(MERGED)**" if data.get('is_merged') else ""
+                    report.append(f"• **{data['name']}** (`{mid}`){merged_tag}")
                     report.append(f"  └─ MR: <{data['mr_url']}>")
                     expected = data.get('expected_author', '')
                     actual = data.get('actual_author', '')
@@ -3994,7 +4102,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
             if mr_url_in_readme_link:
                 report.append("**⚠️ MR URL in README Field (wrong field!):**")
                 for mid, data in sorted(mr_url_in_readme_link.items(), key=lambda x: x[1]['name'].lower()):
-                    report.append(f"• **{data['name']}** (`{mid}`)")
+                    merged_tag = " **(MERGED)**" if data.get('is_merged') else ""
+                    report.append(f"• **{data['name']}** (`{mid}`){merged_tag}")
                     report.append(f"  └─ MR: <{data['mr_url']}>")
                     expected = data.get('expected_author', '')
                     actual = data.get('actual_author', '')
@@ -4014,7 +4123,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
                     all_mrs_details = data.get('all_mrs_details', [])
                     if all_mrs_details:
                         for i, mr_detail in enumerate(all_mrs_details, 1):
-                            report.append(f"  └─ MR {i}: <{mr_detail['url']}> by `{mr_detail['author']}`")
+                            merged_indicator = " (MERGED)" if mr_detail.get('is_merged') else ""
+                            report.append(f"  └─ MR {i}: <{mr_detail['url']}> by `{mr_detail['author']}`{merged_indicator}")
                     else:
                         report.append(f"  └─ MR: <{data['mr_url']}> by `{data['actual_author']}`")
                 report.append("")
@@ -4023,7 +4133,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
             if mrs_found:
                 report.append("**🔗 MRs Found in README (Crawled):**")
                 for mid, data in sorted(mrs_found.items(), key=lambda x: x[1]['name'].lower()):
-                    report.append(f"• **{data['name']}** (`{mid}`)")
+                    merged_tag = " **(MERGED)**" if data.get('is_merged') else ""
+                    report.append(f"• **{data['name']}** (`{mid}`){merged_tag}")
                     if data.get('note'):
                         report.append(f"  └─ MR: <{data['mr_url']}> *(corrected)*")
                     else:

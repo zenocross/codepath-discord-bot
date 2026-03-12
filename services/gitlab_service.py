@@ -292,6 +292,93 @@ class GitLabService:
         
         return None
     
+    def is_tree_url(self, url: str) -> bool:
+        """Check if a URL is a GitLab tree URL (directory view, not a specific file).
+        
+        Args:
+            url: Full URL to check
+        
+        Returns:
+            True if it's a tree URL (repo root or directory), False otherwise
+        """
+        if not url:
+            return False
+        
+        url = url.strip()
+        
+        # Tree URLs: /-/tree/branch/ or repo root without /-/blob/
+        if '/-/tree/' in url:
+            return True
+        
+        # Repo root URL (no /-/blob/ or /-/tree/)
+        if '/-/blob/' not in url and '/-/tree/' not in url:
+            # Check if it's a repo URL (ends with repo name or has trailing slash)
+            if re.match(r'^https?://gitlab\.com/[^/]+/[^/]+/?(?:\?|#|$)', url):
+                return True
+        
+        return False
+    
+    def list_readme_files(self, repo_path: str) -> List[str]:
+        """List all README files in a GitLab repository.
+        
+        Args:
+            repo_path: The full path to the repo (e.g., "username/project")
+        
+        Returns:
+            List of file paths for README files found (e.g., ["README.md", "contribution-1-README.md"])
+        """
+        encoded_path = urllib.parse.quote(repo_path, safe="")
+        
+        # Get default branch
+        project_url = f"{GITLAB_URL}/api/v4/projects/{encoded_path}"
+        project_data = self._make_request(project_url)
+        
+        if not project_data:
+            return []
+        
+        default_branch = project_data.get("default_branch", "main")
+        
+        # List repository tree
+        tree_url = f"{GITLAB_URL}/api/v4/projects/{encoded_path}/repository/tree?ref={default_branch}&recursive=true&per_page=100"
+        tree_data = self._make_request(tree_url)
+        
+        if not tree_data or not isinstance(tree_data, list):
+            return []
+        
+        # Filter for README files (case-insensitive, various patterns)
+        readme_files = []
+        for item in tree_data:
+            if item.get('type') != 'blob':
+                continue
+            
+            name = item.get('name', '').lower()
+            path = item.get('path', '')
+            
+            # Match README files: readme.md, README.md, contribution-X-README.md, etc.
+            if 'readme' in name and name.endswith('.md'):
+                readme_files.append(path)
+        
+        return readme_files
+    
+    def fetch_all_readme_contents(self, repo_path: str) -> List[tuple]:
+        """Fetch content from all README files in a repository.
+        
+        Args:
+            repo_path: The full path to the repo
+        
+        Returns:
+            List of tuples: [(file_path, content), ...]
+        """
+        readme_files = self.list_readme_files(repo_path)
+        results = []
+        
+        for file_path in readme_files:
+            content = self._fetch_gitlab_file(repo_path, file_path)
+            if content:
+                results.append((file_path, content))
+        
+        return results
+    
     def fetch_file_content(self, repo_path: str, file_path: str) -> Optional[str]:
         """Fetch content of a specific file from a GitLab repository.
         
