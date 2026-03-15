@@ -19,8 +19,8 @@ Commands:
     !tracker no_issues        - Show issue status from validated data (requires validate first)
     !tracker no_issues quick  - Quick list of students without issue_url (no validation)
     !tracker no_issues validate - Crawl READMEs to find/validate issue URLs
-    !tracker search_issues_title <term> - Search issue titles for a term (e.g., JsonSafeParse)
-    !tracker search_dl_issues_title <term> - Search + download CSV with contact info
+    !tracker search_issues_title <term> - Search issue titles (use NOT:<term> to exclude)
+    !tracker search_dl_issues_title <term> - Search + download CSV (use NOT:<term> to exclude)
     !tracker help             - Show help (handled by bot/events.py)
 """
 
@@ -1750,10 +1750,12 @@ class TrackerCog(commands.Cog, name="Tracker"):
         
         Usage: 
             !tracker search_issues_title <search_term>
+            !tracker search_issues_title NOT:<search_term>
             !tracker search_issues_title <search_term> intervention:<TYPE>
             
         Examples:
             !tracker search_issues_title JsonSafeParse
+            !tracker search_issues_title NOT:JsonSafeParse
             !tracker search_issues_title JsonSafeParse intervention:JSON_SAFEPARSE_ISSUE
         
         When intervention parameter is provided, matching students will be saved
@@ -1766,7 +1768,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
         from datetime import datetime
         
         if not search_term:
-            await ctx.send("❌ **Please provide a search term.**\n\nUsage: `!tracker search_issues_title <search_term>`")
+            await ctx.send("❌ **Please provide a search term.**\n\nUsage: `!tracker search_issues_title <search_term>`\nUse `NOT:<term>` to exclude issues containing the term.")
             return
         
         # Parse intervention parameter if provided
@@ -1785,7 +1787,18 @@ class TrackerCog(commands.Cog, name="Tracker"):
             await ctx.send("❌ **Please provide a search term.**\n\nUsage: `!tracker search_issues_title <search_term> [intervention:TYPE]`")
             return
         
-        search_term = actual_search_term.strip()
+        # Parse NOT: prefix for exclusion mode
+        exclude_mode = False
+        actual_search_term = actual_search_term.strip()
+        if actual_search_term.upper().startswith('NOT:'):
+            exclude_mode = True
+            actual_search_term = actual_search_term[4:].strip()
+        
+        if not actual_search_term:
+            await ctx.send("❌ **Please provide a search term after NOT:**")
+            return
+        
+        search_term = actual_search_term
         
         results_file = os.path.join('data', 'uploads', '_validated_issues.json')
         
@@ -1845,7 +1858,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
             await ctx.send("❌ **No valid issue URLs found in validated data.**")
             return
         
-        await ctx.send(f"🔍 **Searching {len(all_student_issues)} student-issue pairs for:** `{search_term}`\n\nThis may take a moment...")
+        mode_text = f"NOT containing `{search_term}`" if exclude_mode else f"containing `{search_term}`"
+        await ctx.send(f"🔍 **Searching {len(all_student_issues)} student-issue pairs for issues {mode_text}**\n\nThis may take a moment...")
         
         # Cache issue titles to avoid re-fetching the same URL
         issue_title_cache: dict = {}  # url -> {title, state} or None if error
@@ -1854,6 +1868,11 @@ class TrackerCog(commands.Cog, name="Tracker"):
         matching_issues: list = []
         errors: list = []
         processed = 0
+        
+        def title_matches(title: str) -> bool:
+            """Check if title matches search criteria (include or exclude mode)."""
+            term_in_title = search_term.lower() in title.lower()
+            return not term_in_title if exclude_mode else term_in_title
         
         for (member_id, issue_url), student_info in all_student_issues.items():
             processed += 1
@@ -1865,7 +1884,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
             # Check cache first
             if issue_url in issue_title_cache:
                 cached = issue_title_cache[issue_url]
-                if cached and search_term.lower() in cached['title'].lower():
+                if cached and title_matches(cached['title']):
                     matching_issues.append({
                         'title': cached['title'],
                         'url': issue_url,
@@ -1901,8 +1920,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
                     # Cache the result
                     issue_title_cache[issue_url] = {'title': title, 'state': state}
                     
-                    # Case-insensitive search
-                    if search_term.lower() in title.lower():
+                    # Check if matches (include or exclude mode)
+                    if title_matches(title):
                         matching_issues.append({
                             'title': title,
                             'url': issue_url,
@@ -1958,7 +1977,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
                 await ctx.send(f"⚠️ **Error saving interventions:** {str(e)}")
         
         # Build report
-        report = [f"✅ **Search Complete for:** `{search_term}`\n"]
+        mode_desc = f"NOT containing `{search_term}`" if exclude_mode else f"containing `{search_term}`"
+        report = [f"✅ **Search Complete:** Issues {mode_desc}\n"]
         report.append(f"📊 **Results:** {len(matching_issues)} matching issue(s) found out of {len(all_student_issues)} searched\n")
         
         if intervention_saved:
@@ -1974,7 +1994,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
                 report.append(f"  └─ <{issue['url']}>")
             report.append("")
         else:
-            report.append("📭 **No issues found with that search term in the title.**\n")
+            report.append("📭 **No issues found matching that criteria.**\n")
         
         if errors and len(errors) <= 5:
             report.append(f"⚠️ **Errors ({len(errors)}):**")
@@ -2152,11 +2172,13 @@ class TrackerCog(commands.Cog, name="Tracker"):
         
         Usage: 
             !tracker search_dl_issues_title <search_term>
+            !tracker search_dl_issues_title NOT:<search_term>
             
-        Example:
+        Examples:
             !tracker search_dl_issues_title JsonSafeParse
+            !tracker search_dl_issues_title NOT:JsonSafeParse
         
-        Downloads a CSV with: Name, Member ID, Discord, Email, Phone, Issue Title, Issue URL, State
+        Downloads a CSV with: Name, Member ID, Discord, Email, Phone, Issue Title, Issue Description, Issue URL, State
         """
         import json
         import os
@@ -2165,8 +2187,21 @@ class TrackerCog(commands.Cog, name="Tracker"):
         import asyncio
         
         if not search_term:
-            await ctx.send("❌ **Please provide a search term.**\n\nUsage: `!tracker search_dl_issues_title <search_term>`")
+            await ctx.send("❌ **Please provide a search term.**\n\nUsage: `!tracker search_dl_issues_title <search_term>`\nUse `NOT:<term>` to exclude issues containing the term.")
             return
+        
+        # Parse NOT: prefix for exclusion mode
+        exclude_mode = False
+        actual_search_term = search_term.strip()
+        if actual_search_term.upper().startswith('NOT:'):
+            exclude_mode = True
+            actual_search_term = actual_search_term[4:].strip()
+        
+        if not actual_search_term:
+            await ctx.send("❌ **Please provide a search term after NOT:**")
+            return
+        
+        search_term = actual_search_term
         
         results_file = os.path.join('data', 'uploads', '_validated_issues.json')
         
@@ -2298,10 +2333,16 @@ class TrackerCog(commands.Cog, name="Tracker"):
             await ctx.send("❌ **No valid issue URLs found in validated data.**")
             return
         
-        await ctx.send(f"🔍 **Searching {len(all_student_issues)} student-issue pairs for:** `{search_term}`\n\nThis may take a moment...")
+        mode_text = f"NOT containing `{search_term}`" if exclude_mode else f"containing `{search_term}`"
+        await ctx.send(f"🔍 **Searching {len(all_student_issues)} student-issue pairs for issues {mode_text}**\n\nThis may take a moment...")
         
         # Cache issue titles to avoid re-fetching the same URL
         issue_title_cache: dict = {}
+        
+        def title_matches(title: str) -> bool:
+            """Check if title matches search criteria (include or exclude mode)."""
+            term_in_title = search_term.lower() in title.lower()
+            return not term_in_title if exclude_mode else term_in_title
         
         # Search each issue via GitLab API
         matching_issues: list = []
@@ -2318,7 +2359,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
             # Check cache first
             if issue_url in issue_title_cache:
                 cached = issue_title_cache[issue_url]
-                if cached and search_term.lower() in cached['title'].lower():
+                if cached and title_matches(cached['title']):
                     contact = contact_lookup.get(member_id, {})
                     matching_issues.append({
                         'name': student_info['name'],
@@ -2327,6 +2368,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
                         'email': contact.get('email', ''),
                         'phone': contact.get('phone', ''),
                         'title': cached['title'],
+                        'description': cached.get('description', ''),
                         'url': issue_url,
                         'state': cached['state']
                     })
@@ -2352,10 +2394,11 @@ class TrackerCog(commands.Cog, name="Tracker"):
                 if issue_data and issue_data.get('title'):
                     title = issue_data.get('title', '')
                     state = issue_data.get('state', 'unknown')
+                    description = issue_data.get('description', '') or ''
                     
-                    issue_title_cache[issue_url] = {'title': title, 'state': state}
+                    issue_title_cache[issue_url] = {'title': title, 'state': state, 'description': description}
                     
-                    if search_term.lower() in title.lower():
+                    if title_matches(title):
                         contact = contact_lookup.get(member_id, {})
                         matching_issues.append({
                             'name': student_info['name'],
@@ -2364,6 +2407,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
                             'email': contact.get('email', ''),
                             'phone': contact.get('phone', ''),
                             'title': title,
+                            'description': description,
                             'url': issue_url,
                             'state': state
                         })
@@ -2376,7 +2420,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
                 errors.append(f"{student_info['name']} ({member_id}): {str(e)}")
         
         if not matching_issues:
-            await ctx.send(f"📭 **No issues found with `{search_term}` in the title.**\n\nSearched {len(all_student_issues)} student-issue pairs.")
+            mode_desc = f"NOT containing `{search_term}`" if exclude_mode else f"containing `{search_term}`"
+            await ctx.send(f"📭 **No issues found {mode_desc}**\n\nSearched {len(all_student_issues)} student-issue pairs.")
             return
         
         # Generate CSV
@@ -2384,10 +2429,14 @@ class TrackerCog(commands.Cog, name="Tracker"):
         writer = csv.writer(output)
         
         # Header row
-        writer.writerow(['Name', 'Member ID', 'Discord', 'Email', 'Phone', 'Issue Title', 'Issue URL', 'State'])
+        writer.writerow(['Name', 'Member ID', 'Discord', 'Email', 'Phone', 'Issue Title', 'Issue Description', 'Issue URL', 'State'])
         
         # Data rows (sorted by name)
         for issue in sorted(matching_issues, key=lambda x: x['name'].lower()):
+            # Truncate description if too long for CSV readability
+            desc = issue.get('description', '')
+            if len(desc) > 500:
+                desc = desc[:497] + '...'
             writer.writerow([
                 issue['name'],
                 issue['member_id'],
@@ -2395,6 +2444,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
                 issue['email'],
                 issue['phone'],
                 issue['title'],
+                desc,
                 issue['url'],
                 issue['state']
             ])
