@@ -624,6 +624,15 @@ class TrackerCog(commands.Cog, name="Tracker"):
             
             await ctx.send("\n".join(success_lines), file=file)
             
+            # Send additional files (e.g., missing Wednesday students CSV)
+            if result.additional_files:
+                for extra_file in result.additional_files:
+                    extra = discord.File(
+                        fp=io.BytesIO(extra_file['data']),
+                        filename=extra_file['filename']
+                    )
+                    await ctx.send(f"📋 **Additional: {extra_file['filename']}** (ON TRACK students missing Wednesday only)", file=extra)
+            
         except Exception as e:
             await ctx.send(f"❌ Error generating report: {e}")
     
@@ -723,6 +732,15 @@ class TrackerCog(commands.Cog, name="Tracker"):
                 f"  └─ Weekly Summary (dashboard)",
                 file=file
             )
+            
+            # Send additional files (e.g., missing Wednesday students CSV)
+            if result.additional_files:
+                for extra_file in result.additional_files:
+                    extra = discord.File(
+                        fp=io.BytesIO(extra_file['data']),
+                        filename=extra_file['filename']
+                    )
+                    await ctx.send(f"📋 **Additional: {extra_file['filename']}** (ON TRACK students missing Wednesday only)", file=extra)
             
         except Exception as e:
             await ctx.send(f"❌ Error processing file: {e}")

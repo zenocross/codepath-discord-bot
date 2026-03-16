@@ -31,6 +31,7 @@ class ProcessingResult:
     error_message: Optional[str] = None
     rows_processed: int = 0
     students: Optional[List[Any]] = None  # Raw student records for autogroup
+    additional_files: Optional[List[Dict[str, Any]]] = None  # Extra files: [{'data': bytes, 'filename': str}]
 
 
 @dataclass

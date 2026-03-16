@@ -441,6 +441,7 @@ class TrackerDataProcessor(FileProcessor):
         # ("TRIGGER_FOR_ESCALATION", "ESCALATED_TO_IPM"),  # Add when needed
         ("MISSING_SUNDAY_WK_", "WARNING_OUTREACH"),
         ("MISSING_WEDNESDAY_WK_", "SIMPLE_OUTREACH"),
+        ("MISSING_DELIVERABLES", "SIMPLE_OUTREACH"),
         ("NO_SUBMISSIONS", "SIMPLE_OUTREACH"),
     ]
     
@@ -476,6 +477,9 @@ class TrackerDataProcessor(FileProcessor):
         if intervention.startswith("MISSING_WEDNESDAY_WK_"):
             week = intervention.replace("MISSING_WEDNESDAY_WK_", "")
             return f"Missing Wednesday Week {week}"
+        if intervention.startswith("MISSING_DELIVERABLES_PHASE_"):
+            phase = intervention.replace("MISSING_DELIVERABLES_PHASE_", "")
+            return f"Missing deliverables Phase {phase}"
         if intervention.startswith("MISSING_DELIVERABLES"):
             return "Missing deliverables"
         
@@ -909,12 +913,23 @@ class TrackerDataProcessor(FileProcessor):
             # Count unique students by member_id (or name as fallback)
             unique_students = len(set(s.member_id or s.name for s in students))
             
+            # Generate CSV for students with ONLY missing Wednesdays
+            additional_files = []
+            missing_wed_students = self._get_missing_wednesday_only_students(students)
+            if missing_wed_students:
+                csv_data = self._generate_missing_wed_csv(missing_wed_students)
+                additional_files.append({
+                    'data': csv_data,
+                    'filename': 'missing_wednesday_students.csv'
+                })
+            
             return ProcessingResult(
                 success=True,
                 output_data=output.read(),
                 output_filename="tracker_report.xlsx",
                 rows_processed=unique_students,
-                students=students  # Include raw student records for autogroup
+                students=students,  # Include raw student records for autogroup
+                additional_files=additional_files if additional_files else None
             )
             
         except Exception as e:
@@ -2302,6 +2317,28 @@ class TrackerDataProcessor(FileProcessor):
         
         return missing
     
+    def _format_deliverable_name(self, deliverable: str) -> str:
+        """Convert internal deliverable name to readable format.
+        
+        Args:
+            deliverable: Internal name like 'issue_url', 'why_chosen_complete'
+            
+        Returns:
+            Readable name like 'Issue URL', 'Why Chosen'
+        """
+        name_map = {
+            "issue_url": "Issue URL",
+            "why_chosen_complete": "Why Chosen section",
+            "fork_url": "Fork URL",
+            "reproduction_complete": "Reproduction docs",
+            "solution_complete": "Solution docs",
+            "implementation_complete": "Implementation docs",
+            "testing_complete": "Testing docs",
+            "mr_url": "MR URL",
+            "feedback_complete": "Feedback docs",
+        }
+        return name_map.get(deliverable, deliverable.replace("_", " ").title())
+    
     def _apply_phase_completions(self, students: List[StudentRecord], 
                                  phase_completions: Dict[str, Dict]) -> None:
         """Apply manual phase completions to student records.
@@ -2747,6 +2784,28 @@ class TrackerDataProcessor(FileProcessor):
             elif key not in student_week_has_sunday:
                 student_week_has_sunday[key] = False
         
+        # Build lookup for previous phase deliverables
+        # student_key -> phase_num -> (deliverables_complete, deliverables_expected, submission_num, missing_list)
+        # We track the LAST (highest submission_num) record for each phase
+        student_phase_deliverables: dict = {}
+        for s in students:
+            key = s.member_id or s.name
+            phase = self._get_phase_number(s.current_phase)
+            if phase > 0:
+                if key not in student_phase_deliverables:
+                    student_phase_deliverables[key] = {}
+                # Only keep the latest submission for each phase (highest submission_num)
+                existing = student_phase_deliverables[key].get(phase)
+                if existing is None or s.submission_num > existing[2]:
+                    # Get the specific missing deliverables for this phase
+                    missing_list = self._get_missing_deliverables(s, phase)
+                    student_phase_deliverables[key][phase] = (
+                        s.deliverables_complete,
+                        s.deliverables_expected,
+                        s.submission_num,
+                        missing_list
+                    )
+        
         # Second pass: Evaluate each student record
         for student in students:
             phase_num = self._get_phase_number(student.current_phase)
@@ -2844,13 +2903,16 @@ class TrackerDataProcessor(FileProcessor):
                 
                 # Sort interventions by week (already handled by sort key later)
                 
-                # Set status based on whether any Sunday is missing (AT RISK) or only Wednesdays (FLAGGED)
+                # Set status based on whether any Sunday is missing (AT RISK)
+                # Missing Wednesdays ONLY = ON TRACK (tracked separately for CSV export)
                 if missing_sun_count > 0:
                     at_risk = True
                 elif missing_wed_count > 0:
-                    flagged = True
+                    # Mark for CSV export but keep as ON TRACK
+                    student._missing_wed_only = True
+                    student._missing_wed_weeks = [expected_wed - i for i in range(missing_wed_count)]
                 
-                # Join all missing interventions
+                # Join all missing interventions (still track for reporting)
                 if missing_interventions:
                     intervention = "\n".join(missing_interventions)
             
@@ -2872,10 +2934,26 @@ class TrackerDataProcessor(FileProcessor):
                 # Note: MISSED_CHECKIN_SUN/WED removed - now handled by MISSING_SUNDAY/WEDNESDAY_WK_X
                 # which counts actual submission types vs expected
                 
-                # Stalled with blockers (moved from At Risk to Flagged)
-                if student.blocked and student.blocker_desc:
+                # Stalled with blockers - only if block was reported recently (last 2 submissions)
+                # Check all submissions for this student to find recent blocks
+                recent_block_found = False
+                recent_blocker_desc = ""
+                if is_latest_record:
+                    # Only check on latest record to avoid duplicate interventions
+                    for s in students:
+                        if (s.member_id or s.name) == student_key:
+                            if s.blocked and s.blocker_desc:
+                                # Block is recent if it's from the last 2 submissions
+                                # (current submission or the one before)
+                                if s.submission_num >= student_total_submissions - 1:
+                                    recent_block_found = True
+                                    recent_blocker_desc = s.blocker_desc
+                                    break  # Found a recent block
+                
+                if recent_block_found:
                     flagged = True
                     intervention = "STALLED"
+                    student._stalled_blocker_desc = recent_blocker_desc
                 
                 # Check for missing immediate previous phase submission
                 # Only flag if the phase directly before current has no submission record
@@ -2920,11 +2998,6 @@ class TrackerDataProcessor(FileProcessor):
                     flagged = True
                     intervention = "INCORRECT_PHASE_URL"
                 
-                # Note: Missing deliverables for CURRENT phase is no longer flagged
-                # Students may still be working on their current phase deliverables
-                # Only flag if they've moved to a new phase with incomplete previous phase
-                # (This would require tracking historical phase data - not implemented)
-                
                 # No recent commits
                 elif student.days_since_commit > 7:
                     flagged = True
@@ -2956,6 +3029,29 @@ class TrackerDataProcessor(FileProcessor):
                 # Invalid Member ID is AT_RISK level
                 if not at_risk:
                     at_risk = True
+            
+            # Check for missing deliverables in the PREVIOUS phase only (not current, not older)
+            # This is an independent check that can be combined with other interventions
+            # Only check on latest record to avoid duplicates
+            if is_latest_record and phase_num >= 2:
+                previous_phase = phase_num - 1
+                phase_data = student_phase_deliverables.get(student_key, {}).get(previous_phase)
+                if phase_data:
+                    prev_complete, prev_expected, _, missing_list = phase_data
+                    if prev_expected > 0 and prev_complete < prev_expected and missing_list:
+                        missing_deliv_intervention = f"MISSING_DELIVERABLES_PHASE_{previous_phase}"
+                        # Append to existing interventions
+                        if intervention:
+                            if missing_deliv_intervention not in intervention:
+                                intervention += f"\n{missing_deliv_intervention}"
+                        else:
+                            intervention = missing_deliv_intervention
+                        # Set flagged if not already at_risk or flagged
+                        if not at_risk and not flagged:
+                            flagged = True
+                        # Create detailed breakdown of missing deliverables (raw column names, multi-line)
+                        missing_lines = [f"-{d}" for d in missing_list]
+                        student._missing_deliverables_detail = f"Phase {previous_phase} missing:\n" + "\n".join(missing_lines)
             
             # Apply issue-based interventions (from search_issues_title command)
             # These are for grouping purposes only (e.g., JSON_SAFEPARSE_ISSUE)
@@ -3307,6 +3403,7 @@ class TrackerDataProcessor(FileProcessor):
                     'total_submissions': 0,
                     'deliverables': f"{s.deliverables_complete}/{s.deliverables_expected}",
                     'forced_on_track_reason': forced_reasons.get(key, ''),  # Why forced ON TRACK
+                    'missing_deliverables_detail': '',  # Detailed breakdown of missing deliverables
                 }
             
             # Update to latest week data, preferring Sunday submissions over Wednesday
@@ -3384,8 +3481,12 @@ class TrackerDataProcessor(FileProcessor):
             # Note: Missing deliverables for current phase is no longer flagged
             # Students may still be working on their current phase
             
-            if s.blocked:
-                student_map[key]['issues'].add(f"Week {s.week}: Blocked - {s.blocker_desc[:50] if s.blocker_desc else 'Unknown'}")
+            # Add blocked info - use STALLED blocker desc if available (from recent block check)
+            stalled_desc = getattr(s, '_stalled_blocker_desc', '')
+            if stalled_desc:
+                student_map[key]['issues'].add(f"Blocked - {stalled_desc[:80]}")
+            elif s.blocked and s.blocker_desc:
+                student_map[key]['issues'].add(f"Week {s.week}: Blocked - {s.blocker_desc[:50]}")
             
             if s.timeline_type in ["Compressed", "Critical"] and s.week > 0:
                 student_map[key]['issues'].add(f"Week {s.week}: {s.timeline_type} timeline")
@@ -3408,6 +3509,12 @@ class TrackerDataProcessor(FileProcessor):
             if skipped_phases:
                 skipped_str = ", ".join([str(p) for p in skipped_phases])
                 student_map[key]['issues'].add(f"Week {s.week}: Skipped Phase {skipped_str}")
+            
+            # Missing deliverables from previous phase (detailed breakdown)
+            # Store separately to format as its own block in description
+            missing_deliv_detail = getattr(s, '_missing_deliverables_detail', '')
+            if missing_deliv_detail:
+                student_map[key]['missing_deliverables_detail'] = missing_deliv_detail
             
             if s.member_id_mismatch:
                 student_map[key]['issues'].add("Member ID mismatch")
@@ -3525,6 +3632,16 @@ class TrackerDataProcessor(FileProcessor):
                 if not any(kw in issue.lower() for kw in covered_keywords if kw and len(kw) > 3)
             ]
             all_descriptions = intervention_descriptions + filtered_issues
+            
+            # Add missing deliverables detail as a separate block if present
+            missing_deliv_detail = data.get('missing_deliverables_detail', '')
+            if missing_deliv_detail:
+                if all_descriptions:
+                    all_descriptions.append("")  # Blank line before
+                    all_descriptions.append(missing_deliv_detail)
+                else:
+                    all_descriptions = [missing_deliv_detail]
+            
             description = "\n".join(all_descriptions) if all_descriptions else "No specific issues identified"
             # Format submission numbers as comma-separated sorted list
             submission_nums_str = ", ".join(str(n) for n in sorted(data['submission_nums'])) if data['submission_nums'] else ""
@@ -4058,4 +4175,79 @@ class TrackerDataProcessor(FileProcessor):
                     pass
             
             ws.column_dimensions[column_letter].width = max_length + 2
+    
+    def _get_missing_wednesday_only_students(self, students: List[StudentRecord]) -> List[Dict]:
+        """Get unique students who are ONLY missing Wednesday submissions.
+        
+        These students are ON TRACK but need to be tracked separately for outreach.
+        
+        Args:
+            students: List of all student records
+            
+        Returns:
+            List of dicts with student info: name, member_id, email, discord, phone, missing_weeks
+        """
+        # Group by student key and find those with _missing_wed_only flag
+        student_map = {}
+        for s in students:
+            key = s.member_id or s.name
+            if getattr(s, '_missing_wed_only', False):
+                if key not in student_map:
+                    student_map[key] = {
+                        'name': s.name,
+                        'member_id': s.member_id,
+                        'email': s.email or '',
+                        'discord': s.discord_username or '',
+                        'phone': s.phone or '',
+                        'missing_weeks': set()
+                    }
+                # Add missing weeks
+                missing_weeks = getattr(s, '_missing_wed_weeks', [])
+                for week in missing_weeks:
+                    student_map[key]['missing_weeks'].add(week)
+        
+        # Convert to list and format missing weeks
+        result = []
+        for key, data in student_map.items():
+            weeks_str = ", ".join(f"Week {w}" for w in sorted(data['missing_weeks']))
+            result.append({
+                'name': data['name'],
+                'member_id': data['member_id'],
+                'email': data['email'],
+                'discord': data['discord'],
+                'phone': data['phone'],
+                'missing_weeks': weeks_str
+            })
+        
+        return sorted(result, key=lambda x: x['name'].lower())
+    
+    def _generate_missing_wed_csv(self, students: List[Dict]) -> bytes:
+        """Generate CSV for students missing only Wednesday submissions.
+        
+        Args:
+            students: List of student dicts from _get_missing_wednesday_only_students
+            
+        Returns:
+            CSV data as bytes
+        """
+        import csv
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Header
+        writer.writerow(['Name', 'Member ID', 'Email', 'Discord', 'Phone', 'Missing Wednesdays'])
+        
+        # Data rows
+        for student in students:
+            writer.writerow([
+                student['name'],
+                student['member_id'],
+                student['email'],
+                student['discord'],
+                student['phone'],
+                student['missing_weeks']
+            ])
+        
+        return output.getvalue().encode('utf-8')
 
