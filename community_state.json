@@ -40,8 +40,8 @@
     "imdesigns": 56,
     "mufasa1033": 36,
     "junjulyaugustoctober": 50,
-    "matthewoscarwyatt": 18,
-    "lucianoscarpaci": 143,
+    "matthewoscarwyatt": 21,
+    "lucianoscarpaci": 148,
     "jewlzt": 17,
     "hex_salt": 5,
     "k_noodles": 31,
@@ -61,7 +61,7 @@
     "suzkim23": 12,
     "chichizhang0510": 5,
     "jc_1024": 5,
-    "sbrshkappa": 189,
+    "sbrshkappa": 193,
     "arjunc_21": 5,
     "brittany.h": 12,
     "lindsey3213": 51,
@@ -328,7 +328,8 @@
       "209761369011126272"
     ],
     "1482868259018506384": [
-      "715691481859358911"
+      "715691481859358911",
+      "1194090534348800084"
     ]
   },
   "point_history": {
@@ -953,6 +954,20 @@
         "timestamp": "2026-03-12T22:10:27.912000+00:00",
         "channel_id": "1451043797483131000",
         "message_id": "1481776417103548698"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-16T20:28:14.991488+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1482868259018506384"
+      },
+      {
+        "points": 2,
+        "type": "subsequent_response",
+        "timestamp": "2026-03-16T20:28:40.523000+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1483200352319967243"
       }
     ],
     "lucianoscarpaci": [
@@ -1340,6 +1355,13 @@
         "timestamp": "2026-03-13T21:11:02.216728+00:00",
         "channel_id": "1451043797483131000",
         "message_id": "1482123413459046542"
+      },
+      {
+        "points": 5,
+        "type": "first_post",
+        "timestamp": "2026-03-16T17:11:39.115000+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1483150769740840960"
       }
     ],
     "jewlzt": [
@@ -3011,6 +3033,20 @@
         "timestamp": "2026-03-16T03:46:55.498000+00:00",
         "channel_id": "1451043797483131000",
         "message_id": "1482948253573185557"
+      },
+      {
+        "points": 2,
+        "type": "subsequent_response",
+        "timestamp": "2026-03-16T17:02:31.006000+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1483148470805336136"
+      },
+      {
+        "points": 2,
+        "type": "subsequent_response",
+        "timestamp": "2026-03-16T20:07:53.506000+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1483195121951572080"
       }
     ],
     "arjunc_21": [

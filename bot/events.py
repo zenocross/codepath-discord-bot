@@ -49,6 +49,8 @@ class EventsCog(commands.Cog, name="Events"):
             await ctx.send(embed=embed)
         elif ctx.prefix == '!app ':
             await ctx.send(embed=EmbedBuilder.app_help_embed())
+        elif ctx.prefix == '!checkin ':
+            await ctx.send(embed=EmbedBuilder.checkin_help_embed())
         else:
             # Fallback: DMs default to announce, channels default to app overview
             if isinstance(ctx.channel, discord.DMChannel):

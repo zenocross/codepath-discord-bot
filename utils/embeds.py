@@ -754,6 +754,77 @@ class EmbedBuilder:
         return embed
     
     @staticmethod
+    def checkin_help_embed() -> discord.Embed:
+        """Create help embed for check-in commands.
+        
+        Returns:
+            Configured Discord embed
+        """
+        embed = discord.Embed(
+            title="📋 Check-in Bot - Help",
+            description="Weekly check-in system for tracking your progress and support needs.",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(
+            name="📝 Commands",
+            value=(
+                "`!checkin` - Start your weekly check-in (DM only)\n"
+                "`!checkin status` - View your current week's check-in\n"
+                "`!checkin modify` - Update your check-in responses (DM only)\n"
+                "`!checkin help` - Show this help message"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="👑 Admin Commands",
+            value=(
+                "`!checkin report` - View all check-ins summary\n"
+                "`!checkin report_download` - Download check-ins as CSV"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📅 How it Works",
+            value=(
+                "• Check in once per week with your current phase and status\n"
+                "• If you're blocked, select what support would help\n"
+                "• Use `modify` to update your responses anytime during the week\n"
+                "• A new week starts every Monday"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🎯 Phases",
+            value=(
+                "**1.** Phase 1: Issue Selection\n"
+                "**2.** Phase 2: Reproduction & Planning\n"
+                "**3.** Phase 3: Implementation\n"
+                "**4.** Phase 4: Submission & Iteration"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🆘 Support Options",
+            value=(
+                "If blocked, you can request:\n"
+                "• Office hours guidance\n"
+                "• Technical resource/tutorial\n"
+                "• Mentor pairing\n"
+                "• 1:1 session with Cam"
+            ),
+            inline=False
+        )
+        
+        embed.set_footer(text="DM the bot with !checkin to begin!")
+        
+        return embed
+    
+    @staticmethod
     def app_help_embed() -> discord.Embed:
         """Create overview help embed showing all available modules.
         
@@ -801,6 +872,15 @@ class EmbedBuilder:
             value="Student self-service phase tracking\n"
                   "`!completion set_phase_complete <phase>` - Set your phase (1-4)\n"
                   "`!completion status` - Check your completion status",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📋 !checkin",
+            value="Weekly check-in questionnaire (DM only)\n"
+                  "`!checkin` - Begin weekly check-in\n"
+                  "`!checkin status` - View your check-in\n"
+                  "`!checkin help` for details",
             inline=False
         )
         
