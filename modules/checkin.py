@@ -88,7 +88,11 @@ def get_current_week(start_date: Optional[datetime] = None) -> int:
     """Calculate the current week number based on program start date.
     
     Uses the same start_date as the tracker module from _tracker_settings.json.
+    Week transitions occur on Wednesday at 8AM UTC - check-ins before that
+    time count as the previous week.
     """
+    from datetime import timezone
+    
     if start_date is None:
         # Use the tracker's settings file (same as !tracker start_date)
         settings_file = os.path.join('data', 'uploads', '_tracker_settings.json')
@@ -107,7 +111,27 @@ def get_current_week(start_date: Optional[datetime] = None) -> int:
         else:
             start_date = datetime.now()
     
-    days_since_start = (datetime.now() - start_date).days
+    # Get current time in UTC
+    now_utc = datetime.now(timezone.utc)
+    
+    # Find the most recent Wednesday 8AM UTC cutoff
+    # Wednesday = 2 in weekday() (Monday=0, Tuesday=1, Wednesday=2, ...)
+    days_since_wednesday = (now_utc.weekday() - 2) % 7
+    
+    # Calculate the most recent Wednesday at 8AM UTC
+    last_wednesday_8am = now_utc.replace(hour=8, minute=0, second=0, microsecond=0)
+    last_wednesday_8am = last_wednesday_8am - timedelta(days=days_since_wednesday)
+    
+    # If we haven't reached 8AM on Wednesday yet, use the previous Wednesday
+    if now_utc < last_wednesday_8am:
+        last_wednesday_8am = last_wednesday_8am - timedelta(days=7)
+    
+    # Make start_date timezone-aware if it isn't
+    if start_date.tzinfo is None:
+        start_date = start_date.replace(tzinfo=timezone.utc)
+    
+    # Calculate weeks based on the Wednesday cutoff relative to start date
+    days_since_start = (last_wednesday_8am - start_date).days
     return max(1, (days_since_start // 7) + 1)
 
 

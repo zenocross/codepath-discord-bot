@@ -489,7 +489,7 @@ class EmbedBuilder:
             value="`!announce set_group <name> <intervention_types>` - Create preset (comma-sep types)\n"
                   "`!announce delete_preset <name>` - Delete preset\n"
                   "`!announce presets` - List all presets\n"
-                  "`!announce autogroup` - Create DM groups from presets\n"
+                  "`!announce autogroup` - Create DM groups from presets + missing Wed check-ins\n"
                   "`!announce clear_autogroups` - Clear auto-generated groups",
             inline=False
         )

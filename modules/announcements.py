@@ -1243,6 +1243,104 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
             else:
                 del self.bot.dm_groups[group_name]
         
+        # === Check-in Autogroup ===
+        # Create auto_no_wed_checkin group for students who haven't done their Wednesday check-in
+        import csv
+        import io as io_module
+        from modules.checkin import get_current_week, load_checkin_data
+        
+        checkin_week = get_current_week()
+        checkin_data = load_checkin_data()
+        
+        # Get all students from master with discord usernames
+        all_master_students: Dict[str, Dict] = {}
+        
+        if master_data:
+            try:
+                master_text_checkin = master_data.decode('utf-8')
+                lines = master_text_checkin.splitlines()
+                header_row_idx = None
+                for idx, line in enumerate(lines):
+                    if "Member ID" in line or "member_id" in line.lower():
+                        header_row_idx = idx
+                        break
+                
+                if header_row_idx is not None:
+                    data_lines = lines[header_row_idx:]
+                    if data_lines and data_lines[0].startswith(','):
+                        data_lines = [line[1:] if line.startswith(',') else line for line in data_lines]
+                    
+                    cleaned_csv = '\n'.join(data_lines)
+                    reader = csv.DictReader(io_module.StringIO(cleaned_csv))
+                    
+                    for row in reader:
+                        discord_username = (row.get('Discord Username') or 
+                                           row.get('discord_username') or 
+                                           row.get('Discord') or '').strip().lstrip('@').lower()
+                        if not discord_username:
+                            continue
+                        
+                        full_name = (row.get('Full Name') or row.get('Name') or '').strip()
+                        member_id = (row.get('Member ID') or row.get('member_id') or '').strip()
+                        
+                        all_master_students[discord_username] = {
+                            'name': full_name or 'N/A',
+                            'member_id': member_id,
+                            'discord_username': discord_username
+                        }
+            except Exception as e:
+                print(f"[Autogroup] Error parsing master for check-in: {e}")
+        
+        # Find students who have submitted for current week
+        submitted_discord_names: Set[str] = set()
+        week_key = f"week_{checkin_week}"
+        
+        for user_id_str, weeks_data in checkin_data.items():
+            if week_key in weeks_data:
+                discord_name = weeks_data[week_key].get('discord_name', '').lower()
+                if discord_name:
+                    submitted_discord_names.add(discord_name)
+        
+        # Find students who haven't submitted
+        no_checkin_students = []
+        for discord_username_lower, stu_data in all_master_students.items():
+            if discord_username_lower not in submitted_discord_names:
+                no_checkin_students.append(stu_data)
+        
+        # Create the no_wed_checkin group
+        checkin_group_name = f"{AUTO_GROUP_PREFIX}no_wed_checkin"
+        checkin_users_added = 0
+        
+        if no_checkin_students:
+            self.bot.dm_groups[checkin_group_name] = []
+            
+            for stu in no_checkin_students:
+                discord_username = stu.get('discord_username', '')
+                stu_name = stu.get('name', 'Unknown')
+                stu_member_id = stu.get('member_id', '?')
+                
+                if not discord_username:
+                    continue
+                
+                user = await find_user(discord_username)
+                if user:
+                    self.bot.dm_groups[checkin_group_name].append({
+                        'user_id': user.id,
+                        'username': user.name,
+                        'member_id': stu_member_id,
+                        'name': stu_name
+                    })
+                    checkin_users_added += 1
+            
+            if self.bot.dm_groups[checkin_group_name]:
+                groups_created.append(f"{checkin_group_name} ({len(self.bot.dm_groups[checkin_group_name])} users) - Week {checkin_week} missing")
+            else:
+                del self.bot.dm_groups[checkin_group_name]
+        else:
+            # Everyone checked in - remove the group if it exists
+            if checkin_group_name in self.bot.dm_groups:
+                del self.bot.dm_groups[checkin_group_name]
+        
         # Save DM groups
         self.bot.save_dm_groups()
         
