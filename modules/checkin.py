@@ -6,9 +6,13 @@ Commands:
     !checkin modify          - Modify current week's check-in responses
     !checkin report          - View check-in report (Admin only)
     !checkin report_download - Download check-ins as CSV (Admin only)
+    !checkin post [channel]  - Post check-in prompt with reaction (Admin only)
+    !checkin weekly          - Manage scheduled weekly check-in posts (Admin only)
     !checkin help            - Show help for check-in commands
 """
 
+import csv
+import io
 import json
 import os
 from datetime import datetime, timedelta
@@ -36,6 +40,10 @@ SUPPORT_OPTIONS = [
 ]
 
 CHECKIN_DATA_FILE = os.path.join('data', 'checkins.json')
+CHECKIN_SETTINGS_FILE = os.path.join('data', '_checkin_settings.json')
+
+# Reaction emoji for check-in
+CHECKIN_EMOJI = "📋"
 
 
 # ==================== Data Management ====================
@@ -56,6 +64,24 @@ def save_checkin_data(data: Dict[str, Any]) -> None:
     os.makedirs(os.path.dirname(CHECKIN_DATA_FILE), exist_ok=True)
     with open(CHECKIN_DATA_FILE, 'w') as f:
         json.dump(data, f, indent=2)
+
+
+def load_checkin_settings() -> Dict[str, Any]:
+    """Load check-in settings (reaction message ID, etc.)."""
+    if os.path.exists(CHECKIN_SETTINGS_FILE):
+        try:
+            with open(CHECKIN_SETTINGS_FILE, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return {}
+    return {}
+
+
+def save_checkin_settings(settings: Dict[str, Any]) -> None:
+    """Save check-in settings."""
+    os.makedirs(os.path.dirname(CHECKIN_SETTINGS_FILE), exist_ok=True)
+    with open(CHECKIN_SETTINGS_FILE, 'w') as f:
+        json.dump(settings, f, indent=2)
 
 
 def get_current_week(start_date: Optional[datetime] = None) -> int:
@@ -206,11 +232,13 @@ class SupportSelect(ui.Select):
 class CheckinView(ui.View):
     """Main view for the check-in questionnaire."""
     
-    def __init__(self, user_id: int, week: int, is_modify: bool = False):
+    def __init__(self, user_id: int, week: int, is_modify: bool = False, bot=None, discord_user=None):
         super().__init__(timeout=300)  # 5 minute timeout
         self.user_id = user_id
         self.week = week
         self.is_modify = is_modify
+        self.bot = bot
+        self.discord_user = discord_user  # Store the discord.User object
         
         # Response data
         self.phase: Optional[str] = None
@@ -263,16 +291,35 @@ class CheckinView(ui.View):
                     support_labels.append(opt_label)
                     break
         
-        # Save the check-in data
+        # Get discord username
+        discord_name = "Unknown"
+        if self.discord_user:
+            discord_name = self.discord_user.name
+        elif self.bot:
+            try:
+                user = await self.bot.fetch_user(self.user_id)
+                discord_name = user.name
+            except:
+                pass
+        
+        # Look up full name from master CSV
+        full_name = self._lookup_student_name(discord_name)
+        
+        # Save the check-in data (including full name)
         checkin_data = {
             'phase': self.phase,
             'phase_label': self.phase_label,
             'blocked': self.blocked,
             'support_needed': self.support_needed,
-            'support_labels': support_labels
+            'support_labels': support_labels,
+            'full_name': full_name,
+            'discord_name': discord_name
         }
         
         save_user_checkin(self.user_id, self.week, checkin_data)
+        
+        # Send notification to bot feed
+        await self._notify_bot_feed(support_labels, full_name, discord_name)
         
         # Build confirmation message
         self.clear_items()
@@ -306,6 +353,106 @@ class CheckinView(ui.View):
         await interaction.response.edit_message(embed=embed, view=self)
         self.stop()
     
+    def _lookup_student_name(self, discord_name: str) -> str:
+        """Look up student's full name from master CSV by Discord username.
+        
+        Returns the full name if found, otherwise 'N/A'.
+        """
+        if not self.bot:
+            return "N/A"
+        
+        try:
+            master_data = self.bot.file_storage.read_file_by_category("master")
+            if master_data:
+                master_text = master_data.decode('utf-8')
+                
+                # Preprocess: find the actual header row (containing "Member ID")
+                lines = master_text.splitlines()
+                header_row_idx = None
+                for idx, line in enumerate(lines):
+                    if "Member ID" in line or "member_id" in line.lower():
+                        header_row_idx = idx
+                        break
+                
+                if header_row_idx is None:
+                    print("[Checkin] Could not find header row in master CSV")
+                    return "N/A"
+                
+                # Get lines from header onwards
+                data_lines = lines[header_row_idx:]
+                
+                # Strip leading empty column if present
+                if data_lines and data_lines[0].startswith(','):
+                    data_lines = [line[1:] if line.startswith(',') else line for line in data_lines]
+                
+                cleaned_csv = '\n'.join(data_lines)
+                reader = csv.DictReader(io.StringIO(cleaned_csv))
+                
+                for row in reader:
+                    # Check various possible column names for discord username
+                    row_discord = (row.get('Discord Username') or 
+                                   row.get('discord_username') or 
+                                   row.get('Discord') or '').strip().lower()
+                    # Remove @ prefix if present
+                    row_discord = row_discord.lstrip('@')
+                    compare_name = discord_name.lower().lstrip('@')
+                    
+                    if row_discord == compare_name:
+                        full_name = (row.get('Full Name') or 
+                                    row.get('Name') or 
+                                    row.get('name') or 
+                                    row.get('Student Name') or '').strip()
+                        if full_name:
+                            return full_name
+                        break
+        except Exception as e:
+            print(f"[Checkin] Error looking up student name: {e}")
+        
+        return "N/A"
+    
+    async def _notify_bot_feed(self, support_labels: list, full_name: str, discord_name: str):
+        """Send check-in notification to bot feed channel."""
+        if not self.bot or not self.bot.dm_feed_channel_id:
+            return
+        
+        feed_channel = self.bot.get_channel(self.bot.dm_feed_channel_id)
+        if not feed_channel:
+            return
+        
+        # Build display name
+        if full_name and full_name != "N/A":
+            display_name = f"**{full_name}** ({discord_name})"
+        else:
+            display_name = f"**{discord_name}**"
+        
+        # Build summary
+        if self.blocked:
+            if support_labels:
+                support_text = ", ".join(support_labels)
+                summary = f"🚧 Needs help: {support_text}"
+            else:
+                summary = "🚧 Blocked (no specific support selected)"
+            color = discord.Color.orange()
+        else:
+            summary = "✅ All good!"
+            color = discord.Color.green()
+        
+        # Build embed
+        action_text = "modified" if self.is_modify else "submitted"
+        embed = discord.Embed(
+            title=f"📋 Week {self.week} Check-in {action_text.title()}",
+            color=color
+        )
+        embed.add_field(name="Student", value=display_name, inline=True)
+        embed.add_field(name="Phase", value=self.phase_label, inline=True)
+        embed.add_field(name="Status", value=summary, inline=False)
+        embed.set_footer(text=f"User ID: {self.user_id}")
+        
+        try:
+            await feed_channel.send(embed=embed)
+        except Exception as e:
+            print(f"[Checkin] Error sending feed notification: {e}")
+    
     async def on_timeout(self):
         """Handle view timeout."""
         pass
@@ -318,6 +465,42 @@ class CheckinCog(commands.Cog, name="Checkin"):
     
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+    
+    async def _post_checkin_to_channel(self, channel: discord.TextChannel) -> discord.Message:
+        """Post a check-in prompt to a specific channel. Returns the message."""
+        current_week = get_current_week()
+        
+        embed = discord.Embed(
+            title=f"📋 Week {current_week} Check-in",
+            description=(
+                "**Time for your weekly check-in!**\n\n"
+                f"React with {CHECKIN_EMOJI} below to start your check-in.\n"
+                "I'll DM you a quick questionnaire about your progress.\n\n"
+                "*Already completed? Send `!checkin status` to the bot to view your response or `!checkin modify` to change your answers.*"
+            ),
+            color=discord.Color.blue()
+        )
+        embed.set_footer(text="Check-ins help us track progress and provide support when needed.")
+        
+        # Send message and add reaction
+        message = await channel.send(embed=embed)
+        await message.add_reaction(CHECKIN_EMOJI)
+        
+        # Save message ID and channel ID for reaction tracking
+        settings = load_checkin_settings()
+        settings['reaction_messages'] = settings.get('reaction_messages', [])
+        
+        # Add this message to tracked messages
+        settings['reaction_messages'].append({
+            'message_id': message.id,
+            'channel_id': channel.id,
+            'guild_id': channel.guild.id if channel.guild else None,
+            'week': current_week,
+            'posted_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        })
+        
+        save_checkin_settings(settings)
+        return message
     
     def _is_dm(self, ctx: commands.Context) -> bool:
         """Check if the command was sent in DMs."""
@@ -373,7 +556,7 @@ class CheckinCog(commands.Cog, name="Checkin"):
             color=discord.Color.blue()
         )
         
-        view = CheckinView(ctx.author.id, week, is_modify=is_modify)
+        view = CheckinView(ctx.author.id, week, is_modify=is_modify, bot=self.bot, discord_user=ctx.author)
         await ctx.send(embed=embed, view=view)
     
     @commands.Cog.listener()
@@ -661,6 +844,272 @@ class CheckinCog(commands.Cog, name="Checkin"):
             f"Total Records: {sum(len(w) for w in data.values())}",
             file=file
         )
+    
+    @commands.command(name='post')
+    async def checkin_post(self, ctx: commands.Context, channel_id: Optional[str] = None):
+        """Post a check-in prompt message with reaction (Admin only).
+        
+        Usage: 
+            !checkin post              - Post in current channel
+            !checkin post <channel_id> - Post in specified channel
+        
+        Users can react to start their weekly check-in via DM.
+        """
+        # Check if user is admin
+        if not self.bot.is_user_allowed(ctx.author.id):
+            await ctx.send("❌ **Admin only.** You don't have permission to post check-in prompts.")
+            return
+        
+        # Determine target channel
+        if channel_id:
+            # Remove <# and > if user used channel mention format
+            channel_id_clean = channel_id.strip('<#>').strip()
+            try:
+                target_channel = self.bot.get_channel(int(channel_id_clean))
+                if target_channel is None:
+                    target_channel = await self.bot.fetch_channel(int(channel_id_clean))
+            except (ValueError, discord.NotFound, discord.Forbidden):
+                await ctx.send(f"❌ Could not find channel with ID `{channel_id}`. Make sure the bot has access.")
+                return
+        else:
+            target_channel = ctx.channel
+        
+        try:
+            await self._post_checkin_to_channel(target_channel)
+            
+            if channel_id:
+                await ctx.send(f"✅ Check-in prompt posted in <#{target_channel.id}>! Users can react with {CHECKIN_EMOJI} to start.", delete_after=10)
+            else:
+                await ctx.send(f"✅ Check-in prompt posted! Users can react with {CHECKIN_EMOJI} to start.", delete_after=5)
+        except discord.Forbidden:
+            await ctx.send(f"❌ I don't have permission to post in <#{target_channel.id}>.")
+        except Exception as e:
+            await ctx.send(f"❌ Failed to post check-in: {e}")
+    
+    @commands.command(name='weekly')
+    async def checkin_weekly(self, ctx: commands.Context, action: Optional[str] = None, *args):
+        """Schedule automatic weekly check-in posts (Admin only).
+        
+        Usage:
+            !checkin weekly                     - View current schedule
+            !checkin weekly set <channel_id> <day> <HH:MM>
+                                                - Set schedule (day: mon/tue/wed/thu/fri/sat/sun)
+            !checkin weekly off                 - Disable scheduled posts
+            !checkin weekly reset               - Reset "already posted" flag (for testing)
+        
+        Examples:
+            !checkin weekly set 123456789 wed 09:00
+            !checkin weekly set #general wed 14:30
+        """
+        from services.scheduler_service import SchedulerService
+        from utils.time_utils import format_time_until
+        
+        # Check if user is admin
+        if not self.bot.is_user_allowed(ctx.author.id):
+            await ctx.send("❌ **Admin only.** You don't have permission to manage check-in schedules.")
+            return
+        
+        CHECKIN_SCHEDULE_ID = "checkin_weekly"
+        
+        # View current schedule
+        if action is None:
+            if CHECKIN_SCHEDULE_ID not in self.bot.scheduled_messages:
+                await ctx.send("📅 **Check-in Schedule:** Not configured\n\nUse `!checkin weekly set <channel_id> <day> <HH:MM>` to set up.")
+                return
+            
+            sched = self.bot.scheduled_messages[CHECKIN_SCHEDULE_ID]
+            if not sched.get('active', True):
+                await ctx.send("📅 **Check-in Schedule:** Disabled\n\nUse `!checkin weekly set ...` to re-enable.")
+                return
+            
+            config = sched.get('config', {})
+            day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            day_name = day_names[config.get('day', 0)]
+            time_str = f"{config.get('hour', 9):02d}:{config.get('minute', 0):02d}"
+            channel_id = sched.get('channel_id')
+            next_run = sched.get('next_run')
+            
+            embed = discord.Embed(
+                title="📅 Check-in Schedule",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Status", value="✅ Enabled", inline=True)
+            embed.add_field(name="Channel", value=f"<#{channel_id}>", inline=True)
+            embed.add_field(name="Day & Time", value=f"{day_name} at {time_str} UTC", inline=True)
+            
+            if next_run:
+                time_until = format_time_until(next_run)
+                embed.add_field(name="Next Post", value=time_until, inline=True)
+            
+            await ctx.send(embed=embed)
+            return
+        
+        # Disable schedule
+        if action.lower() == 'off':
+            if CHECKIN_SCHEDULE_ID in self.bot.scheduled_messages:
+                del self.bot.scheduled_messages[CHECKIN_SCHEDULE_ID]
+                self.bot.save_scheduled_messages()
+            await ctx.send("✅ Check-in schedule disabled.")
+            return
+        
+        # Set schedule
+        if action.lower() == 'set':
+            if len(args) < 3:
+                await ctx.send("❌ Usage: `!checkin weekly set <channel_id> <day> <HH:MM>`\n"
+                              "Example: `!checkin weekly set 123456789 wed 09:00`")
+                return
+            
+            channel_arg, day_arg, time_arg = args[0], args[1], args[2]
+            
+            # Parse channel
+            channel_id_clean = channel_arg.strip('<#>').strip()
+            try:
+                channel = self.bot.get_channel(int(channel_id_clean))
+                if channel is None:
+                    channel = await self.bot.fetch_channel(int(channel_id_clean))
+                channel_id = channel.id
+            except (ValueError, discord.NotFound, discord.Forbidden):
+                await ctx.send(f"❌ Could not find channel `{channel_arg}`. Make sure the bot has access.")
+                return
+            
+            # Parse day
+            day_map = {
+                'mon': 0, 'monday': 0,
+                'tue': 1, 'tuesday': 1,
+                'wed': 2, 'wednesday': 2,
+                'thu': 3, 'thursday': 3,
+                'fri': 4, 'friday': 4,
+                'sat': 5, 'saturday': 5,
+                'sun': 6, 'sunday': 6
+            }
+            day_lower = day_arg.lower()
+            if day_lower not in day_map:
+                await ctx.send(f"❌ Invalid day `{day_arg}`. Use: mon, tue, wed, thu, fri, sat, sun")
+                return
+            day_num = day_map[day_lower]
+            
+            # Parse time
+            try:
+                time_parts = time_arg.split(':')
+                hour = int(time_parts[0])
+                minute = int(time_parts[1]) if len(time_parts) > 1 else 0
+                if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                    raise ValueError("Invalid time range")
+            except (ValueError, IndexError):
+                await ctx.send(f"❌ Invalid time `{time_arg}`. Use format: HH:MM (e.g., 09:00, 14:30)")
+                return
+            
+            # Create schedule config
+            config = {
+                'day': day_num,
+                'hour': hour,
+                'minute': minute
+            }
+            
+            # Calculate next run time
+            next_run = SchedulerService.calculate_next_run('weekly', config)
+            
+            # Save to bot's scheduled_messages (uses existing scheduler system)
+            self.bot.scheduled_messages[CHECKIN_SCHEDULE_ID] = {
+                'type': 'weekly',
+                'target_type': 'checkin',
+                'channel_id': channel_id,
+                'config': config,
+                'next_run': next_run,
+                'active': True,
+                'created_by': ctx.author.id
+            }
+            self.bot.save_scheduled_messages()
+            
+            day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+            time_until = format_time_until(next_run)
+            await ctx.send(
+                f"✅ **Check-in schedule set!**\n"
+                f"📍 Channel: <#{channel_id}>\n"
+                f"📅 Every **{day_names[day_num]}** at **{hour:02d}:{minute:02d} UTC**\n"
+                f"⏰ Next post: {time_until}"
+            )
+            return
+        
+        # Reset the "already posted" flag for testing
+        if action.lower() == 'reset':
+            settings = load_checkin_settings()
+            settings['last_scheduled_week'] = 0
+            save_checkin_settings(settings)
+            await ctx.send("✅ Check-in schedule reset. The next scheduled time will post even if already posted this week.")
+            return
+        
+        await ctx.send("❌ Unknown action. Use `!checkin weekly`, `!checkin weekly set ...`, `!checkin weekly off`, or `!checkin weekly reset`")
+    
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
+        """Handle reactions to check-in prompt messages."""
+        # Ignore bot's own reactions
+        if payload.user_id == self.bot.user.id:
+            return
+        
+        # Check if this is the check-in emoji
+        if str(payload.emoji) != CHECKIN_EMOJI:
+            return
+        
+        # Check if this message is a tracked check-in prompt
+        settings = load_checkin_settings()
+        tracked_messages = settings.get('reaction_messages', [])
+        
+        message_ids = [m['message_id'] for m in tracked_messages]
+        if payload.message_id not in message_ids:
+            return
+        
+        # Get the user
+        user = self.bot.get_user(payload.user_id)
+        if user is None:
+            try:
+                user = await self.bot.fetch_user(payload.user_id)
+            except discord.NotFound:
+                return
+        
+        # Don't process for bots
+        if user.bot:
+            return
+        
+        # Check if user already has a check-in this week
+        current_week = get_current_week()
+        existing = get_user_checkin(str(payload.user_id), current_week)
+        
+        try:
+            if existing:
+                # Already has check-in, send reminder
+                await user.send(
+                    f"📋 You've already completed your Week {current_week} check-in!\n"
+                    f"Use `!checkin status` to view it or `!checkin modify` to make changes."
+                )
+            else:
+                # Start the check-in process via DM
+                await user.send(
+                    f"📋 **Week {current_week} Check-in**\n"
+                    f"Let's get your weekly check-in started!"
+                )
+                
+                # Create and send the check-in view
+                view = CheckinView(user.id, current_week, bot=self.bot, discord_user=user)
+                embed = discord.Embed(
+                    title=f"Week {current_week} Check-in",
+                    description="**What phase are you currently in?**",
+                    color=discord.Color.blue()
+                )
+                view.message = await user.send(embed=embed, view=view)
+        except discord.Forbidden:
+            # Can't DM user - try to notify in channel
+            try:
+                channel = self.bot.get_channel(payload.channel_id)
+                if channel:
+                    await channel.send(
+                        f"<@{payload.user_id}> I couldn't DM you! Please enable DMs from server members, "
+                        f"or use `!checkin` in my DMs directly.",
+                        delete_after=15
+                    )
+            except:
+                pass
 
 
 async def setup(bot: commands.Bot):

@@ -780,8 +780,25 @@ class EmbedBuilder:
         embed.add_field(
             name="👑 Admin Commands",
             value=(
+                "`!checkin post [channel_id]` - Post check-in prompt\n"
+                "`!checkin weekly` - View/set scheduled weekly posts\n"
                 "`!checkin report` - View all check-ins summary\n"
                 "`!checkin report_download` - Download check-ins as CSV"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📅 Weekly Schedule Usage",
+            value=(
+                "`!checkin weekly` - View current schedule\n"
+                "`!checkin weekly set <channel> <day> <HH:MM>`\n"
+                "`!checkin weekly off` - Remove schedule entirely\n"
+                "`!checkin weekly reset` - Allow re-post this week\n\n"
+                "**off vs reset:** `off` removes the schedule. `reset` keeps the schedule but clears the \"already posted\" flag for testing.\n\n"
+                "**Examples:**\n"
+                "• `!checkin weekly set 123456789 wed 09:00`\n"
+                "• `!checkin weekly set #general monday 14:30`"
             ),
             inline=False
         )
@@ -897,6 +914,12 @@ class EmbedBuilder:
             value="`!app feed` - Check current DM feed channel\n"
                   "`!app set_feed <#channel or ID>` - Set channel for forwarding DMs\n"
                   "`!app clear_feed` - Stop forwarding DMs",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🕐 !app utc_time",
+            value="Show current UTC day and time for scheduling",
             inline=False
         )
         

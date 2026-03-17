@@ -282,6 +282,8 @@ class DiscordBot(commands.Bot):
         
         if target_type == 'dm':
             await self._send_scheduled_dm_announcement(schedule_id, sched)
+        elif target_type == 'checkin':
+            await self._send_scheduled_checkin(schedule_id, sched)
         else:
             await self._send_scheduled_channel_announcement(schedule_id, sched)
     
@@ -333,6 +335,65 @@ class DiscordBot(commands.Bot):
         
         print(f"Schedule {schedule_id}: DM sent to {sent_count}/{len(users)} users, {failed_count} failed")
     
+    async def _send_scheduled_checkin(self, schedule_id: str, sched: Dict) -> None:
+        """Send a scheduled check-in prompt to a channel."""
+        channel_id = sched.get('channel_id')
+        
+        if not channel_id:
+            print(f"Schedule {schedule_id}: No channel_id for check-in")
+            return
+        
+        channel = self.get_channel(channel_id)
+        if not channel:
+            print(f"Schedule {schedule_id}: Channel {channel_id} not found")
+            return
+        
+        try:
+            # Import here to avoid circular imports
+            from modules.checkin import get_current_week, CHECKIN_EMOJI, load_checkin_settings, save_checkin_settings
+            
+            current_week = get_current_week()
+            
+            # Check if already posted this week (to prevent duplicates on restart)
+            settings = load_checkin_settings()
+            last_posted_week = settings.get('last_scheduled_week', 0)
+            
+            if last_posted_week >= current_week:
+                print(f"Schedule {schedule_id}: Already posted check-in for week {current_week}")
+                return
+            
+            embed = discord.Embed(
+                title=f"📋 Week {current_week} Check-in",
+                description=(
+                    "**Time for your weekly check-in!**\n\n"
+                    f"React with {CHECKIN_EMOJI} below to start your check-in.\n"
+                    "I'll DM you a quick questionnaire about your progress.\n\n"
+                    "*Already completed? Send `!checkin status` to the bot to view your response or `!checkin modify` to change your answers.*"
+                ),
+                color=discord.Color.blue()
+            )
+            embed.set_footer(text="Check-ins help us track progress and provide support when needed.")
+            
+            message = await channel.send(embed=embed)
+            await message.add_reaction(CHECKIN_EMOJI)
+            
+            # Track the message for reaction handling
+            settings['reaction_messages'] = settings.get('reaction_messages', [])
+            settings['reaction_messages'].append({
+                'message_id': message.id,
+                'channel_id': channel.id,
+                'guild_id': channel.guild.id if channel.guild else None,
+                'week': current_week,
+                'posted_at': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+            })
+            settings['last_scheduled_week'] = current_week
+            save_checkin_settings(settings)
+            
+            print(f"Schedule {schedule_id}: Posted check-in to channel {channel_id} (week {current_week})")
+            
+        except Exception as e:
+            print(f"Schedule {schedule_id}: Failed to send check-in - {e}")
+    
     # ==================== Message Event Override ====================
     
     async def on_message(self, message) -> None:
@@ -359,8 +420,9 @@ class DiscordBot(commands.Bot):
                     await self._handle_dm_conversation(message, user_id)
                     return
             
-            # Forward DMs from non-allowed users to feed channel
-            if not self.is_user_allowed(user_id) and self.dm_feed_channel_id:
+            # Forward DMs from non-allowed users to feed channel (skip commands)
+            is_command = message.content.startswith('!')
+            if not is_command and not self.is_user_allowed(user_id) and self.dm_feed_channel_id:
                 await self._forward_dm_to_feed(message)
         
         # Process commands as normal
@@ -516,6 +578,62 @@ class DiscordBot(commands.Bot):
         
         del self.dm_conversations[user_id]
     
+    def _lookup_student_name_from_master(self, discord_name: str) -> str:
+        """Look up student's full name from master CSV by Discord username.
+        
+        Returns the full name if found, otherwise 'N/A'.
+        """
+        import csv
+        import io
+        
+        try:
+            master_data = self.file_storage.read_file_by_category("master")
+            if master_data:
+                master_text = master_data.decode('utf-8')
+                
+                # Preprocess: find the actual header row (containing "Member ID")
+                lines = master_text.splitlines()
+                header_row_idx = None
+                for idx, line in enumerate(lines):
+                    if "Member ID" in line or "member_id" in line.lower():
+                        header_row_idx = idx
+                        break
+                
+                if header_row_idx is None:
+                    return "N/A"
+                
+                # Get lines from header onwards
+                data_lines = lines[header_row_idx:]
+                
+                # Strip leading empty column if present
+                if data_lines and data_lines[0].startswith(','):
+                    data_lines = [line[1:] if line.startswith(',') else line for line in data_lines]
+                
+                cleaned_csv = '\n'.join(data_lines)
+                reader = csv.DictReader(io.StringIO(cleaned_csv))
+                
+                for row in reader:
+                    # Check various possible column names for discord username
+                    row_discord = (row.get('Discord Username') or 
+                                   row.get('discord_username') or 
+                                   row.get('Discord') or '').strip().lower()
+                    # Remove @ prefix if present
+                    row_discord = row_discord.lstrip('@')
+                    compare_name = discord_name.lower().lstrip('@')
+                    
+                    if row_discord == compare_name:
+                        full_name = (row.get('Full Name') or 
+                                    row.get('Name') or 
+                                    row.get('name') or 
+                                    row.get('Student Name') or '').strip()
+                        if full_name:
+                            return full_name
+                        break
+        except Exception as e:
+            print(f"[DM Feed] Error looking up student name: {e}")
+        
+        return "N/A"
+    
     async def _forward_dm_to_feed(self, message) -> None:
         """Forward a DM from a non-allowed user to the feed channel."""
         if not self.dm_feed_channel_id:
@@ -526,6 +644,16 @@ class DiscordBot(commands.Bot):
             print(f"DM Feed: Channel {self.dm_feed_channel_id} not found")
             return
         
+        # Look up student name from master CSV
+        discord_name = message.author.name
+        full_name = self._lookup_student_name_from_master(discord_name)
+        
+        # Build display name
+        if full_name and full_name != "N/A":
+            author_display = f"{full_name} ({discord_name})"
+        else:
+            author_display = f"{discord_name} ({message.author.id})"
+        
         # Build the embed for the forwarded DM
         embed = discord.Embed(
             title="📬 New DM Received",
@@ -535,7 +663,7 @@ class DiscordBot(commands.Bot):
         
         # Add sender info
         embed.set_author(
-            name=f"{message.author.name} ({message.author.id})",
+            name=author_display,
             icon_url=message.author.display_avatar.url if message.author.display_avatar else None
         )
         

@@ -1,5 +1,6 @@
 """App-level commands module (Cog)."""
 
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 import discord
@@ -170,6 +171,49 @@ class AppCog(commands.Cog, name="App"):
             await ctx.send(f"📬 **DM Feed:** {channel.mention} (`{channel.id}`)")
         else:
             await ctx.send(f"⚠️ **DM Feed:** Channel ID `{self.bot.dm_feed_channel_id}` is set but not accessible.\nUse `!app set_feed #channel` to update or `!app clear_feed` to remove.")
+    
+    # ==================== Time Conversion ====================
+    
+    @commands.command(name='utc_time')
+    async def utc_time(self, ctx: commands.Context) -> None:
+        """Show current UTC time with day.
+        
+        Usage: !app utc_time
+        
+        Displays the current UTC day and time for scheduling reference.
+        """
+        now_utc = datetime.now(timezone.utc)
+        day_name = now_utc.strftime('%A')
+        day_short = now_utc.strftime('%a').lower()
+        time_str = now_utc.strftime('%H:%M')
+        date_str = now_utc.strftime('%Y-%m-%d')
+        
+        embed = discord.Embed(
+            title="🕐 Current UTC Time",
+            color=discord.Color.blue()
+        )
+        embed.add_field(
+            name="Day",
+            value=f"**{day_name}**",
+            inline=True
+        )
+        embed.add_field(
+            name="Time",
+            value=f"**{time_str}** UTC",
+            inline=True
+        )
+        embed.add_field(
+            name="Date",
+            value=date_str,
+            inline=True
+        )
+        embed.add_field(
+            name="💡 For Scheduling",
+            value=f"Example: `!checkin weekly set <channel> {day_short} {time_str}`",
+            inline=False
+        )
+        
+        await ctx.send(embed=embed)
 
 
 async def setup(bot: 'DiscordBot') -> None:

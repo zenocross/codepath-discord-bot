@@ -1,44 +1,33 @@
 {
   "432551600100474881": {
     "week_4": {
-      "phase": "4",
-      "phase_label": "Phase 4: Submission & Iteration",
-      "blocked": false,
-      "support_needed": [],
-      "support_labels": [],
-      "submitted_at": "2026-03-16T21:36:47.289927",
-      "week": 4
-    }
-  },
-  "1410247282644750367": {
-    "week_4": {
-      "phase": "3",
-      "phase_label": "Phase 3: Implementation",
-      "blocked": true,
-      "support_needed": [
-        "office_hours",
-        "mentor_pairing",
-        "technical_resource",
-        "one_on_one"
-      ],
-      "support_labels": [
-        "Office hours guidance",
-        "Mentor pairing",
-        "Technical resource/tutorial",
-        "1:1 session with Cam"
-      ],
-      "submitted_at": "2026-03-17T01:06:57.049029",
-      "week": 4
-    }
-  },
-  "824805941936914432": {
-    "week_4": {
       "phase": "2",
       "phase_label": "Phase 2: Reproduction & Planning",
       "blocked": false,
       "support_needed": [],
       "support_labels": [],
-      "submitted_at": "2026-03-17T00:54:53.874641",
+      "full_name": "N/A",
+      "discord_name": "zenocross",
+      "submitted_at": "2026-03-17T16:55:15.426651",
+      "week": 4
+    }
+  },
+  "1410247282644750367": {
+    "week_4": {
+      "phase": "1",
+      "phase_label": "Phase 1: Issue Selection",
+      "blocked": true,
+      "support_needed": [
+        "office_hours",
+        "one_on_one"
+      ],
+      "support_labels": [
+        "Office hours guidance",
+        "1:1 session with Cam"
+      ],
+      "full_name": "ZenoCross Rit",
+      "discord_name": "zenocrossrt",
+      "submitted_at": "2026-03-17T16:55:31.645063",
       "week": 4
     }
   }
