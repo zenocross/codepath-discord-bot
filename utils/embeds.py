@@ -454,7 +454,8 @@ class EmbedBuilder:
                   "`!announce dmgroup delete <name>` - Delete DM group\n"
                   "`!announce dmgroup add <name> <username>` - Add user by username/ID\n"
                   "`!announce dmgroup remove <name> <username>` - Remove user\n"
-                  "`!announce dmgroup test <name>` - Test DM accessibility",
+                  "`!announce dmgroup test <name>` - Test DM accessibility\n"
+                  "`!announce csv_dmgroup <name> [col]` - Create group from CSV upload",
             inline=False
         )
         

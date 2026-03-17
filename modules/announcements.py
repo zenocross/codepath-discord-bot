@@ -428,6 +428,202 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
         if current_chunk:
             await ctx.send(current_chunk)
     
+    @commands.command(name='csv_dmgroup')
+    async def csv_dmgroup(self, ctx: commands.Context, group_name: str = None, *, column_name: str = None) -> None:
+        """Create a DM group from a CSV file upload.
+        
+        Usage:
+        !announce csv_dmgroup <group_name> - Uses "Discord Username" column
+        !announce csv_dmgroup <group_name> "Column Name" - Uses specified column
+        
+        After running, upload a CSV file or type 'cancel' to abort.
+        """
+        import csv
+        import io
+        import asyncio
+        
+        if not isinstance(ctx.channel, discord.DMChannel):
+            await ctx.send("⚠️ This command only works in DMs for security.")
+            return
+        
+        if not self._check_dm_permission(ctx):
+            await ctx.send("❌ You don't have permission to use announce commands.")
+            return
+        
+        if not group_name:
+            await ctx.send("❌ Please specify a group name: `!announce csv_dmgroup <group_name> [column_name]`")
+            return
+        
+        # Default column name
+        if not column_name:
+            column_name = "Discord Username"
+        else:
+            # Strip quotes if provided
+            column_name = column_name.strip('"\'')
+        
+        # Check if group already exists
+        if group_name in self.bot.dm_groups:
+            await ctx.send(f"⚠️ Group `{group_name}` already exists with {len(self.bot.dm_groups[group_name])} members.\n"
+                          f"Upload a CSV to **replace** the group, or type `cancel` to abort.")
+        else:
+            await ctx.send(f"📤 **Upload a CSV file** to create group `{group_name}`\n"
+                          f"• Looking for column: `{column_name}`\n"
+                          f"• Type `cancel` to abort")
+        
+        def check(message: discord.Message) -> bool:
+            if message.author.id != ctx.author.id:
+                return False
+            if not isinstance(message.channel, discord.DMChannel):
+                return False
+            
+            # Check for cancel
+            if message.content.lower() in ['cancel', '!cancel']:
+                return True
+            
+            # Check for CSV attachment
+            for attachment in message.attachments:
+                if attachment.filename.lower().endswith('.csv'):
+                    return True
+            
+            return False
+        
+        try:
+            message = await self.bot.wait_for('message', check=check, timeout=120.0)
+            
+            # Check if cancelled
+            if message.content.lower() in ['cancel', '!cancel']:
+                await ctx.send("❌ Group creation cancelled.")
+                return
+            
+            # Get CSV attachment
+            csv_attachment = None
+            for attachment in message.attachments:
+                if attachment.filename.lower().endswith('.csv'):
+                    csv_attachment = attachment
+                    break
+            
+            if not csv_attachment:
+                await ctx.send("❌ No CSV file found.")
+                return
+            
+            await ctx.send(f"🔄 Processing `{csv_attachment.filename}`...")
+            
+            # Read and parse CSV
+            file_data = await csv_attachment.read()
+            
+            try:
+                csv_text = file_data.decode('utf-8')
+            except UnicodeDecodeError:
+                csv_text = file_data.decode('latin-1')
+            
+            # Preprocess: find the header row containing the target column
+            lines = csv_text.splitlines()
+            header_row_idx = None
+            
+            for idx, line in enumerate(lines):
+                if column_name in line or column_name.lower() in line.lower():
+                    header_row_idx = idx
+                    break
+            
+            if header_row_idx is None:
+                await ctx.send(f"❌ Column `{column_name}` not found in CSV.\n"
+                              f"Make sure your CSV has a header row with that column name.")
+                return
+            
+            # Get lines from header onwards
+            data_lines = lines[header_row_idx:]
+            
+            # Strip leading empty column if present
+            if data_lines and data_lines[0].startswith(','):
+                data_lines = [line[1:] if line.startswith(',') else line for line in data_lines]
+            
+            cleaned_csv = '\n'.join(data_lines)
+            reader = csv.DictReader(io.StringIO(cleaned_csv))
+            
+            # Find the actual column name (case-insensitive match)
+            actual_column = None
+            if reader.fieldnames:
+                for field in reader.fieldnames:
+                    if field and field.strip().lower() == column_name.lower():
+                        actual_column = field
+                        break
+            
+            if not actual_column:
+                await ctx.send(f"❌ Column `{column_name}` not found in CSV headers.\n"
+                              f"Available columns: {', '.join(reader.fieldnames[:10]) if reader.fieldnames else 'None'}")
+                return
+            
+            # Extract usernames
+            usernames_raw = []
+            for row in reader:
+                username = (row.get(actual_column) or '').strip()
+                if username:
+                    # Remove @ prefix if present
+                    username = username.lstrip('@')
+                    usernames_raw.append(username)
+            
+            if not usernames_raw:
+                await ctx.send(f"❌ No usernames found in column `{actual_column}`.")
+                return
+            
+            # Remove duplicates while preserving order
+            seen = set()
+            usernames = []
+            for u in usernames_raw:
+                u_lower = u.lower()
+                if u_lower not in seen:
+                    seen.add(u_lower)
+                    usernames.append(u)
+            
+            await ctx.send(f"🔍 Found {len(usernames)} unique usernames. Looking up Discord users...")
+            
+            # Build the DM group
+            self.bot.dm_groups[group_name] = []
+            users_added = 0
+            users_not_found = []
+            
+            for username in usernames:
+                user = await self.bot.find_user_by_username(username)
+                if user:
+                    self.bot.dm_groups[group_name].append({
+                        'user_id': user.id,
+                        'username': user.name,
+                        'name': user.display_name
+                    })
+                    users_added += 1
+                else:
+                    users_not_found.append(username)
+            
+            # Save DM groups
+            self.bot.save_dm_groups()
+            
+            # Build response
+            response = [f"✅ **DM Group `{group_name}` Created**\n"]
+            response.append(f"• CSV: `{csv_attachment.filename}`")
+            response.append(f"• Column: `{actual_column}`")
+            response.append(f"• Users added: {users_added}")
+            
+            if users_not_found:
+                response.append(f"• Users not found: {len(users_not_found)}")
+                response.append(f"\n**⚠️ Not Found:**")
+                for u in users_not_found[:15]:
+                    response.append(f"• `{u}`")
+                if len(users_not_found) > 15:
+                    response.append(f"• ... and {len(users_not_found) - 15} more")
+            
+            if users_added > 0:
+                response.append(f"\n💡 Use `!announce send {group_name} <message>` to DM them.")
+            else:
+                # Remove empty group
+                del self.bot.dm_groups[group_name]
+                self.bot.save_dm_groups()
+                response.append(f"\n❌ Group removed (no valid users found).")
+            
+            await ctx.send("\n".join(response))
+            
+        except asyncio.TimeoutError:
+            await ctx.send("⏱️ Upload timed out. Please run the command again.")
+    
     # ==================== Scheduling ====================
     
     def _resolve_group(self, group_name: str) -> tuple[str | None, str | None]:
