@@ -929,6 +929,49 @@ class GameCog(commands.Cog, name="Game"):
             'emoji_reaction': channel_config.get('emoji_reaction', saved_defaults.get('emoji_reaction', 1))
         }
     
+    def get_checkin_points(self) -> int:
+        """Get the configured points for check-in submissions."""
+        saved_defaults = self.community_state.get('default_points', {})
+        return saved_defaults.get('checkin', 2)  # Default: 2 points
+    
+    def award_checkin_points(self, discord_username: str, week: int) -> bool:
+        """Award community points for a check-in submission.
+        
+        Args:
+            discord_username: The Discord username of the student
+            week: The week number of the check-in
+            
+        Returns:
+            True if points were awarded, False if user not found in master
+        """
+        # Get master users
+        master_users = set(self._get_master_discord_usernames())
+        if not master_users:
+            return False
+        
+        # Find matching user in master
+        matching_user = self._find_matching_user_in_master(discord_username, master_users)
+        if not matching_user:
+            return False
+        
+        # Get points value
+        points = self.get_checkin_points()
+        if points <= 0:
+            return True  # Valid user but no points configured
+        
+        # Record the points
+        self._record_point_event(
+            username=matching_user,
+            points=points,
+            point_type='checkin',
+            timestamp=datetime.now(timezone.utc),
+            channel_id=None,
+            message_id=f"checkin_week_{week}"
+        )
+        self._save_community_state()
+        
+        return True
+    
     def _record_point_event(
         self, 
         username: str, 
@@ -1250,7 +1293,8 @@ class GameCog(commands.Cog, name="Game"):
             value=f"First Post: {defaults.get('first_post', 5)}\n"
                   f"First Response: {defaults.get('first_response', 8)}\n"
                   f"Subsequent Response: {defaults.get('subsequent_response', 2)}\n"
-                  f"Emoji Reaction: {defaults.get('emoji_reaction', 1)}",
+                  f"Emoji Reaction: {defaults.get('emoji_reaction', 1)}\n"
+                  f"Check-in: {defaults.get('checkin', 2)}",
             inline=True
         )
         
@@ -1828,13 +1872,14 @@ class GameCog(commands.Cog, name="Game"):
             await ctx.send("❌ You don't have permission to configure community points.")
             return
         
-        valid_types = ['first_post', 'first_response', 'subsequent_response', 'emoji_reaction']
+        valid_types = ['first_post', 'first_response', 'subsequent_response', 'emoji_reaction', 'checkin']
         
         if not point_type or point_type not in valid_types or value is None:
             await ctx.send(
                 "Usage: `!game community set_points <type> <value> [channel_id]`\n"
                 f"Valid types: {', '.join(valid_types)}\n"
-                "Example: `!game community set_points first_response 10`"
+                "Example: `!game community set_points first_response 10`\n"
+                "Note: `checkin` points apply globally (channel_id is ignored)"
             )
             return
         
@@ -1861,6 +1906,129 @@ class GameCog(commands.Cog, name="Game"):
             await ctx.send(f"✅ Set default `{point_type}` to **{value}**")
         
         self._save_community_state()
+    
+    @community_group.command(name='process_checkins')
+    async def community_process_checkins(self, ctx: commands.Context, confirm: str = None) -> None:
+        """Retroactively award community points for all existing check-ins.
+        
+        Usage: !game community process_checkins confirm
+        
+        This scans checkins.json and awards points for each check-in submission.
+        Points are NOT awarded if already processed (tracked in community_state).
+        """
+        if not self._check_permission(ctx):
+            await ctx.send("❌ You don't have permission to process check-in scores.")
+            return
+        
+        if confirm != "confirm":
+            checkin_pts = self.get_checkin_points()
+            await ctx.send(f"⚠️ This will retroactively award **{checkin_pts}** points per check-in.\n"
+                          f"To confirm, use: `!game community process_checkins confirm`\n\n"
+                          f"💡 To change points value: `!game community set_points checkin <value>`")
+            return
+        
+        # Load check-in data
+        from modules.checkin import load_checkin_data
+        checkin_data = load_checkin_data()
+        
+        if not checkin_data:
+            await ctx.send("❌ No check-in data found (checkins.json is empty or missing).")
+            return
+        
+        # Get master users for validation
+        master_users = set(self._get_master_discord_usernames())
+        if not master_users:
+            await ctx.send("❌ No master roster uploaded. Use `!tracker upload master` first.")
+            return
+        
+        # Track which checkins have already been processed
+        if 'processed_checkins' not in self.community_state:
+            self.community_state['processed_checkins'] = set()
+        else:
+            # Convert list to set if loaded from JSON
+            self.community_state['processed_checkins'] = set(self.community_state['processed_checkins'])
+        
+        processed = self.community_state['processed_checkins']
+        checkin_pts = self.get_checkin_points()
+        
+        points_awarded = 0
+        users_awarded = 0
+        users_not_found = []
+        already_processed = 0
+        
+        await ctx.send(f"🔄 Processing check-ins... ({checkin_pts} pts each)")
+        
+        for user_id, weeks_data in checkin_data.items():
+            for week_key, checkin_info in weeks_data.items():
+                # Create unique key for this checkin
+                checkin_key = f"{user_id}_{week_key}"
+                
+                if checkin_key in processed:
+                    already_processed += 1
+                    continue
+                
+                # Get discord name from checkin data
+                discord_name = checkin_info.get('discord_name', '')
+                if not discord_name:
+                    continue
+                
+                # Find matching user in master
+                matching_user = self._find_matching_user_in_master(discord_name, master_users)
+                if not matching_user:
+                    if discord_name not in users_not_found:
+                        users_not_found.append(discord_name)
+                    continue
+                
+                # Parse week number
+                try:
+                    week_num = int(week_key.replace('week_', ''))
+                except:
+                    week_num = 0
+                
+                # Parse timestamp
+                submitted_at = checkin_info.get('submitted_at', '')
+                try:
+                    timestamp = datetime.fromisoformat(submitted_at)
+                    if timestamp.tzinfo is None:
+                        timestamp = timestamp.replace(tzinfo=timezone.utc)
+                except:
+                    timestamp = datetime.now(timezone.utc)
+                
+                # Award points
+                self._record_point_event(
+                    username=matching_user,
+                    points=checkin_pts,
+                    point_type='checkin',
+                    timestamp=timestamp,
+                    channel_id=None,
+                    message_id=f"checkin_{week_key}"
+                )
+                
+                # Mark as processed
+                processed.add(checkin_key)
+                points_awarded += checkin_pts
+                users_awarded += 1
+        
+        # Convert set back to list for JSON serialization
+        self.community_state['processed_checkins'] = list(processed)
+        self._save_community_state()
+        
+        # Build response
+        response = ["✅ **Check-in Points Processing Complete**\n"]
+        response.append(f"• Check-ins processed: {users_awarded}")
+        response.append(f"• Points awarded: {points_awarded}")
+        
+        if already_processed > 0:
+            response.append(f"• Already processed (skipped): {already_processed}")
+        
+        if users_not_found:
+            response.append(f"\n⚠️ **Users not in master roster:** {len(users_not_found)}")
+            for u in users_not_found[:10]:
+                response.append(f"• `{u}`")
+            if len(users_not_found) > 10:
+                response.append(f"• ... and {len(users_not_found) - 10} more")
+        
+        await ctx.send("\n".join(response))
     
     @tasks.loop(count=1)
     async def trivia_loop(self):

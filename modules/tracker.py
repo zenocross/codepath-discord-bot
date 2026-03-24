@@ -45,6 +45,9 @@ FILE_DESCRIPTIONS = {
     "app": "App Data (phone numbers and additional contact info)"
 }
 
+# Import centralized week calculation
+from utils.time_utils import get_program_week
+
 
 class TrackerCog(commands.Cog, name="Tracker"):
     """Cog for processing tracker CSV files.
@@ -442,9 +445,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
         else:
             target_date = datetime.now()
         
-        # Calculate current week
-        days_since_start = (target_date - start_date).days
-        current_week = max(1, (days_since_start // 7) + 1)
+        # Calculate current week (Wednesday 5PM UTC cutoff)
+        current_week = get_program_week(start_date, target_date)
         
         # Store the last submissions date for downloads
         self.storage.set_last_submissions_date(target_date)
@@ -538,9 +540,8 @@ class TrackerCog(commands.Cog, name="Tracker"):
             )
             return
         
-        # Calculate current week
-        days_since_start = (target_date - start_date).days
-        current_week = max(1, (days_since_start // 7) + 1)
+        # Calculate current week (Wednesday 5PM UTC cutoff)
+        current_week = get_program_week(start_date, target_date)
         
         # Build status message
         status_lines = [
@@ -689,8 +690,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
             target_date = self.storage.get_last_submissions_date() or datetime.now()
             current_week = 1
             if start_date:
-                days_since_start = (target_date - start_date).days
-                current_week = max(1, (days_since_start // 7) + 1)
+                current_week = get_program_week(start_date, target_date)
             
             result = self.processor.process(
                 typeform_data,

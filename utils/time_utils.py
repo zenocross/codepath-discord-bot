@@ -1,7 +1,52 @@
 """Time utility functions for formatting and calculations."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+
+
+# Week cutoff: Wednesday 5PM UTC (12PM EST / 9AM PST)
+WEEK_CUTOFF_DAY = 2  # Wednesday (Monday=0)
+WEEK_CUTOFF_HOUR_UTC = 17  # 5PM UTC
+
+
+def get_program_week(start_date: datetime, target_date: Optional[datetime] = None) -> int:
+    """Calculate program week number with Wednesday 5PM UTC cutoff.
+    
+    Week transitions occur on Wednesday at 5PM UTC (12PM EST / 9AM PST).
+    If target_date is before Wednesday 5PM UTC, it counts as the previous week.
+    
+    Args:
+        start_date: Program start date
+        target_date: Date to calculate week for (defaults to now)
+        
+    Returns:
+        Week number (1-based)
+    """
+    if target_date is None:
+        target_date = datetime.now(timezone.utc)
+    
+    # Make dates timezone-aware if needed
+    if target_date.tzinfo is None:
+        target_date = target_date.replace(tzinfo=timezone.utc)
+    if start_date.tzinfo is None:
+        start_date = start_date.replace(tzinfo=timezone.utc)
+    
+    # Find the Wednesday 5PM UTC cutoff that applies to target_date
+    days_since_cutoff_day = (target_date.weekday() - WEEK_CUTOFF_DAY) % 7
+    
+    # Calculate the most recent Wednesday at 5PM UTC
+    last_cutoff = target_date.replace(
+        hour=WEEK_CUTOFF_HOUR_UTC, minute=0, second=0, microsecond=0
+    )
+    last_cutoff = last_cutoff - timedelta(days=days_since_cutoff_day)
+    
+    # If we haven't reached the cutoff time yet, use the previous week's cutoff
+    if target_date < last_cutoff:
+        last_cutoff = last_cutoff - timedelta(days=7)
+    
+    # Calculate weeks from start date to this cutoff
+    days_since_start = (last_cutoff - start_date).days
+    return max(1, (days_since_start // 7) + 1)
 
 
 def format_time_until(target: Optional[datetime]) -> str:

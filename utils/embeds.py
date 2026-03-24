@@ -715,15 +715,13 @@ class EmbedBuilder:
                 "`!game community remove_channel <id>` - Remove channel\n"
                 "`!game community clear_all_channels confirm` - Remove all\n"
                 "`!game community process_scores` - Recalculate all scores from history\n"
+                "`!game community process_checkins confirm` - Award points for existing check-ins\n"
                 "`!game community leaderboard` - View leaderboard\n"
                 "`!game community download` - Download leaderboard as CSV\n"
                 "`!game community reset_scores confirm` - Reset all scores\n"
                 "`!game community set_points <type> <value>` - Set default points\n"
-                "`!game community set_points <type> <value> <channel_id>` - Set channel-specific points\n"
-                "• Point types: `first_post`, `first_response`, `subsequent_response`, `emoji_reaction`\n"
-                "• Emoji reactions on others' posts earn points (default: 1)\n"
-                "• Supports text channels and forum channels\n"
-                "• New messages and reactions are scored in real-time automatically"
+                "• Point types: `first_post`, `first_response`, `subsequent_response`, `emoji_reaction`, `checkin`\n"
+                "• Check-ins automatically award points (default: 2 per check-in)"
             ),
             inline=False
         )
@@ -745,7 +743,7 @@ class EmbedBuilder:
                 "• Points are tracked for Discord usernames in the master roster\n"
                 "• Use `!tracker upload master` to set up the roster first\n"
                 "• Trivia: Questions stay active until answered or timeout\n"
-                "• Community: First posts=5pts, first response=8pts, replies=2pts"
+                "• Community: Posts/responses earn points, check-ins earn 2pts"
             ),
             inline=False
         )

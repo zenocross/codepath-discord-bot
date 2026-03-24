@@ -374,7 +374,7 @@ class DiscordBot(commands.Bot):
             )
             embed.set_footer(text="Check-ins help us track progress and provide support when needed.")
             
-            message = await channel.send(embed=embed)
+            message = await channel.send(content="@everyone", embed=embed)
             await message.add_reaction(CHECKIN_EMOJI)
             
             # Track the message for reaction handling

@@ -899,11 +899,12 @@ class TrackerDataProcessor(FileProcessor):
             # Create tabs (Master first, then priority tabs)
             start_date = options.get('start_date')
             target_date = options.get('target_date')
+            current_week = options.get('current_week', 1)
             self._create_master_tab(wb, students)
             self._create_at_risk_tab(wb, students, start_date, target_date)
             self._create_flagged_tab(wb, students, start_date, target_date)
             self._create_on_track_tab(wb, students, start_date, target_date)
-            self._create_summary_tab(wb, students)
+            self._create_summary_tab(wb, students, current_week)
             
             # Save to bytes
             output = io.BytesIO()
@@ -3383,13 +3384,14 @@ class TrackerDataProcessor(FileProcessor):
                 continue
             
             if key not in student_map:
+                # Initialize latest_week to 0 - will be updated only when actual submissions exist
                 student_map[key] = {
                     'name': s.name,
                     'member_id': s.member_id,
                     'discord': s.discord_username,
                     'email': s.email,
                     'phone': s.phone,
-                    'latest_week': s.week,
+                    'latest_week': 0,  # Start at 0, update only on actual submissions
                     'latest_phase': s.current_phase,
                     'weeks_in_phase': s.weeks_in_phase,
                     'timeline': s.timeline_type,
@@ -3406,22 +3408,17 @@ class TrackerDataProcessor(FileProcessor):
                     'missing_deliverables_detail': '',  # Detailed breakdown of missing deliverables
                 }
             
-            # Update to latest week data, preferring Sunday submissions over Wednesday
-            current_is_sunday = s.sun_submitted
-            stored_week = student_map[key]['latest_week']
-            should_update = (
-                s.week > stored_week or  # Newer week always wins
-                (s.week == stored_week and current_is_sunday)  # Same week: Sunday overrides Wednesday
-            )
-            
-            if should_update:
-                student_map[key]['latest_week'] = s.week
-                student_map[key]['latest_phase'] = s.current_phase
-                student_map[key]['weeks_in_phase'] = s.weeks_in_phase
-                student_map[key]['timeline'] = s.timeline_type
-                student_map[key]['blocked'] = s.blocked
-                student_map[key]['blocker_desc'] = s.blocker_desc
-                student_map[key]['deliverables'] = f"{s.deliverables_complete}/{s.deliverables_expected}"
+            # Only update latest_week based on Sunday submissions (ignore Wednesday)
+            if s.sun_submitted:
+                stored_week = student_map[key]['latest_week']
+                if s.week > stored_week:
+                    student_map[key]['latest_week'] = s.week
+                    student_map[key]['latest_phase'] = s.current_phase
+                    student_map[key]['weeks_in_phase'] = s.weeks_in_phase
+                    student_map[key]['timeline'] = s.timeline_type
+                    student_map[key]['blocked'] = s.blocked
+                    student_map[key]['blocker_desc'] = s.blocker_desc
+                    student_map[key]['deliverables'] = f"{s.deliverables_complete}/{s.deliverables_expected}"
             
             # Count submissions and track submission numbers
             if s.wed_submitted or s.sun_submitted:
@@ -3530,6 +3527,30 @@ class TrackerDataProcessor(FileProcessor):
         
         # Note: Old week-by-week MISSING_SUNDAY checks removed
         # Now handled by SKIPPED_PREVIOUS_SUBMISSION pattern check (Wed-Sun-Wed-Sun)
+        
+        # Calculate latest_week as the highest week with a Sunday submission
+        # (Wednesday submissions are ignored for latest_week calculation)
+        for key, data in student_map.items():
+            # Find weeks marked as missing Sunday in interventions
+            missing_sun_weeks = set()
+            for intv in data['interventions']:
+                sun_match = re.search(r'MISSING_SUNDAY_WK_(\d+)', intv)
+                if sun_match:
+                    missing_sun_weeks.add(int(sun_match.group(1)))
+            
+            if missing_sun_weeks:
+                # Determine the max expected week (highest missing week indicates expected range)
+                max_expected_week = max(missing_sun_weeks)
+                
+                # Find the highest week from 1 to max_expected that's NOT missing
+                # This is the last week they actually submitted a Sunday form
+                latest_valid = 0
+                for week in range(max_expected_week, 0, -1):
+                    if week not in missing_sun_weeks:
+                        latest_valid = week
+                        break
+                data['latest_week'] = latest_valid
+            # else: keep existing latest_week (no missing Sundays means they're on track)
         
         # Convert to list and build descriptions
         result = []
@@ -3712,7 +3733,7 @@ class TrackerDataProcessor(FileProcessor):
                 student['discord'],
                 student.get('email', ''),
                 student.get('phone', ''),
-                student['latest_week'],
+                student['latest_week'],  # 0 if no actual submissions
                 student['latest_phase'],
                 student['timeline'],
                 student['deliverables'],
@@ -3793,7 +3814,7 @@ class TrackerDataProcessor(FileProcessor):
                 student['discord'],
                 student.get('email', ''),
                 student.get('phone', ''),
-                student['latest_week'],
+                student['latest_week'],  # 0 if no actual submissions
                 student['latest_phase'],
                 student['timeline'],
                 student['deliverables'],
@@ -3864,7 +3885,7 @@ class TrackerDataProcessor(FileProcessor):
                 student['discord'],
                 student.get('email', ''),
                 student.get('phone', ''),
-                student['latest_week'],
+                student['latest_week'],  # 0 if no actual submissions
                 student['latest_phase'],
                 student['total_submissions'],
                 student['deliverables'],
@@ -3884,7 +3905,7 @@ class TrackerDataProcessor(FileProcessor):
         self._auto_fit_columns(ws)
         ws.freeze_panes = 'A2'
     
-    def _create_summary_tab(self, wb: Workbook, students: List[StudentRecord]) -> None:
+    def _create_summary_tab(self, wb: Workbook, students: List[StudentRecord], current_week: int = 1) -> None:
         """Create Tab 5: Weekly Summary Dashboard."""
         ws = wb.create_sheet("Weekly Summary")
         
@@ -4036,9 +4057,6 @@ class TrackerDataProcessor(FileProcessor):
         
         # Interventions needed = At Risk + Flagged students (those who need attention)
         interventions_needed = at_risk + flagged
-        
-        # Get current week from data
-        current_week = max(s.week for s in students) if students else 0
         
         # Create dashboard layout
         ws.column_dimensions['A'].width = 5

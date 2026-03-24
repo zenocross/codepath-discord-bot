@@ -88,10 +88,9 @@ def get_current_week(start_date: Optional[datetime] = None) -> int:
     """Calculate the current week number based on program start date.
     
     Uses the same start_date as the tracker module from _tracker_settings.json.
-    Week transitions occur on Wednesday at 8AM UTC - check-ins before that
-    time count as the previous week.
+    Week transitions occur on Wednesday at 5PM UTC (12PM EST / 9AM PST).
     """
-    from datetime import timezone
+    from utils.time_utils import get_program_week
     
     if start_date is None:
         # Use the tracker's settings file (same as !tracker start_date)
@@ -111,28 +110,7 @@ def get_current_week(start_date: Optional[datetime] = None) -> int:
         else:
             start_date = datetime.now()
     
-    # Get current time in UTC
-    now_utc = datetime.now(timezone.utc)
-    
-    # Find the most recent Wednesday 8AM UTC cutoff
-    # Wednesday = 2 in weekday() (Monday=0, Tuesday=1, Wednesday=2, ...)
-    days_since_wednesday = (now_utc.weekday() - 2) % 7
-    
-    # Calculate the most recent Wednesday at 8AM UTC
-    last_wednesday_8am = now_utc.replace(hour=8, minute=0, second=0, microsecond=0)
-    last_wednesday_8am = last_wednesday_8am - timedelta(days=days_since_wednesday)
-    
-    # If we haven't reached 8AM on Wednesday yet, use the previous Wednesday
-    if now_utc < last_wednesday_8am:
-        last_wednesday_8am = last_wednesday_8am - timedelta(days=7)
-    
-    # Make start_date timezone-aware if it isn't
-    if start_date.tzinfo is None:
-        start_date = start_date.replace(tzinfo=timezone.utc)
-    
-    # Calculate weeks based on the Wednesday cutoff relative to start date
-    days_since_start = (last_wednesday_8am - start_date).days
-    return max(1, (days_since_start // 7) + 1)
+    return get_program_week(start_date)
 
 
 def get_user_checkin(user_id: int, week: int) -> Optional[Dict[str, Any]]:
@@ -342,11 +320,36 @@ class CheckinView(ui.View):
         
         save_user_checkin(self.user_id, self.week, checkin_data)
         
+        # Award community points for new check-ins (not modifies)
+        points_awarded = 0
+        if not self.is_modify and self.bot:
+            try:
+                game_cog = self.bot.get_cog('Game')
+                if game_cog:
+                    # Check if this checkin was already processed
+                    checkin_key = f"{self.user_id}_week_{self.week}"
+                    processed = set(game_cog.community_state.get('processed_checkins', []))
+                    
+                    if checkin_key not in processed:
+                        if game_cog.award_checkin_points(discord_name, self.week):
+                            points_awarded = game_cog.get_checkin_points()
+                            # Mark as processed
+                            processed.add(checkin_key)
+                            game_cog.community_state['processed_checkins'] = list(processed)
+                            game_cog._save_community_state()
+            except Exception as e:
+                print(f"[Checkin] Error awarding community points: {e}")
+        
         # Send notification to bot feed
         await self._notify_bot_feed(support_labels, full_name, discord_name)
         
         # Build confirmation message
         self.clear_items()
+        
+        # Build points message if awarded
+        points_msg = ""
+        if points_awarded > 0:
+            points_msg = f"\n\n🏆 **+{points_awarded} community points** awarded!"
         
         if self.blocked:
             status_text = "🚧 **Blocked** - Support requested"
@@ -356,6 +359,7 @@ class CheckinView(ui.View):
                 f"**Status:** {status_text}\n\n"
                 f"**Support needed:**\n{support_text}\n\n"
                 "Your responses have been recorded. A team member will reach out to help!"
+                f"{points_msg}"
             )
             color = discord.Color.orange()
         else:
@@ -363,6 +367,7 @@ class CheckinView(ui.View):
                 f"**Phase:** {self.phase_label}\n"
                 f"**Status:** ✅ **Good to go!**\n\n"
                 "Great! Keep up the good work. Your check-in has been recorded."
+                f"{points_msg}"
             )
             color = discord.Color.green()
         
@@ -506,8 +511,8 @@ class CheckinCog(commands.Cog, name="Checkin"):
         )
         embed.set_footer(text="Check-ins help us track progress and provide support when needed.")
         
-        # Send message and add reaction
-        message = await channel.send(embed=embed)
+        # Send message with @everyone and add reaction
+        message = await channel.send(content="@everyone", embed=embed)
         await message.add_reaction(CHECKIN_EMOJI)
         
         # Save message ID and channel ID for reaction tracking
