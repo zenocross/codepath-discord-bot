@@ -12,8 +12,8 @@ Commands:
     !checkin help            - Show help for check-in commands
 
 Notes:
-    - Weeks 1-4: 3-step questionnaire (phase, block status, support options)
-    - Week 5+: 7-step questionnaire with additional survey questions (NPS, confidence, proficiency)
+    - Most weeks: 3-step questionnaire (phase, block status, support options)
+    - Week 5 only: 7-step questionnaire with additional survey questions (NPS, confidence, proficiency)
     - The post command supports mocked UTC time for testing: !checkin post #channel 2026-03-26T18:00:00
 """
 
@@ -65,8 +65,8 @@ PROFICIENCY_LABELS = {
     "1": "Not proficient"
 }
 
-# Week threshold for survey questions (only week 5+ gets the extended survey)
-SURVEY_START_WEEK = 5
+# Weeks where extended survey questions are shown (specific weeks only)
+SURVEY_WEEKS = {5}  # Only week 5 has the extended survey
 
 CHECKIN_DATA_FILE = os.path.join('data', 'checkins.json')
 CHECKIN_SETTINGS_FILE = os.path.join('data', '_checkin_settings.json')
@@ -233,8 +233,8 @@ class BlockStatusSelect(ui.Select):
             await self.view.show_support_options(interaction)
         else:
             self.view.support_needed = []
-            # Continue to survey questions only for week 5+
-            if self.view.week >= SURVEY_START_WEEK:
+            # Continue to survey questions only for specific survey weeks
+            if self.view.week in SURVEY_WEEKS:
                 await self.view.show_nps_question(interaction)
             else:
                 await self.view.finish_checkin(interaction)
@@ -260,8 +260,8 @@ class SupportSelect(ui.Select):
     
     async def callback(self, interaction: discord.Interaction):
         self.view.support_needed = self.values
-        # Continue to survey questions only for week 5+
-        if self.view.week >= SURVEY_START_WEEK:
+        # Continue to survey questions only for specific survey weeks
+        if self.view.week in SURVEY_WEEKS:
             await self.view.show_nps_question(interaction)
         else:
             await self.view.finish_checkin(interaction)
@@ -430,7 +430,7 @@ class CheckinView(ui.View):
     @property
     def has_survey(self) -> bool:
         """Check if this week includes the extended survey questions."""
-        return self.week >= SURVEY_START_WEEK
+        return self.week in SURVEY_WEEKS
     
     @property
     def total_steps(self) -> int:
@@ -938,8 +938,8 @@ class CheckinCog(commands.Cog, name="Checkin"):
             await ctx.send(embed=embed)
             return
         
-        # Start the questionnaire (3 steps for weeks 1-4, 7 steps for week 5+)
-        total_steps = 7 if week >= SURVEY_START_WEEK else 3
+        # Start the questionnaire (3 steps normally, 7 steps for survey weeks)
+        total_steps = 7 if week in SURVEY_WEEKS else 3
         title = f"📋 Modify Week Check-in (Step 1/{total_steps})" if is_modify else f"📋 Weekly Check-in (Step 1/{total_steps})"
         subtitle = "Modify Mode" if is_modify else "Check-in"
         embed = discord.Embed(
@@ -1616,7 +1616,7 @@ class CheckinCog(commands.Cog, name="Checkin"):
                 )
             else:
                 # Start the check-in process via DM
-                total_steps = 7 if checkin_week >= SURVEY_START_WEEK else 3
+                total_steps = 7 if checkin_week in SURVEY_WEEKS else 3
                 await user.send(
                     f"📋 **Week {checkin_week} Check-in**\n"
                     f"Let's get your weekly check-in started!"
