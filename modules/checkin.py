@@ -6,6 +6,7 @@ Commands:
     !checkin modify          - Modify current week's check-in responses
     !checkin report          - View check-in report (Admin only)
     !checkin report_download - Download check-ins as CSV (Admin only)
+    !checkin nps_download    - Download NPS survey report as CSV (Admin only)
     !checkin preview_post    - Preview check-in post with timing info (Admin only)
     !checkin post <channel> [utc_timestamp] - Post check-in prompt (Admin only)
     !checkin weekly          - Manage scheduled weekly check-in posts (Admin only)
@@ -1268,6 +1269,161 @@ class CheckinCog(commands.Cog, name="Checkin"):
             f"📋 **Check-in Report Download**\n"
             f"Current Week: {current_week}\n"
             f"Total Records: {sum(len(w) for w in data.values())}",
+            file=file
+        )
+    
+    @commands.command(name='nps_download')
+    async def checkin_nps_download(self, ctx: commands.Context):
+        """Download extended survey responses as CSV with NPS analysis (Admin only).
+        
+        Exports all check-ins that include survey responses (NPS, confidence, proficiency).
+        Includes averages at the bottom using the proper NPS formula.
+        
+        NPS Formula: % Promoters (9-10) - % Detractors (0-6)
+        
+        Usage: !checkin nps_download
+        """
+        import csv
+        import io
+        
+        # Check if user is admin
+        if not self.bot.is_user_allowed(ctx.author.id):
+            await ctx.send("❌ **Admin only.** You don't have permission to download NPS reports.")
+            return
+        
+        data = load_checkin_data()
+        
+        if not data:
+            await ctx.send("📋 **No check-ins recorded yet.**")
+            return
+        
+        # Collect all survey responses
+        survey_rows = []
+        nps_scores = []
+        opensource_scores = []
+        gitlab_scores = []
+        ai_scores = []
+        
+        for user_id, weeks_data in data.items():
+            for week_key, checkin in weeks_data.items():
+                if not week_key.startswith('week_'):
+                    continue
+                
+                # Only include check-ins with survey data
+                if checkin.get('nps_score') is None:
+                    continue
+                
+                week_num = week_key.replace('week_', '')
+                
+                nps = checkin.get('nps_score')
+                opensource = checkin.get('opensource_confidence')
+                gitlab = checkin.get('gitlab_proficiency')
+                ai_conf = checkin.get('ai_confidence')
+                
+                survey_rows.append({
+                    'user_id': user_id,
+                    'week': week_num,
+                    'discord_name': checkin.get('discord_name', ''),
+                    'full_name': checkin.get('full_name', ''),
+                    'nps_score': nps,
+                    'nps_reason': checkin.get('nps_reason', ''),
+                    'opensource_confidence': opensource,
+                    'gitlab_proficiency': gitlab,
+                    'ai_confidence': ai_conf,
+                    'submitted_at': checkin.get('submitted_at', '')
+                })
+                
+                # Collect scores for averaging
+                if nps is not None:
+                    nps_scores.append(nps)
+                if opensource is not None:
+                    opensource_scores.append(opensource)
+                if gitlab is not None:
+                    gitlab_scores.append(gitlab)
+                if ai_conf is not None:
+                    ai_scores.append(ai_conf)
+        
+        if not survey_rows:
+            await ctx.send("📋 **No survey responses found.** Survey questions only appear in specific weeks (e.g., Week 5).")
+            return
+        
+        # Calculate NPS using proper formula
+        # Promoters: 9-10, Passives: 7-8, Detractors: 0-6
+        if nps_scores:
+            promoters = sum(1 for s in nps_scores if s >= 9)
+            detractors = sum(1 for s in nps_scores if s <= 6)
+            total = len(nps_scores)
+            nps_result = ((promoters / total) - (detractors / total)) * 100
+            
+            promoter_pct = (promoters / total) * 100
+            passive_pct = ((total - promoters - detractors) / total) * 100
+            detractor_pct = (detractors / total) * 100
+        else:
+            nps_result = 0
+            promoter_pct = passive_pct = detractor_pct = 0
+        
+        # Calculate simple averages for other scores
+        avg_opensource = sum(opensource_scores) / len(opensource_scores) if opensource_scores else 0
+        avg_gitlab = sum(gitlab_scores) / len(gitlab_scores) if gitlab_scores else 0
+        avg_ai = sum(ai_scores) / len(ai_scores) if ai_scores else 0
+        
+        # Build CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Header
+        writer.writerow([
+            'User ID', 'Week', 'Discord Name', 'Full Name',
+            'NPS Score (0-10)', 'NPS Reason',
+            'Open Source Confidence (1-5)', 'GitLab Proficiency (1-5)', 'AI Confidence (1-5)',
+            'Submitted At'
+        ])
+        
+        # Data rows
+        for row in survey_rows:
+            writer.writerow([
+                row['user_id'],
+                row['week'],
+                row['discord_name'],
+                row['full_name'],
+                row['nps_score'],
+                row['nps_reason'],
+                row['opensource_confidence'],
+                row['gitlab_proficiency'],
+                row['ai_confidence'],
+                row['submitted_at']
+            ])
+        
+        # Empty row before summary
+        writer.writerow([])
+        writer.writerow(['=== SUMMARY ==='])
+        writer.writerow([])
+        
+        # NPS Analysis
+        writer.writerow(['NPS Analysis'])
+        writer.writerow(['Total Responses', len(nps_scores)])
+        writer.writerow(['Promoters (9-10)', f"{promoters} ({promoter_pct:.1f}%)"])
+        writer.writerow(['Passives (7-8)', f"{total - promoters - detractors} ({passive_pct:.1f}%)"])
+        writer.writerow(['Detractors (0-6)', f"{detractors} ({detractor_pct:.1f}%)"])
+        writer.writerow(['NPS Score', f"{nps_result:.1f}"])
+        writer.writerow([])
+        
+        # Other Averages
+        writer.writerow(['Score Averages'])
+        writer.writerow(['Open Source Confidence (1-5)', f"{avg_opensource:.2f}"])
+        writer.writerow(['GitLab Proficiency (1-5)', f"{avg_gitlab:.2f}"])
+        writer.writerow(['AI Confidence (1-5)', f"{avg_ai:.2f}"])
+        
+        # Send as file
+        csv_bytes = output.getvalue().encode('utf-8')
+        file = discord.File(fp=io.BytesIO(csv_bytes), filename='nps_survey_report.csv')
+        
+        current_week = get_current_week()
+        await ctx.send(
+            f"📊 **NPS Survey Report Download**\n"
+            f"Current Week: {current_week}\n"
+            f"Survey Responses: {len(survey_rows)}\n"
+            f"**NPS Score: {nps_result:.1f}** (Promoters: {promoter_pct:.0f}% | Passives: {passive_pct:.0f}% | Detractors: {detractor_pct:.0f}%)",
             file=file
         )
     

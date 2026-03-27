@@ -785,7 +785,8 @@ class EmbedBuilder:
                 "`!checkin preview_post` - Preview post with timing info\n"
                 "`!checkin post <channel> [utc_time]` - Post check-in prompt\n"
                 "`!checkin report` - View all check-ins summary\n"
-                "`!checkin report_download` - Download check-ins as CSV"
+                "`!checkin report_download` - Download check-ins as CSV\n"
+                "`!checkin nps_download` - Download NPS survey report"
             ),
             inline=False
         )
