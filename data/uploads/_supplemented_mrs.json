@@ -1,0 +1,16 @@
+{
+  "supplemented_mrs": {
+    "125662": {
+      "name": "Biraj Pathak",
+      "mr_url": "https://gitlab.com/gitlab-org/iglu/-/merge_requests/182",
+      "supplemented": true,
+      "commit_url": "https://gitlab.com/gitlab-org/iglu/-/commit/dad131e7118e91de33b34c443157942608b6da4a",
+      "supplemented_by": "zenocross",
+      "supplemented_at": "2026-03-25T00:04:14.681485",
+      "author_match": true,
+      "mr_state": "supplemented",
+      "is_merged": false,
+      "merged_at": null
+    }
+  }
+}

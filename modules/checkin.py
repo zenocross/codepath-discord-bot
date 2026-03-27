@@ -6,9 +6,15 @@ Commands:
     !checkin modify          - Modify current week's check-in responses
     !checkin report          - View check-in report (Admin only)
     !checkin report_download - Download check-ins as CSV (Admin only)
-    !checkin post [channel]  - Post check-in prompt with reaction (Admin only)
+    !checkin preview_post    - Preview check-in post with timing info (Admin only)
+    !checkin post <channel> [utc_timestamp] - Post check-in prompt (Admin only)
     !checkin weekly          - Manage scheduled weekly check-in posts (Admin only)
     !checkin help            - Show help for check-in commands
+
+Notes:
+    - Weeks 1-4: 3-step questionnaire (phase, block status, support options)
+    - Week 5+: 7-step questionnaire with additional survey questions (NPS, confidence, proficiency)
+    - The post command supports mocked UTC time for testing: !checkin post #channel 2026-03-26T18:00:00
 """
 
 import csv
@@ -38,6 +44,29 @@ SUPPORT_OPTIONS = [
     ("mentor_pairing", "Mentor pairing"),
     ("one_on_one", "1:1 session with Cam")
 ]
+
+# NPS Scale (0-10)
+NPS_SCALE = [(str(i), str(i)) for i in range(11)]
+
+# Confidence/Proficiency Scales (1-5)
+CONFIDENCE_LABELS = {
+    "5": "Very Confident",
+    "4": "Confident",
+    "3": "Moderately confident",
+    "2": "Somewhat confident",
+    "1": "Not confident"
+}
+
+PROFICIENCY_LABELS = {
+    "5": "Very proficient",
+    "4": "Proficient",
+    "3": "Moderately proficient",
+    "2": "Somewhat proficient",
+    "1": "Not proficient"
+}
+
+# Week threshold for survey questions (only week 5+ gets the extended survey)
+SURVEY_START_WEEK = 5
 
 CHECKIN_DATA_FILE = os.path.join('data', 'checkins.json')
 CHECKIN_SETTINGS_FILE = os.path.join('data', '_checkin_settings.json')
@@ -203,9 +232,12 @@ class BlockStatusSelect(ui.Select):
             # Show support options
             await self.view.show_support_options(interaction)
         else:
-            # Finish check-in
             self.view.support_needed = []
-            await self.view.finish_checkin(interaction)
+            # Continue to survey questions only for week 5+
+            if self.view.week >= SURVEY_START_WEEK:
+                await self.view.show_nps_question(interaction)
+            else:
+                await self.view.finish_checkin(interaction)
 
 
 class SupportSelect(ui.Select):
@@ -228,6 +260,143 @@ class SupportSelect(ui.Select):
     
     async def callback(self, interaction: discord.Interaction):
         self.view.support_needed = self.values
+        # Continue to survey questions only for week 5+
+        if self.view.week >= SURVEY_START_WEEK:
+            await self.view.show_nps_question(interaction)
+        else:
+            await self.view.finish_checkin(interaction)
+
+
+class NPSSelect(ui.Select):
+    """Select menu for NPS score (0-10)."""
+    
+    def __init__(self):
+        # 10 to 0, no descriptions
+        options = [
+            discord.SelectOption(label=str(i), value=str(i))
+            for i in range(10, -1, -1)
+        ]
+        super().__init__(
+            placeholder="Select a score from 0 to 10...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        self.view.nps_score = int(self.values[0])
+        await self.view.show_nps_reason_prompt(interaction)
+
+
+class NPSReasonModal(ui.Modal, title="Reason for Your Score"):
+    """Modal for collecting the reason behind NPS score."""
+    
+    reason = ui.TextInput(
+        label="What is the primary reason for your score?",
+        style=discord.TextStyle.paragraph,
+        placeholder="Please share your thoughts...",
+        required=True,
+        min_length=1,
+        max_length=1000
+    )
+    
+    def __init__(self, view: 'CheckinView'):
+        super().__init__()
+        self.checkin_view = view
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        self.checkin_view.nps_reason = self.reason.value.strip() if self.reason.value else "N/A"
+        await self.checkin_view.show_opensource_confidence(interaction)
+
+
+class NPSReasonView(ui.View):
+    """View with buttons to enter reason or skip."""
+    
+    def __init__(self, checkin_view: 'CheckinView'):
+        super().__init__(timeout=300)
+        self.checkin_view = checkin_view
+    
+    @ui.button(label="Enter Reason", style=discord.ButtonStyle.primary, emoji="✏️")
+    async def enter_reason(self, interaction: discord.Interaction, button: ui.Button):
+        """Open the modal to enter reason."""
+        modal = NPSReasonModal(self.checkin_view)
+        await interaction.response.send_modal(modal)
+        # Don't stop the view - user can click again if they cancel the modal
+    
+    @ui.button(label="Skip (N/A)", style=discord.ButtonStyle.secondary, emoji="⏭️")
+    async def skip_reason(self, interaction: discord.Interaction, button: ui.Button):
+        """Skip entering a reason."""
+        self.checkin_view.nps_reason = "N/A"
+        await self.checkin_view.show_opensource_confidence(interaction)
+        self.stop()
+
+
+class OpenSourceConfidenceSelect(ui.Select):
+    """Select menu for open source contribution confidence."""
+    
+    def __init__(self):
+        options = [
+            discord.SelectOption(
+                label=f"{value} = {label}",
+                value=value
+            )
+            for value, label in sorted(CONFIDENCE_LABELS.items(), key=lambda x: int(x[0]), reverse=True)
+        ]
+        super().__init__(
+            placeholder="Select your confidence level...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        self.view.opensource_confidence = int(self.values[0])
+        await self.view.show_gitlab_proficiency(interaction)
+
+
+class GitLabProficiencySelect(ui.Select):
+    """Select menu for GitLab platform proficiency."""
+    
+    def __init__(self):
+        options = [
+            discord.SelectOption(
+                label=f"{value} = {label}",
+                value=value
+            )
+            for value, label in sorted(PROFICIENCY_LABELS.items(), key=lambda x: int(x[0]), reverse=True)
+        ]
+        super().__init__(
+            placeholder="Select your proficiency level...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        self.view.gitlab_proficiency = int(self.values[0])
+        await self.view.show_ai_confidence(interaction)
+
+
+class AIConfidenceSelect(ui.Select):
+    """Select menu for AI tools confidence."""
+    
+    def __init__(self):
+        options = [
+            discord.SelectOption(
+                label=f"{value} = {label}",
+                value=value
+            )
+            for value, label in sorted(CONFIDENCE_LABELS.items(), key=lambda x: int(x[0]), reverse=True)
+        ]
+        super().__init__(
+            placeholder="Select your confidence level...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        self.view.ai_confidence = int(self.values[0])
         await self.view.finish_checkin(interaction)
 
 
@@ -242,14 +411,49 @@ class CheckinView(ui.View):
         self.bot = bot
         self.discord_user = discord_user  # Store the discord.User object
         
-        # Response data
+        # Response data - Core questions
         self.phase: Optional[str] = None
         self.phase_label: Optional[str] = None
         self.blocked: Optional[bool] = None
         self.support_needed: List[str] = []
         
+        # Response data - Survey questions (only for week 5+)
+        self.nps_score: Optional[int] = None
+        self.nps_reason: str = "N/A"
+        self.opensource_confidence: Optional[int] = None
+        self.gitlab_proficiency: Optional[int] = None
+        self.ai_confidence: Optional[int] = None
+        
         # Add initial phase select
         self.add_item(PhaseSelect())
+    
+    @property
+    def has_survey(self) -> bool:
+        """Check if this week includes the extended survey questions."""
+        return self.week >= SURVEY_START_WEEK
+    
+    @property
+    def total_steps(self) -> int:
+        """Get total number of steps (3 for weeks 1-4, 7 for week 5+)."""
+        return 7 if self.has_survey else 3
+    
+    async def _safe_edit_message(self, interaction: discord.Interaction, embed: discord.Embed, view):
+        """Safely edit message with fallback for expired interactions."""
+        try:
+            if interaction.response.is_done():
+                # Interaction already responded, use followup
+                await interaction.followup.edit_message(interaction.message.id, embed=embed, view=view)
+            else:
+                await interaction.response.edit_message(embed=embed, view=view)
+        except discord.NotFound:
+            # Interaction expired, try to edit via the message directly
+            try:
+                if hasattr(self, 'message') and self.message:
+                    await self.message.edit(embed=embed, view=view)
+                elif interaction.message:
+                    await interaction.message.edit(embed=embed, view=view)
+            except Exception as e:
+                print(f"[Checkin] Failed to edit message after interaction expired: {e}")
     
     async def show_block_question(self, interaction: discord.Interaction):
         """Show the block status question."""
@@ -258,12 +462,12 @@ class CheckinView(ui.View):
         self.add_item(BlockStatusSelect())
         
         embed = discord.Embed(
-            title="📋 Weekly Check-in (Step 2/3)",
+            title=f"📋 Weekly Check-in (Step 2/{self.total_steps})",
             description=f"**Phase selected:** {self.phase_label}\n\n**Are you blocked or stuck on something?**",
             color=discord.Color.blue()
         )
         
-        await interaction.response.edit_message(embed=embed, view=self)
+        await self._safe_edit_message(interaction, embed, self)
     
     async def show_support_options(self, interaction: discord.Interaction):
         """Show support options for blocked students."""
@@ -271,7 +475,7 @@ class CheckinView(ui.View):
         self.add_item(SupportSelect())
         
         embed = discord.Embed(
-            title="📋 Weekly Check-in (Step 3/3)",
+            title=f"📋 Weekly Check-in (Step 3/{self.total_steps})",
             description=(
                 f"**Phase:** {self.phase_label}\n"
                 f"**Blocked:** Yes\n\n"
@@ -281,7 +485,94 @@ class CheckinView(ui.View):
             color=discord.Color.orange()
         )
         
-        await interaction.response.edit_message(embed=embed, view=self)
+        await self._safe_edit_message(interaction, embed, self)
+    
+    async def show_nps_question(self, interaction: discord.Interaction):
+        """Show the NPS question (only for week 5+)."""
+        self.clear_items()
+        self.add_item(NPSSelect())
+        
+        blocked_str = "🚧 Yes" if self.blocked else "✅ No"
+        embed = discord.Embed(
+            title=f"📋 Weekly Check-in (Step 4/{self.total_steps})",
+            description=(
+                f"**Phase:** {self.phase_label}\n"
+                f"**Blocked:** {blocked_str}\n\n"
+                "**I would recommend the CodePath AI Corps x GitLab program to a friend or colleague.**\n"
+                "*(0 = Not at all likely, 10 = Extremely likely)*"
+            ),
+            color=discord.Color.blue()
+        )
+        
+        await self._safe_edit_message(interaction, embed, self)
+    
+    async def show_nps_reason_prompt(self, interaction: discord.Interaction):
+        """Show the prompt to enter NPS reason."""
+        reason_view = NPSReasonView(self)
+        
+        embed = discord.Embed(
+            title=f"📋 Weekly Check-in (Step 4/{self.total_steps} - Reason)",
+            description=(
+                f"**NPS Score:** {self.nps_score}/10\n\n"
+                "**What is the primary reason for your score?**\n\n"
+                "Click **Enter Reason** to type your response, or **Skip** to continue."
+            ),
+            color=discord.Color.blue()
+        )
+        
+        await self._safe_edit_message(interaction, embed, reason_view)
+    
+    async def show_opensource_confidence(self, interaction: discord.Interaction):
+        """Show the open source confidence question (only for week 5+)."""
+        self.clear_items()
+        self.add_item(OpenSourceConfidenceSelect())
+        
+        embed = discord.Embed(
+            title=f"📋 Weekly Check-in (Step 5/{self.total_steps})",
+            description=(
+                f"**NPS Score:** {self.nps_score}/10\n"
+                f"**Reason:** {self.nps_reason[:50]}{'...' if len(self.nps_reason) > 50 else ''}\n\n"
+                "**How confident do you feel contributing to open source projects?**"
+            ),
+            color=discord.Color.blue()
+        )
+        
+        await self._safe_edit_message(interaction, embed, self)
+    
+    async def show_gitlab_proficiency(self, interaction: discord.Interaction):
+        """Show the GitLab proficiency question (only for week 5+)."""
+        self.clear_items()
+        self.add_item(GitLabProficiencySelect())
+        
+        conf_label = CONFIDENCE_LABELS.get(str(self.opensource_confidence), "Unknown")
+        embed = discord.Embed(
+            title=f"📋 Weekly Check-in (Step 6/{self.total_steps})",
+            description=(
+                f"**Open Source Confidence:** {self.opensource_confidence}/5 ({conf_label})\n\n"
+                "**How proficient are you at navigating the GitLab platform?**"
+            ),
+            color=discord.Color.blue()
+        )
+        
+        await self._safe_edit_message(interaction, embed, self)
+    
+    async def show_ai_confidence(self, interaction: discord.Interaction):
+        """Show the AI tools confidence question (only for week 5+)."""
+        self.clear_items()
+        self.add_item(AIConfidenceSelect())
+        
+        prof_label = PROFICIENCY_LABELS.get(str(self.gitlab_proficiency), "Unknown")
+        embed = discord.Embed(
+            title=f"📋 Weekly Check-in (Step 7/{self.total_steps})",
+            description=(
+                f"**GitLab Proficiency:** {self.gitlab_proficiency}/5 ({prof_label})\n\n"
+                "**How confident are you using AI tools (like Claude Code, ChatGPT, CoPilot, etc.) "
+                "to support your coding and technical work?**"
+            ),
+            color=discord.Color.blue()
+        )
+        
+        await self._safe_edit_message(interaction, embed, self)
     
     async def finish_checkin(self, interaction: discord.Interaction):
         """Complete the check-in and save data."""
@@ -307,7 +598,7 @@ class CheckinView(ui.View):
         # Look up full name from master CSV
         full_name = self._lookup_student_name(discord_name)
         
-        # Save the check-in data (including full name)
+        # Save the check-in data (including full name and survey responses)
         checkin_data = {
             'phase': self.phase,
             'phase_label': self.phase_label,
@@ -315,7 +606,13 @@ class CheckinView(ui.View):
             'support_needed': self.support_needed,
             'support_labels': support_labels,
             'full_name': full_name,
-            'discord_name': discord_name
+            'discord_name': discord_name,
+            # Survey questions
+            'nps_score': self.nps_score,
+            'nps_reason': self.nps_reason,
+            'opensource_confidence': self.opensource_confidence,
+            'gitlab_proficiency': self.gitlab_proficiency,
+            'ai_confidence': self.ai_confidence
         }
         
         save_user_checkin(self.user_id, self.week, checkin_data)
@@ -351,13 +648,29 @@ class CheckinView(ui.View):
         if points_awarded > 0:
             points_msg = f"\n\n🏆 **+{points_awarded} community points** awarded!"
         
+        # Build survey summary (only for week 5+)
+        survey_summary = ""
+        if self.has_survey:
+            os_conf_label = CONFIDENCE_LABELS.get(str(self.opensource_confidence), "N/A")
+            gl_prof_label = PROFICIENCY_LABELS.get(str(self.gitlab_proficiency), "N/A")
+            ai_conf_label = CONFIDENCE_LABELS.get(str(self.ai_confidence), "N/A")
+            
+            survey_summary = (
+                f"\n\n**📊 Survey Responses:**\n"
+                f"• NPS Score: {self.nps_score}/10\n"
+                f"• Open Source Confidence: {self.opensource_confidence}/5 ({os_conf_label})\n"
+                f"• GitLab Proficiency: {self.gitlab_proficiency}/5 ({gl_prof_label})\n"
+                f"• AI Tools Confidence: {self.ai_confidence}/5 ({ai_conf_label})"
+            )
+        
         if self.blocked:
             status_text = "🚧 **Blocked** - Support requested"
             support_text = "\n".join([f"  • {label}" for label in support_labels])
             description = (
                 f"**Phase:** {self.phase_label}\n"
                 f"**Status:** {status_text}\n\n"
-                f"**Support needed:**\n{support_text}\n\n"
+                f"**Support needed:**\n{support_text}"
+                f"{survey_summary}\n\n"
                 "Your responses have been recorded. A team member will reach out to help!"
                 f"{points_msg}"
             )
@@ -365,7 +678,8 @@ class CheckinView(ui.View):
         else:
             description = (
                 f"**Phase:** {self.phase_label}\n"
-                f"**Status:** ✅ **Good to go!**\n\n"
+                f"**Status:** ✅ **Good to go!**"
+                f"{survey_summary}\n\n"
                 "Great! Keep up the good work. Your check-in has been recorded."
                 f"{points_msg}"
             )
@@ -379,7 +693,7 @@ class CheckinView(ui.View):
         )
         embed.set_footer(text="Use !checkin status to view | !checkin modify to change")
         
-        await interaction.response.edit_message(embed=embed, view=self)
+        await self._safe_edit_message(interaction, embed, self)
         self.stop()
     
     def _lookup_student_name(self, discord_name: str) -> str:
@@ -475,6 +789,18 @@ class CheckinView(ui.View):
         embed.add_field(name="Student", value=display_name, inline=True)
         embed.add_field(name="Phase", value=self.phase_label, inline=True)
         embed.add_field(name="Status", value=summary, inline=False)
+        
+        # Add survey responses for week 5+
+        if self.has_survey and self.nps_score is not None:
+            survey_text = (
+                f"**Recommendation Score (0-10):** {self.nps_score}\n"
+                f"**Recommendation Reason:** {self.nps_reason[:100]}{'...' if len(self.nps_reason) > 100 else ''}\n"
+                f"**Open Source Confidence (1-5):** {self.opensource_confidence}\n"
+                f"**GitLab Proficiency (1-5):** {self.gitlab_proficiency}\n"
+                f"**AI Confidence (1-5):** {self.ai_confidence}"
+            )
+            embed.add_field(name="📊 Survey Responses", value=survey_text, inline=False)
+        
         embed.set_footer(text=f"User ID: {self.user_id}")
         
         try:
@@ -495,9 +821,39 @@ class CheckinCog(commands.Cog, name="Checkin"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
     
-    async def _post_checkin_to_channel(self, channel: discord.TextChannel) -> discord.Message:
-        """Post a check-in prompt to a specific channel. Returns the message."""
-        current_week = get_current_week()
+    async def _post_checkin_to_channel(
+        self, 
+        channel: discord.TextChannel, 
+        mocked_utc: Optional[datetime] = None,
+        skip_mentions: bool = False
+    ) -> discord.Message:
+        """Post a check-in prompt to a specific channel. Returns the message.
+        
+        Args:
+            channel: Target channel to post in
+            mocked_utc: Optional mocked UTC datetime for testing week calculation
+            skip_mentions: If True, don't @everyone (useful for testing)
+        """
+        from utils.time_utils import get_program_week
+        
+        # Calculate week using mocked time if provided
+        if mocked_utc:
+            settings_file = os.path.join('data', 'uploads', '_tracker_settings.json')
+            start_date = datetime.now()
+            if os.path.exists(settings_file):
+                try:
+                    with open(settings_file, 'r') as f:
+                        data = json.load(f)
+                        date_str = data.get('start_date', '')
+                        if 'T' in date_str:
+                            start_date = datetime.fromisoformat(date_str)
+                        else:
+                            start_date = datetime.strptime(date_str, '%Y-%m-%d')
+                except:
+                    pass
+            current_week = get_program_week(start_date, mocked_utc)
+        else:
+            current_week = get_current_week()
         
         embed = discord.Embed(
             title=f"📋 Week {current_week} Check-in",
@@ -511,8 +867,17 @@ class CheckinCog(commands.Cog, name="Checkin"):
         )
         embed.set_footer(text="Check-ins help us track progress and provide support when needed.")
         
-        # Send message with @everyone and add reaction
-        message = await channel.send(content="@everyone", embed=embed)
+        # Add mocked time info if testing
+        if mocked_utc:
+            embed.add_field(
+                name="🧪 Test Mode",
+                value=f"Mocked UTC: `{mocked_utc.strftime('%Y-%m-%d %H:%M:%S')}`",
+                inline=False
+            )
+        
+        # Send message (with or without @everyone)
+        content = None if skip_mentions else "@everyone"
+        message = await channel.send(content=content, embed=embed)
         await message.add_reaction(CHECKIN_EMOJI)
         
         # Save message ID and channel ID for reaction tracking
@@ -525,7 +890,8 @@ class CheckinCog(commands.Cog, name="Checkin"):
             'channel_id': channel.id,
             'guild_id': channel.guild.id if channel.guild else None,
             'week': current_week,
-            'posted_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            'posted_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'mocked_utc': mocked_utc.isoformat() if mocked_utc else None
         })
         
         save_checkin_settings(settings)
@@ -572,8 +938,9 @@ class CheckinCog(commands.Cog, name="Checkin"):
             await ctx.send(embed=embed)
             return
         
-        # Start the questionnaire
-        title = "📋 Modify Week Check-in (Step 1/3)" if is_modify else "📋 Weekly Check-in (Step 1/3)"
+        # Start the questionnaire (3 steps for weeks 1-4, 7 steps for week 5+)
+        total_steps = 7 if week >= SURVEY_START_WEEK else 3
+        title = f"📋 Modify Week Check-in (Step 1/{total_steps})" if is_modify else f"📋 Weekly Check-in (Step 1/{total_steps})"
         subtitle = "Modify Mode" if is_modify else "Check-in"
         embed = discord.Embed(
             title=title,
@@ -624,6 +991,25 @@ class CheckinCog(commands.Cog, name="Checkin"):
             await ctx.send(embed=embed)
             return
         
+        # Build survey summary if available
+        survey_summary = ""
+        if checkin.get('nps_score') is not None:
+            os_conf = checkin.get('opensource_confidence')
+            gl_prof = checkin.get('gitlab_proficiency')
+            ai_conf = checkin.get('ai_confidence')
+            
+            os_conf_label = CONFIDENCE_LABELS.get(str(os_conf), "N/A") if os_conf else "N/A"
+            gl_prof_label = PROFICIENCY_LABELS.get(str(gl_prof), "N/A") if gl_prof else "N/A"
+            ai_conf_label = CONFIDENCE_LABELS.get(str(ai_conf), "N/A") if ai_conf else "N/A"
+            
+            survey_summary = (
+                f"\n\n**📊 Survey Responses:**\n"
+                f"• NPS Score: {checkin.get('nps_score', 'N/A')}/10\n"
+                f"• Open Source Confidence: {os_conf}/5 ({os_conf_label})\n"
+                f"• GitLab Proficiency: {gl_prof}/5 ({gl_prof_label})\n"
+                f"• AI Tools Confidence: {ai_conf}/5 ({ai_conf_label})"
+            )
+        
         # Build status display
         if checkin.get('blocked'):
             status_text = "🚧 Blocked - Support requested"
@@ -634,12 +1020,14 @@ class CheckinCog(commands.Cog, name="Checkin"):
                 f"**Phase:** {checkin.get('phase_label', 'N/A')}\n"
                 f"**Status:** {status_text}\n\n"
                 f"**Support needed:**\n{support_text}"
+                f"{survey_summary}"
             )
             color = discord.Color.orange()
         else:
             description = (
                 f"**Phase:** {checkin.get('phase_label', 'N/A')}\n"
                 f"**Status:** ✅ Good to go!"
+                f"{survey_summary}"
             )
             color = discord.Color.green()
         
@@ -840,8 +1228,12 @@ class CheckinCog(commands.Cog, name="Checkin"):
         output = io.StringIO()
         writer = csv.writer(output)
         
-        # Header
-        writer.writerow(['User ID', 'Week', 'Phase', 'Phase Label', 'Blocked', 'Support Needed', 'Submitted At'])
+        # Header (including new survey columns)
+        writer.writerow([
+            'User ID', 'Week', 'Phase', 'Phase Label', 'Blocked', 'Support Needed',
+            'NPS Score', 'NPS Reason', 'Open Source Confidence', 'GitLab Proficiency', 
+            'AI Tools Confidence', 'Submitted At'
+        ])
         
         # Data rows
         for user_id, weeks_data in data.items():
@@ -859,6 +1251,11 @@ class CheckinCog(commands.Cog, name="Checkin"):
                     checkin.get('phase_label', ''),
                     'Yes' if checkin.get('blocked') else 'No',
                     support_str,
+                    checkin.get('nps_score', ''),
+                    checkin.get('nps_reason', ''),
+                    checkin.get('opensource_confidence', ''),
+                    checkin.get('gitlab_proficiency', ''),
+                    checkin.get('ai_confidence', ''),
                     checkin.get('submitted_at', '')
                 ])
         
@@ -874,42 +1271,138 @@ class CheckinCog(commands.Cog, name="Checkin"):
             file=file
         )
     
+    @commands.command(name='preview_post')
+    async def checkin_preview(self, ctx: commands.Context):
+        """Preview what the check-in post would look like (Admin only).
+        
+        Shows the current week number, the embed that would be posted,
+        and timing information about the next cutoff.
+        
+        Usage: !checkin preview_post
+        """
+        from datetime import timezone
+        from utils.time_utils import WEEK_CUTOFF_DAY, WEEK_CUTOFF_HOUR_UTC
+        
+        # Check if user is admin
+        if not self.bot.is_user_allowed(ctx.author.id):
+            await ctx.send("❌ **Admin only.** You don't have permission to preview check-in posts.")
+            return
+        
+        current_week = get_current_week()
+        now = datetime.now(timezone.utc)
+        
+        # Calculate next cutoff (Wednesday 5PM UTC)
+        days_until_cutoff = (WEEK_CUTOFF_DAY - now.weekday()) % 7
+        next_cutoff = now.replace(hour=WEEK_CUTOFF_HOUR_UTC, minute=0, second=0, microsecond=0)
+        next_cutoff = next_cutoff + timedelta(days=days_until_cutoff)
+        
+        # If we're past this week's cutoff, it's next week
+        if now >= next_cutoff:
+            next_cutoff = next_cutoff + timedelta(days=7)
+        
+        # Calculate time until cutoff
+        time_until = next_cutoff - now
+        hours_until = time_until.total_seconds() / 3600
+        
+        if hours_until >= 24:
+            days = int(hours_until // 24)
+            hours = hours_until % 24
+            time_str = f"{days}d {hours:.1f}h"
+        else:
+            time_str = f"{hours_until:.1f}h"
+        
+        # Show timing info
+        timing_embed = discord.Embed(
+            title="⏱️ Check-in Preview - Timing Info",
+            description=(
+                f"**Current Week:** {current_week}\n"
+                f"**Current Time (UTC):** {now.strftime('%Y-%m-%d %H:%M')}\n"
+                f"**Next Cutoff:** {next_cutoff.strftime('%Y-%m-%d %H:%M')} UTC (Wed 5PM)\n"
+                f"**Time Until Cutoff:** {time_str}\n\n"
+                f"After the cutoff, the check-in will show **Week {current_week + 1}**."
+            ),
+            color=discord.Color.orange()
+        )
+        await ctx.send(embed=timing_embed)
+        
+        # Show preview of what the check-in post would look like
+        preview_embed = discord.Embed(
+            title=f"📋 Week {current_week} Check-in",
+            description=(
+                "**Time for your weekly check-in!**\n\n"
+                f"React with {CHECKIN_EMOJI} below to start your check-in.\n"
+                "I'll DM you a quick questionnaire about your progress.\n\n"
+                "*Already completed? Send `!checkin status` to the bot to view your response or `!checkin modify` to change your answers.*"
+            ),
+            color=discord.Color.blue()
+        )
+        preview_embed.set_footer(text="Check-ins help us track progress and provide support when needed.")
+        
+        await ctx.send("**📝 Preview of check-in post:**", embed=preview_embed)
+    
     @commands.command(name='post')
-    async def checkin_post(self, ctx: commands.Context, channel_id: Optional[str] = None):
+    async def checkin_post(self, ctx: commands.Context, channel_id: str = None, utc_timestamp: Optional[str] = None):
         """Post a check-in prompt message with reaction (Admin only).
         
         Usage: 
-            !checkin post              - Post in current channel
-            !checkin post <channel_id> - Post in specified channel
+            !checkin post <channel_id>                  - Post in specified channel
+            !checkin post <channel_id> <utc_timestamp>  - Post with mocked UTC time (for testing)
         
+        UTC timestamp format: YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS
+        Example: !checkin post #general 2026-03-26T18:00:00
+        
+        When using mocked time, @everyone is skipped to prevent pings during testing.
         Users can react to start their weekly check-in via DM.
         """
+        from datetime import timezone
+        
         # Check if user is admin
         if not self.bot.is_user_allowed(ctx.author.id):
             await ctx.send("❌ **Admin only.** You don't have permission to post check-in prompts.")
             return
         
-        # Determine target channel
-        if channel_id:
-            # Remove <# and > if user used channel mention format
-            channel_id_clean = channel_id.strip('<#>').strip()
+        # Require channel_id
+        if not channel_id:
+            await ctx.send(
+                "❌ **Channel ID required.**\n"
+                "Usage: `!checkin post <channel_id> [utc_timestamp]`\n"
+                "Example: `!checkin post #general` or `!checkin post #general 2026-03-26T18:00:00`"
+            )
+            return
+        
+        # Parse mocked UTC time if provided
+        mocked_utc = None
+        if utc_timestamp:
             try:
-                target_channel = self.bot.get_channel(int(channel_id_clean))
-                if target_channel is None:
-                    target_channel = await self.bot.fetch_channel(int(channel_id_clean))
-            except (ValueError, discord.NotFound, discord.Forbidden):
-                await ctx.send(f"❌ Could not find channel with ID `{channel_id}`. Make sure the bot has access.")
+                # Support both date-only and datetime formats
+                if 'T' in utc_timestamp:
+                    mocked_utc = datetime.fromisoformat(utc_timestamp).replace(tzinfo=timezone.utc)
+                else:
+                    mocked_utc = datetime.strptime(utc_timestamp, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+            except ValueError:
+                await ctx.send(
+                    "❌ **Invalid UTC timestamp format.**\n"
+                    "Use `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`\n"
+                    "Example: `2026-03-26` or `2026-03-26T18:00:00`"
+                )
                 return
-        else:
-            target_channel = ctx.channel
+        
+        # Determine target channel (remove <# and > if user used channel mention format)
+        channel_id_clean = channel_id.strip('<#>').strip()
+        try:
+            target_channel = self.bot.get_channel(int(channel_id_clean))
+            if target_channel is None:
+                target_channel = await self.bot.fetch_channel(int(channel_id_clean))
+        except (ValueError, discord.NotFound, discord.Forbidden):
+            await ctx.send(f"❌ Could not find channel with ID `{channel_id}`. Make sure the bot has access.")
+            return
         
         try:
-            await self._post_checkin_to_channel(target_channel)
+            # Skip @everyone when testing with mocked time
+            await self._post_checkin_to_channel(target_channel, mocked_utc=mocked_utc, skip_mentions=mocked_utc is not None)
             
-            if channel_id:
-                await ctx.send(f"✅ Check-in prompt posted in <#{target_channel.id}>! Users can react with {CHECKIN_EMOJI} to start.", delete_after=10)
-            else:
-                await ctx.send(f"✅ Check-in prompt posted! Users can react with {CHECKIN_EMOJI} to start.", delete_after=5)
+            test_info = f" (mocked UTC: `{utc_timestamp}`)" if mocked_utc else ""
+            await ctx.send(f"✅ Check-in prompt posted in <#{target_channel.id}>!{test_info} Users can react with {CHECKIN_EMOJI} to start.", delete_after=10)
         except discord.Forbidden:
             await ctx.send(f"❌ I don't have permission to post in <#{target_channel.id}>.")
         except Exception as e:
@@ -922,13 +1415,14 @@ class CheckinCog(commands.Cog, name="Checkin"):
         Usage:
             !checkin weekly                     - View current schedule
             !checkin weekly set <channel_id> <day> <HH:MM>
-                                                - Set schedule (day: mon/tue/wed/thu/fri/sat/sun)
+                                                - Set schedule (time in UTC)
+                                                - day: mon/tue/wed/thu/fri/sat/sun
             !checkin weekly off                 - Disable scheduled posts
             !checkin weekly reset               - Reset "already posted" flag (for testing)
         
         Examples:
-            !checkin weekly set 123456789 wed 09:00
-            !checkin weekly set #general wed 14:30
+            !checkin weekly set #general wed 17:00  (Wed 5PM UTC)
+            !checkin weekly set #general mon 14:30  (Mon 2:30PM UTC)
         """
         from services.scheduler_service import SchedulerService
         from utils.time_utils import format_time_until
@@ -984,8 +1478,8 @@ class CheckinCog(commands.Cog, name="Checkin"):
         # Set schedule
         if action.lower() == 'set':
             if len(args) < 3:
-                await ctx.send("❌ Usage: `!checkin weekly set <channel_id> <day> <HH:MM>`\n"
-                              "Example: `!checkin weekly set 123456789 wed 09:00`")
+                await ctx.send("❌ Usage: `!checkin weekly set <channel> <day> <HH:MM>` (UTC)\n"
+                              "Example: `!checkin weekly set #general wed 17:00` (Wed 5PM UTC)")
                 return
             
             channel_arg, day_arg, time_arg = args[0], args[1], args[2]
@@ -1085,9 +1579,18 @@ class CheckinCog(commands.Cog, name="Checkin"):
         settings = load_checkin_settings()
         tracked_messages = settings.get('reaction_messages', [])
         
-        message_ids = [m['message_id'] for m in tracked_messages]
-        if payload.message_id not in message_ids:
+        # Find the tracked message to get its stored week
+        tracked_msg = None
+        for m in tracked_messages:
+            if m['message_id'] == payload.message_id:
+                tracked_msg = m
+                break
+        
+        if tracked_msg is None:
             return
+        
+        # Use the week from the tracked message (supports mocked time testing)
+        checkin_week = tracked_msg.get('week', get_current_week())
         
         # Get the user
         user = self.bot.get_user(payload.user_id)
@@ -1102,28 +1605,32 @@ class CheckinCog(commands.Cog, name="Checkin"):
             return
         
         # Check if user already has a check-in this week
-        current_week = get_current_week()
-        existing = get_user_checkin(str(payload.user_id), current_week)
+        existing = get_user_checkin(str(payload.user_id), checkin_week)
         
         try:
             if existing:
                 # Already has check-in, send reminder
                 await user.send(
-                    f"📋 You've already completed your Week {current_week} check-in!\n"
+                    f"📋 You've already completed your Week {checkin_week} check-in!\n"
                     f"Use `!checkin status` to view it or `!checkin modify` to make changes."
                 )
             else:
                 # Start the check-in process via DM
+                total_steps = 7 if checkin_week >= SURVEY_START_WEEK else 3
                 await user.send(
-                    f"📋 **Week {current_week} Check-in**\n"
+                    f"📋 **Week {checkin_week} Check-in**\n"
                     f"Let's get your weekly check-in started!"
                 )
                 
                 # Create and send the check-in view
-                view = CheckinView(user.id, current_week, bot=self.bot, discord_user=user)
+                view = CheckinView(user.id, checkin_week, bot=self.bot, discord_user=user)
                 embed = discord.Embed(
-                    title=f"Week {current_week} Check-in",
-                    description="**What phase are you currently in?**",
+                    title=f"📋 Weekly Check-in (Step 1/{total_steps})",
+                    description=(
+                        f"**Week {checkin_week} Check-in**\n\n"
+                        "Let's get your weekly status update!\n\n"
+                        "**What phase are you currently in?**"
+                    ),
                     color=discord.Color.blue()
                 )
                 view.message = await user.send(embed=embed, view=view)

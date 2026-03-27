@@ -1,5 +1,5 @@
 {
-  "validated_at": "2026-03-23T20:34:36.221933",
+  "validated_at": "2026-03-27T00:23:27.450537",
   "students_with_valid_mr": {
     "83182": {
       "name": "Ricardo Ortega-Pacheco",
@@ -117,9 +117,9 @@
       "expected_author": "kentvuoung",
       "actual_author": "kentvuoung",
       "author_match": true,
-      "mr_state": "opened",
-      "is_merged": false,
-      "merged_at": null
+      "mr_state": "merged",
+      "is_merged": true,
+      "merged_at": "2026-03-23T17:43:41.802Z"
     },
     "92377": {
       "name": "Kesiena Berezi",
@@ -217,9 +217,9 @@
       "expected_author": "nguyenevan",
       "actual_author": "nguyenevan",
       "author_match": true,
-      "mr_state": "opened",
-      "is_merged": false,
-      "merged_at": null
+      "mr_state": "merged",
+      "is_merged": true,
+      "merged_at": "2026-03-24T13:43:59.640Z"
     },
     "115747": {
       "name": "Ronak Patel",
@@ -257,9 +257,9 @@
       "expected_author": "hitansh8",
       "actual_author": "hitansh8",
       "author_match": true,
-      "mr_state": "opened",
-      "is_merged": false,
-      "merged_at": null
+      "mr_state": "merged",
+      "is_merged": true,
+      "merged_at": "2026-03-23T17:01:25.647Z"
     },
     "131263": {
       "name": "Himansh Mudigonda",
@@ -287,9 +287,9 @@
       "expected_author": "tobia2028",
       "actual_author": "tobia2028",
       "author_match": true,
-      "mr_state": "opened",
-      "is_merged": false,
-      "merged_at": null
+      "mr_state": "merged",
+      "is_merged": true,
+      "merged_at": "2026-03-23T15:28:16.351Z"
     },
     "139639": {
       "name": "Oluwaseyi Fadahunsi",
@@ -340,6 +340,16 @@
       "mr_state": "opened",
       "is_merged": false,
       "merged_at": null
+    },
+    "119330": {
+      "name": "Kaleb Tsegaye",
+      "mr_url": "https://gitlab.com/gitlab-org/modelops/applied-ml/code-suggestions/ai-assist/-/merge_requests/4964",
+      "expected_author": "kfesaha15",
+      "actual_author": "kfesaha15",
+      "author_match": true,
+      "mr_state": "opened",
+      "is_merged": false,
+      "merged_at": null
     }
   },
   "students_with_invalid_mr": {
@@ -371,11 +381,11 @@
     },
     "79028": {
       "name": "Hubert Huang",
-      "readme_link": "https://gitlab.com/hhubert14/ai-corps-contribution/-/tree/main/contribution-3?ref_type=heads, https://gitlab.com/hhubert14/ai-corps-contribution/-/blob/main/contribution-2/README.md?ref_type=heads, https://gitlab.com/hhubert14/ai-corps-contribution/-/blob/main/contribution-1/README.md?ref_type=heads",
+      "readme_link": "https://gitlab.com/hhubert14/ai-corps-contribution/-/blob/main/contribution-1/README.md?ref_type=heads, https://gitlab.com/hhubert14/ai-corps-contribution/-/blob/main/contribution-2/README.md?ref_type=heads, https://gitlab.com/hhubert14/ai-corps-contribution",
       "readme_links_crawled": [
-        "https://gitlab.com/hhubert14/ai-corps-contribution/-/tree/main/contribution-3?ref_type=heads (all READMEs)",
+        "https://gitlab.com/hhubert14/ai-corps-contribution/-/blob/main/contribution-1/README.md?ref_type=heads",
         "https://gitlab.com/hhubert14/ai-corps-contribution/-/blob/main/contribution-2/README.md?ref_type=heads",
-        "https://gitlab.com/hhubert14/ai-corps-contribution/-/blob/main/contribution-1/README.md?ref_type=heads"
+        "https://gitlab.com/hhubert14/ai-corps-contribution (all READMEs)"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/227769",
       "all_mrs_found": [
@@ -402,10 +412,10 @@
     },
     "115965": {
       "name": "Ryan Lawton",
-      "readme_link": "https://gitlab.com/gitrlawton/sp26-gitlab-contribution/README.md, https://gitlab.com/gitrlawton/sp26-gitlab-contribution/-/blob/main/README.md, https://gitlab.com/gitrlawton/sp26-gitlab-contribution/-/blob/main/README_2.md",
+      "readme_link": "https://gitlab.com/gitrlawton/sp26-gitlab-contribution/-/blob/main/README.md, https://gitlab.com/gitrlawton/sp26-gitlab-contribution/README.md, https://gitlab.com/gitrlawton/sp26-gitlab-contribution/-/blob/main/README_2.md",
       "readme_links_crawled": [
-        "https://gitlab.com/gitrlawton/sp26-gitlab-contribution/README.md (all READMEs)",
         "https://gitlab.com/gitrlawton/sp26-gitlab-contribution/-/blob/main/README.md",
+        "https://gitlab.com/gitrlawton/sp26-gitlab-contribution/README.md (all READMEs)",
         "https://gitlab.com/gitrlawton/sp26-gitlab-contribution/-/blob/main/README_2.md"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/227346",
@@ -416,11 +426,11 @@
     },
     "147088": {
       "name": "Sai Manasa Gadepalli",
-      "readme_link": "https://gitlab.com/manasagadepalli08/ai-corps-contribution, https://gitlab.com/manasagadepalli08/ai-corps-contribution/-/blob/main/README.md, https://gitlab.com/manasagadepalli08/ai-corps-contribution/-/blob/main/README.md?plain=0",
+      "readme_link": "https://gitlab.com/manasagadepalli08/ai-corps-contribution/-/blob/main/README.md?plain=0, https://gitlab.com/manasagadepalli08/ai-corps-contribution, https://gitlab.com/manasagadepalli08/ai-corps-contribution/-/blob/main/README.md",
       "readme_links_crawled": [
+        "https://gitlab.com/manasagadepalli08/ai-corps-contribution/-/blob/main/README.md?plain=0",
         "https://gitlab.com/manasagadepalli08/ai-corps-contribution (all READMEs)",
-        "https://gitlab.com/manasagadepalli08/ai-corps-contribution/-/blob/main/README.md",
-        "https://gitlab.com/manasagadepalli08/ai-corps-contribution/-/blob/main/README.md?plain=0"
+        "https://gitlab.com/manasagadepalli08/ai-corps-contribution/-/blob/main/README.md"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/228353",
       "all_mrs_found": [
@@ -432,7 +442,7 @@
     },
     "54243": {
       "name": "Bhagyesh Rathi",
-      "readme_link": "https://gitlab.com/bhagyeshrathi/fixgitlab-ndjson#:~:text=Last%20update-,README.md,-updated%20reason%20to, https://gitlab.com/bhagyeshrathi/fixgitlab-ndjson.git, https://gitlab.com/bhagyeshrathi/fixgitlab-ndjson/-/blob/main/README.md",
+      "readme_link": "https://gitlab.com/bhagyeshrathi/fixgitlab-ndjson/-/blob/main/README.md, https://gitlab.com/bhagyeshrathi/fixgitlab-ndjson, https://gitlab.com/bhagyeshrathi/fixgitlab-ndjson.git",
       "readme_links_crawled": [
         "https://gitlab.com/bhagyeshrathi/fixgitlab-ndjson/-/blob/main/README.md",
         "https://gitlab.com/bhagyeshrathi/fixgitlab-ndjson (all READMEs)"
@@ -445,11 +455,11 @@
     },
     "84448": {
       "name": "Arely Martinez Garcia",
-      "readme_link": "https://gitlab.com/arelymartinez741-group/sp26-gitlab-contribution2, https://gitlab.com/arelymartinez741-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads, https://gitlab.com/arelymartinez741-group/sp26-gitlab-contribution",
+      "readme_link": "https://gitlab.com/arelymartinez741-group/sp26-gitlab-contribution, https://gitlab.com/arelymartinez741-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads, https://gitlab.com/arelymartinez741-group/sp26-gitlab-contribution2",
       "readme_links_crawled": [
-        "https://gitlab.com/arelymartinez741-group/sp26-gitlab-contribution2 (all READMEs)",
+        "https://gitlab.com/arelymartinez741-group/sp26-gitlab-contribution (all READMEs)",
         "https://gitlab.com/arelymartinez741-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
-        "https://gitlab.com/arelymartinez741-group/sp26-gitlab-contribution (all READMEs)"
+        "https://gitlab.com/arelymartinez741-group/sp26-gitlab-contribution2 (all READMEs)"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/213558#note_2903674837",
       "all_mrs_found": [
@@ -475,10 +485,10 @@
     },
     "56604": {
       "name": "Jose Cervantes",
-      "readme_link": "https://gitlab.com/cervanj.swe-group/sp26-gitlab-contribution, https://gitlab.com/cervanj.swe-group/sp26-gitlab-contribution-2/-/blob/main/README.md?ref_type=heads, https://gitlab.com/cervanj.swe-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "readme_link": "https://gitlab.com/cervanj.swe-group/sp26-gitlab-contribution-2/-/blob/main/README.md?ref_type=heads, https://gitlab.com/cervanj.swe-group/sp26-gitlab-contribution, https://gitlab.com/cervanj.swe-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
       "readme_links_crawled": [
-        "https://gitlab.com/cervanj.swe-group/sp26-gitlab-contribution (all READMEs)",
         "https://gitlab.com/cervanj.swe-group/sp26-gitlab-contribution-2/-/blob/main/README.md?ref_type=heads",
+        "https://gitlab.com/cervanj.swe-group/sp26-gitlab-contribution (all READMEs)",
         "https://gitlab.com/cervanj.swe-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/227693",
@@ -498,12 +508,12 @@
     },
     "81629": {
       "name": "Suzuna Kimura",
-      "readme_link": "https://gitlab.com/suzunakimura/sp26-gitlab-contribution-2/-/blob/main/README.md?ref_type=heads, https://gitlab.com/suzunakimura/sp26-gitlab-contribution/-/tree/f4d9492742dc4ea7d8ac5b40360ad13cfa0f62ec/, https://gitlab.com/gitlab-community/gitlab-org/gitlab/-/tree/fix-issue-590185?ref_type=heads",
+      "readme_link": "https://gitlab.com/suzunakimura/sp26-gitlab-contribution-2, https://gitlab.com/suzunakimura/sp26-gitlab-contribution-2/-/blob/main/README.md?ref_type=heads, https://gitlab.com/suzunhttps://gitlab.com/suzunakimura/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads1877d5407c0d2fa1e/README.md",
       "readme_links_crawled": [
-        "https://gitlab.com/suzunakimura/sp26-gitlab-contribution-2/-/blob/main/README.md?ref_type=heads",
-        "https://gitlab.com/suzunakimura/sp26-gitlab-contribution/-/tree/f4d9492742dc4ea7d8ac5b40360ad13cfa0f62ec/ (all READMEs)",
         "https://gitlab.com/suzunakimura/sp26-gitlab-contribution-2 (all READMEs)",
-        "https://gitlab.com/suzunhttps://gitlab.com/suzunakimura/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads1877d5407c0d2fa1e/README.md"
+        "https://gitlab.com/suzunakimura/sp26-gitlab-contribution-2/-/blob/main/README.md?ref_type=heads",
+        "https://gitlab.com/suzunhttps://gitlab.com/suzunakimura/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads1877d5407c0d2fa1e/README.md",
+        "https://gitlab.com/suzunakimura/sp26-gitlab-contribution/-/tree/f4d9492742dc4ea7d8ac5b40360ad13cfa0f62ec/ (all READMEs)"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/226434",
       "all_mrs_found": [
@@ -514,10 +524,10 @@
     },
     "59602": {
       "name": "Luciano Scarpaci",
-      "readme_link": "https://gitlab.com/lucianoscarpaci/sp26-ai-corps-contribution/-/blob/main/README.md?ref_type=heads, https://gitlab.com/lucianoscarpaci/sp26-ai-corps-contribution, https://gitlab.com/lucianoscarpaci/sp26-ai-corps-contribution/-/blob/main/README.md",
+      "readme_link": "https://gitlab.com/lucianoscarpaci/sp26-ai-corps-contribution, https://gitlab.com/lucianoscarpaci/sp26-ai-corps-contribution/-/blob/main/README.md?ref_type=heads, https://gitlab.com/lucianoscarpaci/sp26-ai-corps-contribution/-/blob/main/README.md",
       "readme_links_crawled": [
-        "https://gitlab.com/lucianoscarpaci/sp26-ai-corps-contribution/-/blob/main/README.md?ref_type=heads",
         "https://gitlab.com/lucianoscarpaci/sp26-ai-corps-contribution (all READMEs)",
+        "https://gitlab.com/lucianoscarpaci/sp26-ai-corps-contribution/-/blob/main/README.md?ref_type=heads",
         "https://gitlab.com/lucianoscarpaci/sp26-ai-corps-contribution/-/blob/main/README.md"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/226381",
@@ -529,9 +539,8 @@
     },
     "45164": {
       "name": "Quoc-Viet Bui",
-      "readme_link": "https://gitlab.com/vietbui1999ru/ai-corps-contribution-codepath-sp26/-/blob/main/README.md?ref_type=heads, https://gitlab.com/gitlab-org/gitlab/-/issues/586018, https://gitlab.com/vietbui1999ru/ai-corps-contribution-codepath-sp26",
+      "readme_link": "https://gitlab.com/vietbui1999ru/ai-corps-contribution-codepath-sp26, https://gitlab.com/vietbui1999ru/ai-corps-contribution-codepath-sp26/-/blob/main/README.md?ref_type=heads, https://gitlab.com/gitlab-org/gitlab/-/issues/586018",
       "readme_links_crawled": [
-        "https://gitlab.com/vietbui1999ru/ai-corps-contribution-codepath-sp26/-/blob/main/README.md?ref_type=heads",
         "https://gitlab.com/vietbui1999ru/ai-corps-contribution-codepath-sp26 (all READMEs)"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/226767",
@@ -543,12 +552,12 @@
     },
     "96737": {
       "name": "Matthew Wyatt",
-      "readme_link": "https://gitlab.com/MatthewOscar/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads, https://gitlab.com/MatthewOscar/sp26-gitlab-contribution-2/-/blob/main/README.md, https://gitlab.com/MatthewOscar/sp26-gitlab-contribution/-/blob/main/README.md",
+      "readme_link": "https://gitlab.com/MatthewOscar/sp26-gitlab-contribution/-/blob/fb105a78ca92975719a2e9b75d5d8e309e406c73/README.md, https://gitlab.com/MatthewOscar/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads, https://gitlab.com/MatthewOscar/sp26-gitlab-contribution-2/-/blob/main/README.md",
       "readme_links_crawled": [
+        "https://gitlab.com/MatthewOscar/sp26-gitlab-contribution/-/blob/fb105a78ca92975719a2e9b75d5d8e309e406c73/README.md",
         "https://gitlab.com/MatthewOscar/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
         "https://gitlab.com/MatthewOscar/sp26-gitlab-contribution-2/-/blob/main/README.md",
-        "https://gitlab.com/MatthewOscar/sp26-gitlab-contribution/-/blob/main/README.md",
-        "https://gitlab.com/MatthewOscar/sp26-gitlab-contribution/-/blob/fb105a78ca92975719a2e9b75d5d8e309e406c73/README.md"
+        "https://gitlab.com/MatthewOscar/sp26-gitlab-contribution/-/blob/main/README.md"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/227322",
       "all_mrs_found": [
@@ -567,11 +576,11 @@
     },
     "125662": {
       "name": "Biraj",
-      "readme_link": "https://gitlab.com/BPATHAK10/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=0, https://gitlab.com/BPATHAK10/sp26-gitlab-contribution/-/blob/cfd88d5fd0e02ac081da85ef9ade7168eb80ecad/README_contribution2.md, https://gitlab.com/BPATHAK10/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "readme_link": "https://gitlab.com/BPATHAK10/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads, https://gitlab.com/BPATHAK10/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=0, https://gitlab.com/BPATHAK10/sp26-gitlab-contribution/-/blob/cfd88d5fd0e02ac081da85ef9ade7168eb80ecad/README_contribution2.md",
       "readme_links_crawled": [
+        "https://gitlab.com/BPATHAK10/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
         "https://gitlab.com/BPATHAK10/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=0",
-        "https://gitlab.com/BPATHAK10/sp26-gitlab-contribution/-/blob/cfd88d5fd0e02ac081da85ef9ade7168eb80ecad/README_contribution2.md",
-        "https://gitlab.com/BPATHAK10/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads"
+        "https://gitlab.com/BPATHAK10/sp26-gitlab-contribution/-/blob/cfd88d5fd0e02ac081da85ef9ade7168eb80ecad/README_contribution2.md"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/iglu/-/merge_requests/182",
       "all_mrs_found": [
@@ -581,10 +590,10 @@
     },
     "99144": {
       "name": "Evan Nguyen",
-      "readme_link": "https://gitlab.com/NguyenEvan/sp26-gitlab-contribution/-/blob/main/README_contribution2.md?ref_type=heads, https://gitlab.com/NguyenEvan/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "readme_link": "https://gitlab.com/NguyenEvan/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads, https://gitlab.com/NguyenEvan/sp26-gitlab-contribution/-/blob/main/README_contribution2.md?ref_type=heads",
       "readme_links_crawled": [
-        "https://gitlab.com/NguyenEvan/sp26-gitlab-contribution/-/blob/main/README_contribution2.md?ref_type=heads",
-        "https://gitlab.com/NguyenEvan/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads"
+        "https://gitlab.com/NguyenEvan/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+        "https://gitlab.com/NguyenEvan/sp26-gitlab-contribution/-/blob/main/README_contribution2.md?ref_type=heads"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/215073",
       "all_mrs_found": [
@@ -611,12 +620,12 @@
     },
     "41423": {
       "name": "Linxi",
-      "readme_link": "https://gitlab.com/linxixu517/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads, https://gitlab.com/linxixu517/sp26-gitlab-contribution/-/blob/main/README.md, https://gitlab.com/linxixu517/sp26-gitlab-contribution",
+      "readme_link": "https://gitlab.com/linxixu517/sp26-gitlab-contribution/-/blob/main/README_issue-587667.md, https://gitlab.com/linxixu517/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads, https://gitlab.com/linxixu517/sp26-gitlab-contribution",
       "readme_links_crawled": [
+        "https://gitlab.com/linxixu517/sp26-gitlab-contribution/-/blob/main/README_issue-587667.md",
         "https://gitlab.com/linxixu517/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
-        "https://gitlab.com/linxixu517/sp26-gitlab-contribution/-/blob/main/README.md",
         "https://gitlab.com/linxixu517/sp26-gitlab-contribution (all READMEs)",
-        "https://gitlab.com/linxixu517/sp26-gitlab-contribution/-/blob/main/README_issue-587667.md"
+        "https://gitlab.com/linxixu517/sp26-gitlab-contribution/-/blob/main/README.md"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/226430",
       "all_mrs_found": [
@@ -632,11 +641,11 @@
     },
     "134724": {
       "name": "Ayush Shivhare",
-      "readme_link": "https://gitlab.com/Shivhare-Ayush/ai-corps-constribution, https://gitlab.com/Shivhare-Ayush/ai-corps-constribution/-/blob/main/README.md, https://gitlab.com/Shivhare-Ayush/ai-corps-constribution/-/blob/main/README.md?ref_type=heads",
+      "readme_link": "https://gitlab.com/Shivhare-Ayush/ai-corps-constribution, https://gitlab.com/Shivhare-Ayush/ai-corps-constribution/-/blob/main/README.md?ref_type=heads, https://gitlab.com/Shivhare-Ayush/ai-corps-constribution/-/blob/main/README.md",
       "readme_links_crawled": [
         "https://gitlab.com/Shivhare-Ayush/ai-corps-constribution (all READMEs)",
-        "https://gitlab.com/Shivhare-Ayush/ai-corps-constribution/-/blob/main/README.md",
-        "https://gitlab.com/Shivhare-Ayush/ai-corps-constribution/-/blob/main/README.md?ref_type=heads"
+        "https://gitlab.com/Shivhare-Ayush/ai-corps-constribution/-/blob/main/README.md?ref_type=heads",
+        "https://gitlab.com/Shivhare-Ayush/ai-corps-constribution/-/blob/main/README.md"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/226767",
       "all_mrs_found": [
@@ -644,36 +653,12 @@
       ],
       "source": "readme"
     },
-    "104339": {
-      "name": "Meirzhan Saparov",
-      "readme_link": "https://gitlab.com/Meirzhan05/sp26-gitlab-contribution/-/blob/main/CONTRIBUTION.md?ref_type=heads, https://gitlab.com/Meirzhan05/sp26-gitlab-contribution/-/blob/main/CONTRIBUTION_PLAN.md?ref_type=heads, https://gitlab.com/Meirzhan05/sp26-gitlab-contribution",
-      "readme_links_crawled": [
-        "https://gitlab.com/Meirzhan05/sp26-gitlab-contribution/-/blob/main/CONTRIBUTION.md?ref_type=heads",
-        "https://gitlab.com/Meirzhan05/sp26-gitlab-contribution/-/blob/main/CONTRIBUTION_PLAN.md?ref_type=heads",
-        "https://gitlab.com/Meirzhan05/sp26-gitlab-contribution (all READMEs)",
-        "https://gitlab.com/Meirzhan05/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads"
-      ],
-      "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/227382",
-      "all_mrs_found": [
-        "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/227382",
-        "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/215073"
-      ],
-      "source": "readme",
-      "original_mr": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/215073",
-      "note": "Original MR by fvpotvin, updated to student's MR",
-      "expected_author": "meirzhan05",
-      "actual_author": "meirzhan05",
-      "author_match": true,
-      "mr_state": "closed",
-      "is_merged": false,
-      "merged_at": null
-    },
     "133008": {
       "name": "Vennela Kudala",
-      "readme_link": "https://gitlab.com/KV721/ai-corps-contribution2/-/blob/main/README.md?ref_type=heads, https://gitlab.com/KV721/ai-corps-contribution/-/blob/main/README.md?ref_type=heads",
+      "readme_link": "https://gitlab.com/KV721/ai-corps-contribution/-/blob/main/README.md?ref_type=heads, https://gitlab.com/KV721/ai-corps-contribution2/-/blob/main/README.md?ref_type=heads",
       "readme_links_crawled": [
-        "https://gitlab.com/KV721/ai-corps-contribution2/-/blob/main/README.md?ref_type=heads",
-        "https://gitlab.com/KV721/ai-corps-contribution/-/blob/main/README.md?ref_type=heads"
+        "https://gitlab.com/KV721/ai-corps-contribution/-/blob/main/README.md?ref_type=heads",
+        "https://gitlab.com/KV721/ai-corps-contribution2/-/blob/main/README.md?ref_type=heads"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/227348",
       "all_mrs_found": [
@@ -707,11 +692,11 @@
     },
     "77414": {
       "name": "Prabin Bajgai",
-      "readme_link": "https://gitlab.com/prabinb19/sp26-gitlab-contribution, https://gitlab.com/prabinb19/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=0, https://gitlab.com/prabinb19/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "readme_link": "https://gitlab.com/prabinb19/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads, https://gitlab.com/prabinb19/sp26-gitlab-contribution, https://gitlab.com/prabinb19/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=0",
       "readme_links_crawled": [
+        "https://gitlab.com/prabinb19/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
         "https://gitlab.com/prabinb19/sp26-gitlab-contribution (all READMEs)",
-        "https://gitlab.com/prabinb19/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=0",
-        "https://gitlab.com/prabinb19/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads"
+        "https://gitlab.com/prabinb19/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=0"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/226419",
       "all_mrs_found": [
@@ -734,11 +719,11 @@
     },
     "144569": {
       "name": "Eniola Oludayo",
-      "readme_link": "https://gitlab.com/eniolaolud/ai-corps-contribution/-/tree/993d88127c899e6938feccf182dc7ca714b1fd72/, https://gitlab.com/eniolaolud-group/ai-corps-contribution/-/blob/main/README.md?ref_type=heads, https://gitlab.com/eniolaolud/ai-corps-contribution/-/blob/993d88127c899e6938feccf182dc7ca714b1fd72/README.md",
+      "readme_link": "https://gitlab.com/eniolaolud/ai-corps-contribution/-/tree/993d88127c899e6938feccf182dc7ca714b1fd72/, https://gitlab.com/eniolaolud-group/ai-corps-contribution/-/blob/main/README.md, https://gitlab.com/eniolaolud/ai-corps-contribution/-/blob/main/README.md",
       "readme_links_crawled": [
         "https://gitlab.com/eniolaolud/ai-corps-contribution/-/tree/993d88127c899e6938feccf182dc7ca714b1fd72/ (all READMEs)",
-        "https://gitlab.com/eniolaolud/ai-corps-contribution/-/blob/993d88127c899e6938feccf182dc7ca714b1fd72/README.md",
-        "https://gitlab.com/eniolaolud/ai-corps-contribution/-/blob/main/README.md"
+        "https://gitlab.com/eniolaolud/ai-corps-contribution/-/blob/main/README.md",
+        "https://gitlab.com/eniolaolud/ai-corps-contribution/-/blob/993d88127c899e6938feccf182dc7ca714b1fd72/README.md"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/227047",
       "all_mrs_found": [
@@ -748,7 +733,7 @@
       "expected_author": "eniolaolud",
       "actual_author": "eniolaolud",
       "author_match": true,
-      "mr_state": "opened",
+      "mr_state": "closed",
       "is_merged": false,
       "merged_at": null
     },
@@ -766,10 +751,10 @@
     },
     "92377": {
       "name": "Kesiena Berezi",
-      "readme_link": "https://gitlab.com/berezikesiena/codepath-sp26-gitlab/-/tree/main, https://gitlab.com/berezikesiena/codepath-sp26-gitlab/-/blob/main/README.md?ref_type=heads, https://gitlab.com/berezikesiena/codepath-sp26-gitlab",
+      "readme_link": "https://gitlab.com/berezikesiena/codepath-sp26-gitlab/-/blob/main/README.md?ref_type=heads, https://gitlab.com/berezikesiena/codepath-sp26-gitlab/-/tree/main, https://gitlab.com/berezikesiena/codepath-sp26-gitlab/-/blob/main/contribution-2?ref_type=heads",
       "readme_links_crawled": [
-        "https://gitlab.com/berezikesiena/codepath-sp26-gitlab/-/tree/main (all READMEs)",
-        "https://gitlab.com/berezikesiena/codepath-sp26-gitlab/-/blob/main/README.md?ref_type=heads"
+        "https://gitlab.com/berezikesiena/codepath-sp26-gitlab/-/blob/main/README.md?ref_type=heads",
+        "https://gitlab.com/berezikesiena/codepath-sp26-gitlab/-/tree/main (all READMEs)"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/215073",
       "all_mrs_found": [
@@ -780,10 +765,10 @@
     },
     "12352": {
       "name": "Sabareesh Kappagantu",
-      "readme_link": "https://gitlab.com/sbrshkappa/ai-crops-contribution/-/blob/main/CONTRIBUTION2_README.md?ref_type=heads, https://gitlab.com/sbrshkappa/ai-crops-contribution/-/blob/main/README.md?ref_type=heads",
+      "readme_link": "https://gitlab.com/sbrshkappa/ai-crops-contribution/-/blob/main/README.md?ref_type=heads, https://gitlab.com/sbrshkappa/ai-crops-contribution/-/blob/main/CONTRIBUTION2_README.md?ref_type=heads",
       "readme_links_crawled": [
-        "https://gitlab.com/sbrshkappa/ai-crops-contribution/-/blob/main/CONTRIBUTION2_README.md?ref_type=heads",
-        "https://gitlab.com/sbrshkappa/ai-crops-contribution/-/blob/main/README.md?ref_type=heads (all READMEs)"
+        "https://gitlab.com/sbrshkappa/ai-crops-contribution/-/blob/main/README.md?ref_type=heads (all READMEs)",
+        "https://gitlab.com/sbrshkappa/ai-crops-contribution/-/blob/main/CONTRIBUTION2_README.md?ref_type=heads"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/224596",
       "all_mrs_found": [
@@ -806,10 +791,10 @@
     },
     "61305": {
       "name": "Apar Pokhrel",
-      "readme_link": "https://gitlab.com/apokhrel.ap/sp26-gitlab-contribution/-/blob/main/contribution-2-README.md?ref_type=heads, https://gitlab.com/apokhrel.ap/sp26-gitlab-contribution/-/blob/main/contribution-1-README.md?ref_type=heads",
+      "readme_link": "https://gitlab.com/apokhrel.ap/sp26-gitlab-contribution/-/blob/main/contribution-1-README.md?ref_type=heads, https://gitlab.com/apokhrel.ap/sp26-gitlab-contribution/-/blob/main/contribution-2-README.md?ref_type=heads",
       "readme_links_crawled": [
-        "https://gitlab.com/apokhrel.ap/sp26-gitlab-contribution/-/blob/main/contribution-2-README.md?ref_type=heads",
-        "https://gitlab.com/apokhrel.ap/sp26-gitlab-contribution/-/blob/main/contribution-1-README.md?ref_type=heads"
+        "https://gitlab.com/apokhrel.ap/sp26-gitlab-contribution/-/blob/main/contribution-1-README.md?ref_type=heads",
+        "https://gitlab.com/apokhrel.ap/sp26-gitlab-contribution/-/blob/main/contribution-2-README.md?ref_type=heads"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/225365",
       "all_mrs_found": [
@@ -819,11 +804,11 @@
     },
     "139639": {
       "name": "Oluwaseyi Fadahunsi",
-      "readme_link": "https://gitlab.com/OluwaseyiFad/sp26-gitlab-contribution/-/blob/dd70fb3ae053024e32c6283512377d1097164a2a/README.md, https://gitlab.com/OluwaseyiFad/sp26-gitlab-contribution/-/blob/main/README.md, https://gitlab.com/OluwaseyiFad/sp26-gitlab-contribution",
+      "readme_link": "https://gitlab.com/OluwaseyiFad/sp26-gitlab-contribution, https://gitlab.com/OluwaseyiFad/sp26-gitlab-contribution/-/blob/main/README.md, https://gitlab.com/OluwaseyiFad/sp26-gitlab-contribution/-/blob/dd70fb3ae053024e32c6283512377d1097164a2a/README.md",
       "readme_links_crawled": [
-        "https://gitlab.com/OluwaseyiFad/sp26-gitlab-contribution/-/blob/dd70fb3ae053024e32c6283512377d1097164a2a/README.md",
+        "https://gitlab.com/OluwaseyiFad/sp26-gitlab-contribution (all READMEs)",
         "https://gitlab.com/OluwaseyiFad/sp26-gitlab-contribution/-/blob/main/README.md",
-        "https://gitlab.com/OluwaseyiFad/sp26-gitlab-contribution (all READMEs)"
+        "https://gitlab.com/OluwaseyiFad/sp26-gitlab-contribution/-/blob/dd70fb3ae053024e32c6283512377d1097164a2a/README.md"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/228360",
       "all_mrs_found": [
@@ -833,49 +818,46 @@
     },
     "138804": {
       "name": "Junyi He Wu",
-      "readme_link": "https://gitlab.com/jhewu/sp26-gitlab-contribution/-/tree/143b756941b5515c6cf3bd9aaa80af436089bdf2/, https://gitlab.com/jhewu/sp26-gitlab-contribution/-/tree/b6730808f4ce9d34f914fc57980591f40ee3ba08/, https://gitlab.com/jhewu/sp26-gitlab-contribution/-/tree/cff69970e49ae373ed36f2db2ae68da42d97d2b8/",
+      "readme_link": "https://gitlab.com/jhewu/sp26-gitlab-contribution/-/tree/b6730808f4ce9d34f914fc57980591f40ee3ba08/, https://gitlab.com/jhewu-group/jhewu-project, https://gitlab.com/jhewu/sp26-gitlab-contribution/-/tree/cff69970e49ae373ed36f2db2ae68da42d97d2b8/",
       "readme_links_crawled": [
-        "https://gitlab.com/jhewu/sp26-gitlab-contribution/-/tree/143b756941b5515c6cf3bd9aaa80af436089bdf2/ (all READMEs)"
+        "https://gitlab.com/jhewu/sp26-gitlab-contribution/-/tree/b6730808f4ce9d34f914fc57980591f40ee3ba08/ (all READMEs)",
+        "https://gitlab.com/jhewu/sp26-gitlab-contribution-2/-/blob/main/README.md?ref_type=heads"
       ],
-      "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/226917",
+      "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/228559",
       "all_mrs_found": [
-        "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/226917"
+        "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/226917",
+        "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/228559"
       ],
       "source": "readme",
       "expected_author": "jhewu",
       "actual_author": "jhewu",
       "author_match": true,
-      "mr_state": "opened",
-      "is_merged": false,
-      "merged_at": null
+      "mr_state": "merged",
+      "is_merged": true,
+      "merged_at": "2026-03-24T09:28:19.670Z"
     },
     "119330": {
       "name": "Kaleb Tsegaye",
-      "readme_link": "https://gitlab.com/kfesaha15/sp26-gitlab-contribution/-/blob/main/contribution-2-README.md?ref_type=heads, https://gitlab.com/kfesaha15/sp26-gitlab-contribution/-/blob/1a63ecb986ddac5284f0c82c912953d1820c7ec6/contribution-1-README.md, https://gitlab.com/kfesaha15/sp26-gitlab-contribution",
+      "readme_link": "https://gitlab.com/kfesaha15/sp26-gitlab-contribution/-/blob/main/contribution-2-README.md?ref_type=heads, https://gitlab.com/kfesaha15/sp26-gitlab-contribution, https://gitlab.com/kfesaha15/sp26-gitlab-contribution/-/blob/1a63ecb986ddac5284f0c82c912953d1820c7ec6/contribution-1-README.md",
       "readme_links_crawled": [
         "https://gitlab.com/kfesaha15/sp26-gitlab-contribution/-/blob/main/contribution-2-README.md?ref_type=heads",
-        "https://gitlab.com/kfesaha15/sp26-gitlab-contribution/-/blob/1a63ecb986ddac5284f0c82c912953d1820c7ec6/contribution-1-README.md",
-        "https://gitlab.com/kfesaha15/sp26-gitlab-contribution (all READMEs)"
+        "https://gitlab.com/kfesaha15/sp26-gitlab-contribution (all READMEs)",
+        "https://gitlab.com/kfesaha15/sp26-gitlab-contribution/-/blob/1a63ecb986ddac5284f0c82c912953d1820c7ec6/contribution-1-README.md"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/225782",
       "all_mrs_found": [
         "https://gitlab.com/gitlab-org/modelops/applied-ml/code-suggestions/ai-assist/-/merge_requests/3885",
+        "https://gitlab.com/gitlab-org/modelops/applied-ml/code-suggestions/ai-assist/-/merge_requests/4964",
         "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/225782"
       ],
-      "source": "readme",
-      "expected_author": "kfesaha15",
-      "actual_author": "kfesaha15",
-      "author_match": true,
-      "mr_state": "merged",
-      "is_merged": true,
-      "merged_at": "2026-03-15T21:37:08.298Z"
+      "source": "readme"
     },
     "116006": {
       "name": "Olayinka Vaughan",
-      "readme_link": "https://gitlab.com/Builder106/spring-2026-gitlab-ai301/-/blob/main/students/contribution-readme/CONTRIBUTION-1-README.md?ref_type=heads, https://gitlab.com/Builder106/spring-2026-gitlab-ai301/-/blob/feat/sort-preferences/students/CONTRIBUTION-README.md, https://gitlab.com/gitlab-org/gitlab/-/issues/591706",
+      "readme_link": "https://gitlab.com/Builder106/spring-2026-gitlab-ai301/-/blob/feat/sort-preferences/students/CONTRIBUTION-README.md, https://gitlab.com/gitlab-org/gitlab/-/issues/591706, https://gitlab.com/Builder106/spring-2026-gitlab-ai301/-/blob/main/students/contribution-readme/CONTRIBUTION-1-README.md?ref_type=heads",
       "readme_links_crawled": [
-        "https://gitlab.com/Builder106/spring-2026-gitlab-ai301/-/blob/main/students/contribution-readme/CONTRIBUTION-1-README.md?ref_type=heads",
-        "https://gitlab.com/Builder106/spring-2026-gitlab-ai301/-/blob/feat/sort-preferences/students/CONTRIBUTION-README.md (all READMEs)"
+        "https://gitlab.com/Builder106/spring-2026-gitlab-ai301/-/blob/feat/sort-preferences/students/CONTRIBUTION-README.md (all READMEs)",
+        "https://gitlab.com/Builder106/spring-2026-gitlab-ai301/-/blob/main/students/contribution-readme/CONTRIBUTION-1-README.md?ref_type=heads"
       ],
       "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/225571",
       "all_mrs_found": [
@@ -904,9 +886,50 @@
       ],
       "source": "readme"
     },
+    "115531": {
+      "name": "Anastasia Pupo",
+      "readme_link": "https://gitlab.com/anastasiapupo/sp26-gitlab-contribution-issue1/-/blob/main/README.md, https://gitlab.com/anastasiapupo/sp26-gitlab-contribution-issue1/-/blob/main/README.md?ref_type=heads",
+      "readme_links_crawled": [
+        "https://gitlab.com/anastasiapupo/sp26-gitlab-contribution-issue1/-/blob/main/README.md",
+        "https://gitlab.com/anastasiapupo/sp26-gitlab-contribution-issue1/-/blob/main/README.md?ref_type=heads"
+      ],
+      "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/226621",
+      "all_mrs_found": [
+        "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/226621"
+      ],
+      "source": "readme",
+      "expected_author": "anastasiapupo",
+      "actual_author": "anastasiapupo",
+      "author_match": true,
+      "mr_state": "opened",
+      "is_merged": false,
+      "merged_at": null
+    },
+    "103088": {
+      "name": "NIYOBUZIMA Theophile",
+      "readme_link": "https://gitlab.com/theophileniyobuzima/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=1, https://gitlab.com/theophileniyobuzima/sp26-gitlab-contribution/-/blob/main/README.md",
+      "readme_links_crawled": [
+        "https://gitlab.com/theophileniyobuzima/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=1",
+        "https://gitlab.com/theophileniyobuzima/sp26-gitlab-contribution/-/blob/main/README.md"
+      ],
+      "mr_url": "https://gitlab.com/gitlab-community/gitlab-org/gitlab/-/merge_requests/62",
+      "all_mrs_found": [
+        "https://gitlab.com/gitlab-community/gitlab-org/gitlab/-/merge_requests/62",
+        "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/220237"
+      ],
+      "source": "readme",
+      "original_mr": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/220237",
+      "note": "Original MR by mazen-ghanaym, updated to student's MR",
+      "expected_author": "theophileniyobuzima",
+      "actual_author": "theophileniyobuzima",
+      "author_match": true,
+      "mr_state": "closed",
+      "is_merged": false,
+      "merged_at": null
+    },
     "85567": {
       "name": "Roger Nguyen",
-      "readme_link": "https://gitlab.com/hiepng05/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads, https://gitlab.com/hiepng05/sp26-gitlab-contribution/-/blob/main/README.md, https://gitlab.com/hiepng05/sp26-gitlab-contribution/-/blob/main/contribution1.md?ref_type=heads",
+      "readme_link": "https://gitlab.com/hiepng05/sp26-gitlab-contribution/-/blob/main/README.md, https://gitlab.com/hiepng05/sp26-gitlab-contribution/-/blob/main/contribution1.md?ref_type=heads, https://gitlab.com/hiepng05/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
       "readme_links_crawled": [
         "https://gitlab.com/hiepng05/sp26-gitlab-contribution/-/blob/main/contribution1.md?ref_type=heads"
       ],
@@ -922,29 +945,29 @@
   "no_mr_in_readme": {
     "38527": {
       "name": "Kimia Naeiji",
-      "readme_link": "https://gitlab.com/bluenoodles/ai-corps-contribution/-/blob/main/README.md?ref_type=heads",
+      "readme_link": "https://gitlab.com/bluenoodles/ai-assist",
       "readme_links": [
+        "https://gitlab.com/bluenoodles/ai-assist",
         "https://gitlab.com/bluenoodles/ai-corps-contribution/-/blob/main/README.md?ref_type=heads",
-        "https://gitlab.com/bluenoodles/ai-corps-contribution",
-        "https://gitlab.com/bluenoodles/ai-assist"
+        "https://gitlab.com/bluenoodles/ai-corps-contribution"
       ]
     },
     "148542": {
       "name": "Chichi Zhang",
-      "readme_link": "https://gitlab.com/chichizhang0510/sp26-gitlab-contribution/-/blob/main/README.md",
+      "readme_link": "https://gitlab.com/chichizhang0510/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
       "readme_links": [
-        "https://gitlab.com/chichizhang0510/sp26-gitlab-contribution/-/blob/main/README.md",
-        "https://gitlab.com/chichizhang0510/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads"
+        "https://gitlab.com/chichizhang0510/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+        "https://gitlab.com/chichizhang0510/sp26-gitlab-contribution/-/blob/main/README.md"
       ]
     },
     "111207": {
       "name": "Kent Tran",
-      "readme_link": "https://gitlab.com/kentvtran/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "readme_link": "https://gitlab.com/kentvtran/sp26-gitlab-contribution/-/blob/main/contribution2.md?ref_type=heads",
       "readme_links": [
-        "https://gitlab.com/kentvtran/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
-        "https://gitlab.com/codepath-org/ai-corps/spring-2026-gitlab-ai301/-/blob/main/students/phase4/README.md?ref_type=heads&plain=1",
         "https://gitlab.com/kentvtran/sp26-gitlab-contribution/-/blob/main/contribution2.md?ref_type=heads",
-        "https://gitlab.com/kentvtran/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=0"
+        "https://gitlab.com/kentvtran/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=0",
+        "https://gitlab.com/codepath-org/ai-corps/spring-2026-gitlab-ai301/-/blob/main/students/phase4/README.md?ref_type=heads&plain=1",
+        "https://gitlab.com/kentvtran/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads"
       ]
     },
     "109632": {
@@ -956,18 +979,18 @@
     },
     "111582": {
       "name": "Alicia Yu",
-      "readme_link": "https://gitlab.com/aliiyuu/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "readme_link": "https://gitlab.com/aliiyuu/sp26-gitlab-contribution/-/blob/main/README.md",
       "readme_links": [
-        "https://gitlab.com/aliiyuu/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
-        "https://gitlab.com/aliiyuu/sp26-gitlab-contribution/-/blob/main/README.md"
+        "https://gitlab.com/aliiyuu/sp26-gitlab-contribution/-/blob/main/README.md",
+        "https://gitlab.com/aliiyuu/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads"
       ]
     },
     "138794": {
       "name": "Jeffrey Chu",
-      "readme_link": "https://gitlab.com/jeffreychu0/sp26-gitlab-contribution/-/blob/main/contribution-1-README.md",
+      "readme_link": "https://gitlab.com/jeffreychu0/sp26-gitlab-contribution",
       "readme_links": [
-        "https://gitlab.com/jeffreychu0/sp26-gitlab-contribution/-/blob/main/contribution-1-README.md",
         "https://gitlab.com/jeffreychu0/sp26-gitlab-contribution",
+        "https://gitlab.com/jeffreychu0/sp26-gitlab-contribution/-/blob/main/contribution-1-README.md",
         "https://gitlab.com/jeffreychu0/sp26-gitlab-contribution/-/blob/main/contribution-1-README.md?ref_type=heads"
       ]
     },
@@ -981,20 +1004,20 @@
     },
     "114951": {
       "name": "Arnav Sareen",
-      "readme_link": "https://gitlab.com/aesareen/sp26-gitlab-contribution-sareen",
+      "readme_link": "https://gitlab.com/aesareen/sp26-gitlab-contribution-sareen/-/tree/main",
       "readme_links": [
-        "https://gitlab.com/aesareen/sp26-gitlab-contribution-sareen",
         "https://gitlab.com/aesareen/sp26-gitlab-contribution-sareen/-/tree/main",
+        "https://gitlab.com/aesareen/sp26-gitlab-contribution-sareen",
         "https://gitlab.com/aesareen/sp26-gitlab-contribution-sareen/-/blob/main/issue-cli-8177/README.md?ref_type=heads"
       ]
     },
     "119410": {
       "name": "Kate Li",
-      "readme_link": "https://gitlab.com/likate/sp26-gitlab-contribution/-/blob/main/README.md",
+      "readme_link": "https://gitlab.com/likate/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
       "readme_links": [
-        "https://gitlab.com/likate/sp26-gitlab-contribution/-/blob/main/README.md",
+        "https://gitlab.com/likate/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
         "https://gitlab.com/likate/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=0",
-        "https://gitlab.com/likate/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads"
+        "https://gitlab.com/likate/sp26-gitlab-contribution/-/blob/main/README.md"
       ]
     },
     "129307": {
@@ -1007,11 +1030,21 @@
     },
     "98506": {
       "name": "Aarzoo Bansal",
-      "readme_link": "https://gitlab.com/Aarzoo-Bansal/ai-corps-contribution-1/-/blob/main/README.md?ref_type=heads",
+      "readme_link": "https://gitlab.com/Aarzoo-Bansal/ai-corps-contribution-1/-/blob/main/README.md",
       "readme_links": [
+        "https://gitlab.com/Aarzoo-Bansal/ai-corps-contribution-1/-/blob/main/README.md",
         "https://gitlab.com/Aarzoo-Bansal/ai-corps-contribution-1/-/blob/main/README.md?ref_type=heads",
-        "https://gitlab.com/Aarzoo-Bansal/ai-corps-contribution-1",
-        "https://gitlab.com/Aarzoo-Bansal/ai-corps-contribution-1/-/blob/main/README.md"
+        "https://gitlab.com/Aarzoo-Bansal/ai-corps-contribution-1"
+      ]
+    },
+    "104339": {
+      "name": "Meirzhan Saparov",
+      "readme_link": "https://gitlab.com/Meirzhan05/sp26-gitlab-contribution/-/blob/main/CONTRIBUTION.md?ref_type=heads",
+      "readme_links": [
+        "https://gitlab.com/Meirzhan05/sp26-gitlab-contribution/-/blob/main/CONTRIBUTION.md?ref_type=heads",
+        "https://gitlab.com/Meirzhan05/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+        "https://gitlab.com/Meirzhan05/sp26-gitlab-contribution",
+        "https://gitlab.com/Meirzhan05/sp26-gitlab-contribution/-/blob/main/CONTRIBUTION_PLAN.md?ref_type=heads"
       ]
     },
     "122491": {
@@ -1054,18 +1087,18 @@
     },
     "91407": {
       "name": "Daria Khotunitskaya",
-      "readme_link": "https://gitlab.com/DariaKhot/tbd/-/blob/main/README.md?ref_type=heads",
+      "readme_link": "https://gitlab.com/DariaKhot/tbd",
       "readme_links": [
-        "https://gitlab.com/DariaKhot/tbd/-/blob/main/README.md?ref_type=heads",
-        "https://gitlab.com/DariaKhot/tbd"
+        "https://gitlab.com/DariaKhot/tbd",
+        "https://gitlab.com/DariaKhot/tbd/-/blob/main/README.md?ref_type=heads"
       ]
     },
     "101792": {
       "name": "Emanuel Pimentel",
-      "readme_link": "https://gitlab.com/ep3100/ai-corps-contribution/-/blob/main/README.md?ref_type=hea",
+      "readme_link": "https://gitlab.com/ep3100/ai-corps-contribution/-/blob/main/README.md?ref_type=heads",
       "readme_links": [
-        "https://gitlab.com/ep3100/ai-corps-contribution/-/blob/main/README.md?ref_type=hea",
         "https://gitlab.com/ep3100/ai-corps-contribution/-/blob/main/README.md?ref_type=heads",
+        "https://gitlab.com/ep3100/ai-corps-contribution/-/blob/main/README.md?ref_type=hea",
         "https://gitlab.com/ep3100/ai-corps-contribution/-/blob/main/README.md"
       ]
     },
@@ -1080,28 +1113,28 @@
     },
     "129843": {
       "name": "Matheus Fonseca",
-      "readme_link": "https://gitlab.com/matheusfarocha/sp26-gitlab-contribution",
+      "readme_link": "https://gitlab.com/matheusfarocha/codepath-sp26-gitlab/contribution-1-README.md",
       "readme_links": [
-        "https://gitlab.com/matheusfarocha/sp26-gitlab-contribution",
-        "https://gitlab.com/matheusfarocha/codepath-sp26-gitlab/contribution-1-README.md"
+        "https://gitlab.com/matheusfarocha/codepath-sp26-gitlab/contribution-1-README.md",
+        "https://gitlab.com/matheusfarocha/sp26-gitlab-contribution"
       ]
     },
     "108743": {
       "name": "Mary Odetayo",
-      "readme_link": "https://gitlab.com/mary-odetayo/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+      "readme_link": "https://gitlab.com/mary-odetayo/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=1",
       "readme_links": [
+        "https://gitlab.com/mary-odetayo/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=1",
         "https://gitlab.com/mary-odetayo/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
-        "https://gitlab.com/mary-odetayo/sp26-gitlab-contribution/-/blob/main/README.md",
         "https://gitlab.com/mary-odetayo/sp26-gitlab-contribution",
-        "https://gitlab.com/mary-odetayo/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=1"
+        "https://gitlab.com/mary-odetayo/sp26-gitlab-contribution/-/blob/main/README.md"
       ]
     },
     "136257": {
       "name": "Mark Davletov",
-      "readme_link": "https://gitlab.com/davmark2909-group/sp26-gitlab-contribution/-/blob/main/README.md",
+      "readme_link": "https://gitlab.com/davmark2909-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
       "readme_links": [
-        "https://gitlab.com/davmark2909-group/sp26-gitlab-contribution/-/blob/main/README.md",
-        "https://gitlab.com/davmark2909-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads"
+        "https://gitlab.com/davmark2909-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+        "https://gitlab.com/davmark2909-group/sp26-gitlab-contribution/-/blob/main/README.md"
       ]
     },
     "116271": {
@@ -1113,10 +1146,10 @@
     },
     "76960": {
       "name": "Topu Saha",
-      "readme_link": "https://gitlab.com/topusaha-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=1",
+      "readme_link": "https://gitlab.com/topusaha-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
       "readme_links": [
-        "https://gitlab.com/topusaha-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=1",
-        "https://gitlab.com/topusaha-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads"
+        "https://gitlab.com/topusaha-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+        "https://gitlab.com/topusaha-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=1"
       ]
     },
     "132797": {
@@ -1136,20 +1169,20 @@
     },
     "86270": {
       "name": "Oluwatomisin Sapara-Williams",
-      "readme_link": "https://gitlab.com/tsw-codes-group/ai-corps-contribution",
+      "readme_link": "https://gitlab.com/codepath-org/ai-corps/spring-2026-gitlab-ai301/-/blob/main/README.md?ref_type=heads",
       "readme_links": [
+        "https://gitlab.com/codepath-org/ai-corps/spring-2026-gitlab-ai301/-/blob/main/README.md?ref_type=heads",
         "https://gitlab.com/tsw-codes-group/ai-corps-contribution",
-        "https://gitlab.com/tsw-codes-group/ai-corps-contribution/-/blob/main/README.md?ref_type=heads",
-        "https://gitlab.com/codepath-org/ai-corps/spring-2026-gitlab-ai301/-/blob/main/README.md?ref_type=heads"
+        "https://gitlab.com/tsw-codes-group/ai-corps-contribution/-/blob/main/README.md?ref_type=heads"
       ]
     },
     "2380": {
       "name": "Ibrahim Mustafa",
-      "readme_link": "https://gitlab.com/ibrahimmustafa451/sp26-gitlab-contribution/-/blob/main/README.md",
+      "readme_link": "https://gitlab.com/ibrahimmustafa451-group/ibrahimmustafa451-project/-/blob/main/README.md?ref_type=heads",
       "readme_links": [
-        "https://gitlab.com/ibrahimmustafa451/sp26-gitlab-contribution/-/blob/main/README.md",
-        "https://gitlab.com/ibrahimmustafa451/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
         "https://gitlab.com/ibrahimmustafa451-group/ibrahimmustafa451-project/-/blob/main/README.md?ref_type=heads",
+        "https://gitlab.com/ibrahimmustafa451/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+        "https://gitlab.com/ibrahimmustafa451/sp26-gitlab-contribution/-/blob/main/README.md",
         "https://gitlab.com/ibrahimmustafa451/sp26-gitlab-contribution"
       ]
     },
@@ -1163,11 +1196,11 @@
     },
     "129243": {
       "name": "Isaac Torres",
-      "readme_link": "https://gitlab.com/anon-spec-group/sp26-gitlab-contribution/-/blob/main/README.md",
+      "readme_link": "https://gitlab.com/anon-spec-group/sp26-gitlab-contribution/-/blob/49a3f448c176aeaac8fbd0cd1521777138a3ae48/README.md",
       "readme_links": [
-        "https://gitlab.com/anon-spec-group/sp26-gitlab-contribution/-/blob/main/README.md",
+        "https://gitlab.com/anon-spec-group/sp26-gitlab-contribution/-/blob/49a3f448c176aeaac8fbd0cd1521777138a3ae48/README.md",
         "https://gitlab.com/anon-spec-group/sp26-gitlab-contribution/-/blob/b1f5c9cc7c3caefb57521b961fdb257734f556e5/README.md",
-        "https://gitlab.com/anon-spec-group/sp26-gitlab-contribution/-/blob/49a3f448c176aeaac8fbd0cd1521777138a3ae48/README.md"
+        "https://gitlab.com/anon-spec-group/sp26-gitlab-contribution/-/blob/main/README.md"
       ]
     },
     "107718": {
@@ -1186,10 +1219,10 @@
     },
     "130252": {
       "name": "Julietta Rozin",
-      "readme_link": "https://gitlab.com/juliettarozin/sp26-gitlab-contribution",
+      "readme_link": "https://gitlab.com/juliettarozin/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
       "readme_links": [
-        "https://gitlab.com/juliettarozin/sp26-gitlab-contribution",
-        "https://gitlab.com/juliettarozin/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads"
+        "https://gitlab.com/juliettarozin/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
+        "https://gitlab.com/juliettarozin/sp26-gitlab-contribution"
       ]
     },
     "125691": {
@@ -1210,18 +1243,18 @@
     },
     "132774": {
       "name": "Lijun Wan",
-      "readme_link": "https://gitlab.com/gitlab-org/gitlab/-/issues/581706",
+      "readme_link": "https://gitlab.com/lietcooper/sp26-gitlab-contribution/-/blob/main/contribution-docs/1.md",
       "readme_links": [
-        "https://gitlab.com/gitlab-org/gitlab/-/issues/581706",
-        "https://gitlab.com/lietcooper/sp26-gitlab-contribution/-/blob/main/contribution-docs/1.md"
+        "https://gitlab.com/lietcooper/sp26-gitlab-contribution/-/blob/main/contribution-docs/1.md",
+        "https://gitlab.com/gitlab-org/gitlab/-/issues/581706"
       ]
     },
     "86562": {
       "name": "Chau Phan",
-      "readme_link": "https://gitlab.com/ptbchau/ai-corps-contribution/-/blob/main/contribution-1-README.md?ref_type=heads",
+      "readme_link": "https://gitlab.com/ptbchau/ai-corps-contribution/-/blob/main/contribution-1-README.md?ref_type=heads&plain=0",
       "readme_links": [
-        "https://gitlab.com/ptbchau/ai-corps-contribution/-/blob/main/contribution-1-README.md?ref_type=heads",
-        "https://gitlab.com/ptbchau/ai-corps-contribution/-/blob/main/contribution-1-README.md?ref_type=heads&plain=0"
+        "https://gitlab.com/ptbchau/ai-corps-contribution/-/blob/main/contribution-1-README.md?ref_type=heads&plain=0",
+        "https://gitlab.com/ptbchau/ai-corps-contribution/-/blob/main/contribution-1-README.md?ref_type=heads"
       ]
     },
     "128185": {
@@ -1275,14 +1308,6 @@
       "readme_link": "https://gitlab.com/gitlab-community/community-members",
       "readme_links": [
         "https://gitlab.com/gitlab-community/community-members"
-      ]
-    },
-    "115531": {
-      "name": "Anastasia Pupo",
-      "readme_link": "https://gitlab.com/anastasiapupo/sp26-gitlab-contribution-issue1/-/blob/main/README.md",
-      "readme_links": [
-        "https://gitlab.com/anastasiapupo/sp26-gitlab-contribution-issue1/-/blob/main/README.md",
-        "https://gitlab.com/anastasiapupo/sp26-gitlab-contribution-issue1/-/blob/main/README.md?ref_type=heads"
       ]
     },
     "130082": {
@@ -1345,8 +1370,8 @@
       "readme_link": "https://gitlab.com/pcuyeu/ai-corps-contribution-phase1/-/blob/main/README.md?ref_type=heads",
       "readme_links": [
         "https://gitlab.com/pcuyeu/ai-corps-contribution-phase1/-/blob/main/README.md?ref_type=heads",
-        "https://gitlab.com/pcuyeu",
-        "https://gitlab.com/pcuyeu-group/pcuyeu-project/-/blob/main/README.md?ref_type=heads"
+        "https://gitlab.com/pcuyeu-group/pcuyeu-project/-/blob/main/README.md?ref_type=heads",
+        "https://gitlab.com/pcuyeu"
       ],
       "error": "https://gitlab.com/pcuyeu: Could not extract repo path"
     },
@@ -1355,18 +1380,18 @@
       "readme_link": "https://gitlab.com/markfalcone1-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
       "readme_links": [
         "https://gitlab.com/markfalcone1-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
-        "https://gitlab.com/markFalcone1",
-        "https://gitlab.com/markfalcone1-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=1"
+        "https://gitlab.com/markfalcone1-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads&plain=1",
+        "https://gitlab.com/markFalcone1"
       ],
       "error": "https://gitlab.com/markFalcone1: Could not extract repo path"
     },
     "134915": {
       "name": "Riad Benyamna",
-      "readme_link": "https://gitlab.com/riad.benyamna2020-group/sp26-gitlab-contribution",
+      "readme_link": "https://gitlab.com/riad.benyamna2020-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
       "readme_links": [
-        "https://gitlab.com/riad.benyamna2020-group/sp26-gitlab-contribution",
+        "https://gitlab.com/riad.benyamna2020-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads",
         "https://gitlab.com/",
-        "https://gitlab.com/riad.benyamna2020-group/sp26-gitlab-contribution/-/blob/main/README.md?ref_type=heads"
+        "https://gitlab.com/riad.benyamna2020-group/sp26-gitlab-contribution"
       ],
       "error": "https://gitlab.com/: Could not extract repo path"
     }
@@ -1385,27 +1410,6 @@
         {
           "url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/227382#note_3171125347",
           "author": "meirzhan05"
-        }
-      ]
-    },
-    "103088": {
-      "name": "NIYOBUZIMA Theophile",
-      "mr_url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/220237",
-      "expected_author": "niyobuzima",
-      "actual_author": "mazen-ghanaym",
-      "mr_title": "Fix json safe parse in lfs_objects_pipeline.rb",
-      "source": "readme",
-      "all_mrs_checked": 2,
-      "all_mrs_details": [
-        {
-          "url": "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/220237",
-          "author": "mazen-ghanaym"
-        },
-        {
-          "url": "https://gitlab.com/gitlab-community/gitlab-org/gitlab/-/merge_requests/62",
-          "author": "theophileniyobuzima",
-          "mr_state": "closed",
-          "is_merged": false
         }
       ]
     },

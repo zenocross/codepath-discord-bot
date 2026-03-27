@@ -1,0 +1,387 @@
+{
+  "384542255178055680": {
+    "week_4": {
+      "phase": "4",
+      "phase_label": "Phase 4: Submission & Iteration",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Kent Tran",
+      "discord_name": "ninjaboy21",
+      "submitted_at": "2026-03-19T01:03:07.485802",
+      "week": 4
+    }
+  },
+  "758673456895623189": {
+    "week_4": {
+      "phase": "4",
+      "phase_label": "Phase 4: Submission & Iteration",
+      "blocked": true,
+      "support_needed": [
+        "mentor_pairing",
+        "office_hours"
+      ],
+      "support_labels": [
+        "Mentor pairing",
+        "Office hours guidance"
+      ],
+      "full_name": "Anushka Nilangekar",
+      "discord_name": "anagram_magic",
+      "submitted_at": "2026-03-19T01:03:44.572938",
+      "week": 4
+    }
+  },
+  "791688131623387187": {
+    "week_4": {
+      "phase": "4",
+      "phase_label": "Phase 4: Submission & Iteration",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Hiep (Roger) Nguyen",
+      "discord_name": "rogernguyen",
+      "submitted_at": "2026-03-19T01:04:40.526074",
+      "week": 4
+    }
+  },
+  "968294700572373012": {
+    "week_4": {
+      "phase": "1",
+      "phase_label": "Phase 1: Issue Selection",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Chinmayi Ranade",
+      "discord_name": "cran14",
+      "submitted_at": "2026-03-19T01:42:18.278057",
+      "week": 4
+    }
+  },
+  "1195238926252769372": {
+    "week_4": {
+      "phase": "1",
+      "phase_label": "Phase 1: Issue Selection",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Ryan Lawton",
+      "discord_name": "rlawton.cs",
+      "submitted_at": "2026-03-19T01:44:07.551766",
+      "week": 4
+    }
+  },
+  "1029490163639930911": {
+    "week_4": {
+      "phase": "1",
+      "phase_label": "Phase 1: Issue Selection",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Luciano Scarpaci",
+      "discord_name": "lucianoscarpaci",
+      "submitted_at": "2026-03-19T01:45:45.306754",
+      "week": 4
+    }
+  },
+  "1301283445808304221": {
+    "week_4": {
+      "phase": "4",
+      "phase_label": "Phase 4: Submission & Iteration",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Olayinka Vaughan",
+      "discord_name": "olayinkav",
+      "submitted_at": "2026-03-19T02:02:39.076637",
+      "week": 4
+    }
+  },
+  "1162238751255314432": {
+    "week_4": {
+      "phase": "3",
+      "phase_label": "Phase 3: Implementation",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Lynjai Jimenez",
+      "discord_name": "imdesigns",
+      "submitted_at": "2026-03-19T02:02:45.017910",
+      "week": 4
+    }
+  },
+  "1194090534348800084": {
+    "week_4": {
+      "phase": "1",
+      "phase_label": "Phase 1: Issue Selection",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Matthew Wyatt",
+      "discord_name": "matthewoscarwyatt",
+      "submitted_at": "2026-03-19T02:25:56.571154",
+      "week": 4
+    }
+  },
+  "433577031473561600": {
+    "week_4": {
+      "phase": "1",
+      "phase_label": "Phase 1: Issue Selection",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Biraj Pathak",
+      "discord_name": "bpathak",
+      "submitted_at": "2026-03-19T02:28:19.173110",
+      "week": 4
+    }
+  },
+  "340974524759670785": {
+    "week_4": {
+      "phase": "1",
+      "phase_label": "Phase 1: Issue Selection",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Julianne Tomlinson",
+      "discord_name": "jewlzt",
+      "submitted_at": "2026-03-19T04:16:16.833137",
+      "week": 4
+    }
+  },
+  "698578896940957757": {
+    "week_4": {
+      "phase": "2",
+      "phase_label": "Phase 2: Reproduction & Planning",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Hubert Huang",
+      "discord_name": "hube2148",
+      "submitted_at": "2026-03-19T05:10:43.204003",
+      "week": 4
+    }
+  },
+  "457614453991538692": {
+    "week_4": {
+      "phase": "3",
+      "phase_label": "Phase 3: Implementation",
+      "blocked": true,
+      "support_needed": [
+        "mentor_pairing",
+        "office_hours"
+      ],
+      "support_labels": [
+        "Mentor pairing",
+        "Office hours guidance"
+      ],
+      "full_name": "Kaleb Tsegaye",
+      "discord_name": "amkr6209",
+      "submitted_at": "2026-03-19T06:50:34.470878",
+      "week": 4
+    }
+  },
+  "479787112665841696": {
+    "week_4": {
+      "phase": "1",
+      "phase_label": "Phase 1: Issue Selection",
+      "blocked": true,
+      "support_needed": [
+        "technical_resource"
+      ],
+      "support_labels": [
+        "Technical resource/tutorial"
+      ],
+      "full_name": "Suzuna Kimura",
+      "discord_name": "suzkim23",
+      "submitted_at": "2026-03-19T07:12:55.195878",
+      "week": 4
+    }
+  },
+  "150378058631610368": {
+    "week_4": {
+      "phase": "3",
+      "phase_label": "Phase 3: Implementation",
+      "blocked": true,
+      "support_needed": [
+        "one_on_one",
+        "mentor_pairing"
+      ],
+      "support_labels": [
+        "1:1 session with Cam",
+        "Mentor pairing"
+      ],
+      "full_name": "Arnav Sareen",
+      "discord_name": "ernsanders",
+      "submitted_at": "2026-03-19T07:51:34.433931",
+      "week": 4
+    }
+  },
+  "1145573694211625023": {
+    "week_4": {
+      "phase": "4",
+      "phase_label": "Phase 4: Submission & Iteration",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Kalyaan Kanugula",
+      "discord_name": "kalyaan09",
+      "submitted_at": "2026-03-19T09:11:00.703036",
+      "week": 4
+    }
+  },
+  "475066466530623499": {
+    "week_4": {
+      "phase": "2",
+      "phase_label": "Phase 2: Reproduction & Planning",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Emanuel Pimentel",
+      "discord_name": "actualjam",
+      "submitted_at": "2026-03-19T09:49:38.491908",
+      "week": 4
+    }
+  },
+  "1392146774378020874": {
+    "week_4": {
+      "phase": "3",
+      "phase_label": "Phase 3: Implementation",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Mark Falcone",
+      "discord_name": "mark063591",
+      "submitted_at": "2026-03-19T10:31:33.823805",
+      "week": 4
+    }
+  },
+  "967249703056064542": {
+    "week_4": {
+      "phase": "2",
+      "phase_label": "Phase 2: Reproduction & Planning",
+      "blocked": true,
+      "support_needed": [
+        "mentor_pairing"
+      ],
+      "support_labels": [
+        "Mentor pairing"
+      ],
+      "full_name": "Lucy He",
+      "discord_name": "lucyhe09",
+      "submitted_at": "2026-03-19T10:40:43.270350",
+      "week": 4
+    }
+  },
+  "481819631481520129": {
+    "week_4": {
+      "phase": "2",
+      "phase_label": "Phase 2: Reproduction & Planning",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Riad Benyamna",
+      "discord_name": "totally_rimuru",
+      "submitted_at": "2026-03-19T10:47:35.696353",
+      "week": 4
+    }
+  },
+  "1012711105212203099": {
+    "week_4": {
+      "phase": "1",
+      "phase_label": "Phase 1: Issue Selection",
+      "blocked": true,
+      "support_needed": [
+        "office_hours",
+        "technical_resource",
+        "one_on_one"
+      ],
+      "support_labels": [
+        "Office hours guidance",
+        "Technical resource/tutorial",
+        "1:1 session with Cam"
+      ],
+      "full_name": "Sydelle Nyegamo",
+      "discord_name": "queensydelle",
+      "submitted_at": "2026-03-19T10:48:14.207259",
+      "week": 4
+    }
+  },
+  "209761369011126272": {
+    "week_4": {
+      "phase": "1",
+      "phase_label": "Phase 1: Issue Selection",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Evan Nguyen",
+      "discord_name": "capevan",
+      "submitted_at": "2026-03-19T11:45:52.648693",
+      "week": 4
+    }
+  },
+  "431324804885250048": {
+    "week_4": {
+      "phase": "3",
+      "phase_label": "Phase 3: Implementation",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Ricardo Ortega-Pacheco",
+      "discord_name": "hayate_kun01",
+      "submitted_at": "2026-03-19T11:55:50.224373",
+      "week": 4
+    }
+  },
+  "671293616668278784": {
+    "week_4": {
+      "phase": "1",
+      "phase_label": "Phase 1: Issue Selection",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Ronak Patel",
+      "discord_name": "beast.op",
+      "submitted_at": "2026-03-19T13:15:31.880083",
+      "week": 4
+    }
+  },
+  "448620335919529986": {
+    "week_4": {
+      "phase": "3",
+      "phase_label": "Phase 3: Implementation",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Jeffrey Chu",
+      "discord_name": "jc_1024",
+      "submitted_at": "2026-03-19T23:02:44.357213",
+      "week": 4
+    }
+  },
+  "1143317377119961249": {
+    "week_4": {
+      "phase": "4",
+      "phase_label": "Phase 4: Submission & Iteration",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Andrea Nunoo",
+      "discord_name": "andi_85004",
+      "submitted_at": "2026-03-20T03:36:21.012778",
+      "week": 4
+    }
+  },
+  "763856555576918066": {
+    "week_4": {
+      "phase": "4",
+      "phase_label": "Phase 4: Submission & Iteration",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Kimia Naeiji",
+      "discord_name": "k_noodles",
+      "submitted_at": "2026-03-20T11:11:26.380252",
+      "week": 4
+    }
+  }
+}

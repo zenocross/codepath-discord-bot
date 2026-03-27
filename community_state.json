@@ -39,21 +39,21 @@
     "notveks": 79,
     "imdesigns": 64,
     "mufasa1033": 36,
-    "junjulyaugustoctober": 78,
-    "matthewoscarwyatt": 35,
-    "lucianoscarpaci": 169,
-    "jewlzt": 21,
+    "junjulyaugustoctober": 93,
+    "matthewoscarwyatt": 37,
+    "lucianoscarpaci": 183,
+    "jewlzt": 23,
     "hex_salt": 5,
-    "k_noodles": 33,
+    "k_noodles": 36,
     "shikha_71088": 42,
     "lucky_panda_46622": 16,
-    "rlawton.cs": 39,
-    "hube2148": 36,
+    "rlawton.cs": 41,
+    "hube2148": 38,
     "bpathak": 39,
     "topu9727": 50,
     "speedboatwillie": 13,
     "moo4president": 18,
-    "hayate_kun01": 94,
+    "hayate_kun01": 101,
     "mgadepalli_27526": 38,
     "duckylikesbread": 11,
     "beast.op": 12,
@@ -66,18 +66,18 @@
     "brittany.h": 12,
     "lindsey3213": 74,
     "lmfai": 6,
-    "CapEvan": 74,
+    "CapEvan": 76,
     "vkudala_12769": 26,
-    "queensydelle": 24,
-    "mj_sp05": 10,
+    "queensydelle": 26,
+    "mj_sp05": 12,
     "jhnx737": 5,
-    "andi_85004": 40,
-    "cran14": 15,
-    "ActualJam": 7,
+    "andi_85004": 41,
+    "cran14": 17,
+    "ActualJam": 9,
     "averrie": 5,
-    "atkpotato": 5,
+    "atkpotato": 7,
     "hieu_mtran": 5,
-    "ninjaboy21": 100,
+    "ninjaboy21": 102,
     "kalyaan09": 20,
     "uzumaki3374": 108,
     "lijunwan": 5,
@@ -87,13 +87,13 @@
     "titoooo": 5,
     "himudigonda": 5,
     "vietbui99#6587": 5,
-    "lucyhe09": 28,
+    "lucyhe09": 30,
     "fiston4927": 5,
     "3n0ugh_": 11,
     "ultrasynchd": 6,
-    "rogernguyen": 7,
+    "rogernguyen": 9,
     "prabin": 48,
-    "mark063591": 12,
+    "mark063591": 20,
     "hacktivist24": 28,
     "juliettarozin": 5,
     "mk370z": 5,
@@ -102,14 +102,14 @@
     "ernsanders": 15,
     "mairsdaily": 5,
     "tmjc_guech": 5,
-    ".its_tomi": 34,
-    "amkr6209": 39,
-    "anagram_magic": 8,
+    ".its_tomi": 51,
+    "amkr6209": 41,
+    "anagram_magic": 10,
     "aarzoo_bansal": 8,
     "annie_74520": 1,
     "vietbui99": 14,
     "8fenrir89": 5,
-    "olayinkav": 7,
+    "olayinkav": 9,
     "geniusavo": 5
   },
   "default_points": {
@@ -144,7 +144,8 @@
       "1483887738120966144": 384542255178055680,
       "1484328600227282964": 475120638160273419,
       "1484212184249667587": 475120638160273419,
-      "1485467572009828382": 892879266637832222
+      "1485467572009828382": 892879266637832222,
+      "1486092955961004125": 475120638160273419
     },
     "1471204453368725565": {
       "1474580840796393582": 334702149596610560,
@@ -405,6 +406,37 @@
     ],
     "1485672319018991768": [
       "1194090534348800084"
+    ],
+    "1486093440906428446": [
+      "1029490163639930911"
+    ],
+    "1486116622396555454": [
+      "475120638160273419"
+    ],
+    "1486092955961004125": [
+      "1143317377119961249"
+    ],
+    "1486310174796021920": [
+      "475120638160273419",
+      "1029490163639930911"
+    ],
+    "1486434190114427021": [
+      "475120638160273419"
+    ],
+    "1486436682353082621": [
+      "1029490163639930911"
+    ],
+    "1486409651950981201": [
+      "431324804885250048",
+      "763856555576918066",
+      "1392146774378020874",
+      "950865088389185536"
+    ],
+    "1486806690983837818": [
+      "950865088389185536"
+    ],
+    "1486806316654657657": [
+      "950865088389185536"
     ]
   },
   "point_history": {
@@ -1068,6 +1100,47 @@
         "timestamp": "2026-03-20T02:38:35.546000+00:00",
         "channel_id": "1451043797483131000",
         "message_id": "1484380608590512168"
+      },
+      {
+        "points": 8,
+        "type": "first_response",
+        "timestamp": "2026-03-24T20:04:46.593000+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1486093440906428446"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-24T21:40:26.368827+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1486116622396555454"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-25T15:00:16.244074+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1486310174796021920"
+      },
+      {
+        "points": 2,
+        "type": "subsequent_response",
+        "timestamp": "2026-03-25T15:00:49.566000+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1486379337136603136"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-25T17:09:44.911181+00:00",
+        "message_id": "checkin_week_5"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-25T19:39:37.550072+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1486434190114427021"
       }
     ],
     "matthewoscarwyatt": [
@@ -1153,6 +1226,12 @@
         "timestamp": "2026-03-23T23:47:12.369527+00:00",
         "channel_id": "1451043797483131000",
         "message_id": "1485672319018991768"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-25T18:30:26.474833+00:00",
+        "message_id": "checkin_week_5"
       }
     ],
     "lucianoscarpaci": [
@@ -1623,6 +1702,54 @@
         "timestamp": "2026-03-23T04:42:33.223000+00:00",
         "channel_id": "1451043797483131000",
         "message_id": "1485498968065445950"
+      },
+      {
+        "points": 5,
+        "type": "first_post",
+        "timestamp": "2026-03-24T20:02:50.973000+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1486092955961004125"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-24T21:36:21.676789+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1486093440906428446"
+      },
+      {
+        "points": 2,
+        "type": "subsequent_response",
+        "timestamp": "2026-03-24T21:36:53.491000+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1486116622396555454"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-25T15:57:44.062003+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1486310174796021920"
+      },
+      {
+        "points": 2,
+        "type": "subsequent_response",
+        "timestamp": "2026-03-25T18:38:47.535000+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1486434190114427021"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-25T21:59:07.401139+00:00",
+        "message_id": "checkin_week_5"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-25T22:38:20.443268+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1486436682353082621"
       }
     ],
     "jewlzt": [
@@ -1708,6 +1835,12 @@
         "timestamp": "2026-03-20T05:58:09.913165+00:00",
         "channel_id": "1451043797483131000",
         "message_id": "1484419927799496886"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-26T01:20:30.149484+00:00",
+        "message_id": "checkin_week_5"
       }
     ],
     "hex_salt": [
@@ -1816,6 +1949,19 @@
         "type": "checkin",
         "timestamp": "2026-03-20T03:11:26.381683+00:00",
         "message_id": "checkin_week_4"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-26T03:04:34.194106+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1486409651950981201"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-26T03:05:29.893070+00:00",
+        "message_id": "checkin_week_5"
       }
     ],
     "shikha_71088": [
@@ -2108,6 +2254,12 @@
         "timestamp": "2026-03-23T05:36:28.160000+00:00",
         "channel_id": "1451043797483131000",
         "message_id": "1485512536374771754"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-25T17:12:21.628744+00:00",
+        "message_id": "checkin_week_5"
       }
     ],
     "hube2148": [
@@ -2193,6 +2345,12 @@
         "timestamp": "2026-03-22T01:07:57.995454+00:00",
         "channel_id": "1451043797483131000",
         "message_id": "1484419927799496886"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-25T17:02:18.637107+00:00",
+        "message_id": "checkin_week_5"
       }
     ],
     "bpathak": [
@@ -2677,6 +2835,33 @@
         "timestamp": "2026-03-23T11:52:31.421000+00:00",
         "channel_id": "1471205492540833813",
         "message_id": "1485607173550510150"
+      },
+      {
+        "points": 2,
+        "type": "subsequent_response",
+        "timestamp": "2026-03-24T23:55:52.468000+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1486151598601277500"
+      },
+      {
+        "points": 2,
+        "type": "subsequent_response",
+        "timestamp": "2026-03-24T23:56:02.292000+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1486151639806119997"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-25T23:59:24.922054+00:00",
+        "message_id": "checkin_week_5"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-25T23:59:37.619520+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1486409651950981201"
       }
     ],
     "mgadepalli_27526": [
@@ -3868,6 +4053,12 @@
         "type": "checkin",
         "timestamp": "2026-03-19T11:45:52.648693+00:00",
         "message_id": "checkin_week_4"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-26T05:41:54.428935+00:00",
+        "message_id": "checkin_week_5"
       }
     ],
     "vkudala_12769": [
@@ -3962,6 +4153,12 @@
         "timestamp": "2026-03-23T15:15:49.448000+00:00",
         "channel_id": "1471204453368725565",
         "message_id": "1485658335784075276"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-26T02:54:00.109298+00:00",
+        "message_id": "checkin_week_5"
       }
     ],
     "mj_sp05": [
@@ -3978,6 +4175,12 @@
         "timestamp": "2026-03-19T02:23:08.680000+00:00",
         "channel_id": "1451043797483131000",
         "message_id": "1484014333166878813"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-25T23:59:41.785794+00:00",
+        "message_id": "checkin_week_5"
       }
     ],
     "jhnx737": [
@@ -4100,6 +4303,13 @@
         "type": "checkin",
         "timestamp": "2026-03-19T19:36:21.013829+00:00",
         "message_id": "checkin_week_4"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-24T21:44:48.696535+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1486092955961004125"
       }
     ],
     "cran14": [
@@ -4136,6 +4346,12 @@
         "type": "checkin",
         "timestamp": "2026-03-19T01:42:18.278057+00:00",
         "message_id": "checkin_week_4"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-25T22:26:25.300120+00:00",
+        "message_id": "checkin_week_5"
       }
     ],
     "ActualJam": [
@@ -4151,6 +4367,12 @@
         "type": "checkin",
         "timestamp": "2026-03-19T09:49:38.491908+00:00",
         "message_id": "checkin_week_4"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-26T05:39:37.227974+00:00",
+        "message_id": "checkin_week_5"
       }
     ],
     "averrie": [
@@ -4169,6 +4391,12 @@
         "timestamp": "2026-02-26T05:28:16.624000+00:00",
         "channel_id": "1451043797483131000",
         "message_id": "1476450778083364975"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-25T22:16:46.038982+00:00",
+        "message_id": "checkin_week_5"
       }
     ],
     "hieu_mtran": [
@@ -4459,6 +4687,12 @@
         "type": "checkin",
         "timestamp": "2026-03-19T01:03:07.485802+00:00",
         "message_id": "checkin_week_4"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-25T17:00:44.379203+00:00",
+        "message_id": "checkin_week_5"
       }
     ],
     "kalyaan09": [
@@ -4904,6 +5138,12 @@
         "type": "checkin",
         "timestamp": "2026-03-19T10:40:43.270350+00:00",
         "message_id": "checkin_week_4"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-25T17:20:46.453212+00:00",
+        "message_id": "checkin_week_5"
       }
     ],
     "fiston4927": [
@@ -4967,6 +5207,12 @@
         "type": "checkin",
         "timestamp": "2026-03-19T01:04:40.526074+00:00",
         "message_id": "checkin_week_4"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-25T21:09:04.932725+00:00",
+        "message_id": "checkin_week_5"
       }
     ],
     "prabin": [
@@ -5117,6 +5363,26 @@
         "type": "checkin",
         "timestamp": "2026-03-19T10:31:33.823805+00:00",
         "message_id": "checkin_week_4"
+      },
+      {
+        "points": 5,
+        "type": "first_post",
+        "timestamp": "2026-03-26T04:25:29.765000+00:00",
+        "channel_id": "1471205680806625434",
+        "message_id": "1486581838968520746"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-26T04:25:45.460798+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1486409651950981201"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-26T04:27:24.435393+00:00",
+        "message_id": "checkin_week_5"
       }
     ],
     "hacktivist24": [
@@ -5413,6 +5679,76 @@
         "timestamp": "2026-03-23T14:17:23.522000+00:00",
         "channel_id": "1471205492540833813",
         "message_id": "1485643630864629832"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-26T19:03:36.384006+00:00",
+        "channel_id": "1451043797483131000",
+        "message_id": "1486409651950981201"
+      },
+      {
+        "points": 2,
+        "type": "subsequent_response",
+        "timestamp": "2026-03-26T19:04:18.216000+00:00",
+        "channel_id": "1471205492540833813",
+        "message_id": "1486802998121337035"
+      },
+      {
+        "points": 2,
+        "type": "subsequent_response",
+        "timestamp": "2026-03-26T19:04:52.333000+00:00",
+        "channel_id": "1471205492540833813",
+        "message_id": "1486803141218402375"
+      },
+      {
+        "points": 2,
+        "type": "subsequent_response",
+        "timestamp": "2026-03-26T19:05:08.384000+00:00",
+        "channel_id": "1471205492540833813",
+        "message_id": "1486803208541175898"
+      },
+      {
+        "points": 2,
+        "type": "subsequent_response",
+        "timestamp": "2026-03-26T19:10:23.750000+00:00",
+        "channel_id": "1471205492540833813",
+        "message_id": "1486804531282186398"
+      },
+      {
+        "points": 2,
+        "type": "subsequent_response",
+        "timestamp": "2026-03-26T19:10:39.127000+00:00",
+        "channel_id": "1471205492540833813",
+        "message_id": "1486804595777863770"
+      },
+      {
+        "points": 2,
+        "type": "subsequent_response",
+        "timestamp": "2026-03-26T19:16:45.498000+00:00",
+        "channel_id": "1471205492540833813",
+        "message_id": "1486806132449218853"
+      },
+      {
+        "points": 2,
+        "type": "subsequent_response",
+        "timestamp": "2026-03-26T19:17:04.122000+00:00",
+        "channel_id": "1471205492540833813",
+        "message_id": "1486806210563936307"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-26T19:28:52.633055+00:00",
+        "channel_id": "1471205492540833813",
+        "message_id": "1486806690983837818"
+      },
+      {
+        "points": 1,
+        "type": "emoji_reaction",
+        "timestamp": "2026-03-26T19:29:01.400860+00:00",
+        "channel_id": "1471205492540833813",
+        "message_id": "1486806316654657657"
       }
     ],
     "amkr6209": [
@@ -5470,6 +5806,12 @@
         "timestamp": "2026-03-22T11:58:12.586000+00:00",
         "channel_id": "1451043797483131000",
         "message_id": "1485246216634896415"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-26T05:41:09.045388+00:00",
+        "message_id": "checkin_week_5"
       }
     ],
     "anagram_magic": [
@@ -5492,6 +5834,12 @@
         "type": "checkin",
         "timestamp": "2026-03-19T01:03:44.572938+00:00",
         "message_id": "checkin_week_4"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-26T03:50:43.060537+00:00",
+        "message_id": "checkin_week_5"
       }
     ],
     "aarzoo_bansal": [
@@ -5613,6 +5961,12 @@
         "type": "checkin",
         "timestamp": "2026-03-19T02:02:39.076637+00:00",
         "message_id": "checkin_week_4"
+      },
+      {
+        "points": 2,
+        "type": "checkin",
+        "timestamp": "2026-03-25T17:16:12.994885+00:00",
+        "message_id": "checkin_week_5"
       }
     ],
     "geniusavo": [
@@ -5626,32 +5980,53 @@
     ]
   },
   "processed_checkins": [
-    "1194090534348800084_week_4",
-    "671293616668278784_week_4",
+    "384542255178055680_week_4",
+    "1029490163639930911_week_4",
+    "448620335919529986_week_4",
+    "1392146774378020874_week_5",
+    "475066466530623499_week_5",
+    "1143317377119961249_week_4",
+    "340974524759670785_week_5",
     "479787112665841696_week_4",
     "481819631481520129_week_4",
-    "150378058631610368_week_4",
-    "431324804885250048_week_4",
-    "448620335919529986_week_4",
-    "433577031473561600_week_4",
-    "1162238751255314432_week_4",
-    "1392146774378020874_week_4",
-    "763856555576918066_week_4",
-    "968294700572373012_week_4",
-    "758673456895623189_week_4",
-    "791688131623387187_week_4",
-    "1301283445808304221_week_4",
-    "340974524759670785_week_4",
-    "475066466530623499_week_4",
-    "1145573694211625023_week_4",
-    "1195238926252769372_week_4",
-    "1143317377119961249_week_4",
-    "384542255178055680_week_4",
-    "967249703056064542_week_4",
-    "698578896940957757_week_4",
+    "967249703056064542_week_5",
+    "1029490163639930911_week_5",
     "209761369011126272_week_4",
-    "1012711105212203099_week_4",
+    "150378058631610368_week_4",
+    "420629904313548822_week_5",
+    "968294700572373012_week_4",
+    "1195238926252769372_week_4",
+    "698578896940957757_week_4",
+    "1301283445808304221_week_4",
+    "433577031473561600_week_4",
+    "1012711105212203099_week_5",
+    "671293616668278784_week_4",
+    "758673456895623189_week_4",
+    "340974524759670785_week_4",
+    "431324804885250048_week_5",
+    "384542255178055680_week_5",
+    "763856555576918066_week_4",
+    "698578896940957757_week_5",
+    "209761369011126272_week_5",
+    "763856555576918066_week_5",
+    "1392146774378020874_week_4",
+    "1194090534348800084_week_5",
     "457614453991538692_week_4",
-    "1029490163639930911_week_4"
+    "1145573694211625023_week_4",
+    "791688131623387187_week_5",
+    "1012711105212203099_week_4",
+    "1301283445808304221_week_5",
+    "457614453991538692_week_5",
+    "791688131623387187_week_4",
+    "475120638160273419_week_5",
+    "968294700572373012_week_5",
+    "1195238926252769372_week_5",
+    "1162238751255314432_week_4",
+    "758673456895623189_week_5",
+    "475066466530623499_week_4",
+    "1194090534348800084_week_4",
+    "1072526470360088727_week_5",
+    "967249703056064542_week_4",
+    "431324804885250048_week_4"
   ]
 }

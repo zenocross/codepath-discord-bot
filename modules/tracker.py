@@ -16,6 +16,9 @@ Commands:
         Options: nofilter, validate_commits, validate_all
     !tracker set_phase_complete <phase> <member_id> - Set a student's completed phase
     !tracker get_member_id <discord_info> - Look up member ID from Discord username/ID
+    !tracker supplement <member_id> <mr_url> <commit_url> - Supplement inaccessible MR with commit URL
+    !tracker list_supplements - List all supplemented MRs
+    !tracker unsupplement <member_id> - Remove a supplemented MR
     !tracker no_issues        - Show issue status from validated data (requires validate first)
     !tracker no_issues quick  - Quick list of students without issue_url (no validation)
     !tracker no_issues validate - Crawl READMEs to find/validate issue URLs
@@ -940,6 +943,182 @@ class TrackerCog(commands.Cog, name="Tracker"):
             lines.append(line)
         
         await ctx.send("\n".join(lines))
+    
+    @commands.command(name='supplement')
+    async def supplement_mr(self, ctx: commands.Context, member_id: str = None, mr_url: str = None, commit_url: str = None):
+        """Supplement an inaccessible MR with a commit URL that proves ownership.
+        
+        Usage: !tracker supplement <member_id> <mr_url> <commit_url>
+        
+        This marks a student as having a validated MR when their MR URL is inaccessible
+        but they can provide a commit URL that proves their work.
+        
+        Args:
+            member_id: The student's member ID
+            mr_url: The MR URL (may be inaccessible)
+            commit_url: A commit URL that is accessible and proves ownership
+        """
+        import json
+        import os
+        import urllib.request
+        import urllib.error
+        
+        if not member_id or not mr_url or not commit_url:
+            await ctx.send(
+                "**🔗 Supplement MR**\n\n"
+                "Usage: `!tracker supplement <member_id> <mr_url> <commit_url>`\n\n"
+                "Use this when a student's MR URL is inaccessible but they have a commit URL "
+                "that proves their work.\n\n"
+                "**Example:**\n"
+                "`!tracker supplement 12345 https://gitlab.com/.../merge_requests/123 https://gitlab.com/.../commit/abc123`\n\n"
+                "The commit URL will be verified before adding."
+            )
+            return
+        
+        # Look up student name from master CSV
+        member_info = self._get_member_info(member_id)
+        if not member_info:
+            await ctx.send(
+                f"❌ Member ID `{member_id}` not found in master roster.\n\n"
+                f"Use `!tracker get_member_id <discord_username>` to look up the correct member ID."
+            )
+            return
+        
+        student_name = member_info.get('name', 'Unknown')
+        
+        # Verify the commit_url is accessible (not 404)
+        await ctx.send(f"🔍 Verifying commit URL is accessible...")
+        
+        try:
+            req = urllib.request.Request(commit_url, method='HEAD')
+            req.add_header('User-Agent', 'Mozilla/5.0')
+            with urllib.request.urlopen(req, timeout=10) as response:
+                if response.status != 200:
+                    await ctx.send(f"❌ Commit URL returned status {response.status}. Please verify the URL is correct.")
+                    return
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                await ctx.send(f"❌ Commit URL returned 404 (Not Found). Please verify the URL is correct and accessible.")
+            else:
+                await ctx.send(f"❌ Commit URL returned error {e.code}. Please verify the URL is correct.")
+            return
+        except urllib.error.URLError as e:
+            await ctx.send(f"❌ Could not access commit URL: {e.reason}")
+            return
+        except Exception as e:
+            await ctx.send(f"❌ Error verifying commit URL: {e}")
+            return
+        
+        # Save to separate supplemented MRs file (persistent, merged at report generation)
+        supplemented_file = os.path.join('data', 'uploads', '_supplemented_mrs.json')
+        
+        if os.path.exists(supplemented_file):
+            with open(supplemented_file, 'r') as f:
+                supplemented_data = json.load(f)
+        else:
+            supplemented_data = {
+                'supplemented_mrs': {}
+            }
+        
+        # Add/update the student's entry
+        supplemented_by = f"{ctx.author.name}#{ctx.author.discriminator}" if ctx.author.discriminator != "0" else ctx.author.name
+        
+        supplemented_data['supplemented_mrs'][member_id] = {
+            'name': student_name,
+            'mr_url': mr_url,
+            'supplemented': True,
+            'commit_url': commit_url,
+            'supplemented_by': supplemented_by,
+            'supplemented_at': datetime.now().isoformat(),
+            'author_match': True,  # Manually verified
+            'mr_state': 'supplemented',
+            'is_merged': False,
+            'merged_at': None
+        }
+        
+        # Save the supplemented file
+        with open(supplemented_file, 'w') as f:
+            json.dump(supplemented_data, f, indent=2)
+        
+        await ctx.send(
+            f"✅ **MR Supplemented**\n\n"
+            f"• **Name:** {student_name}\n"
+            f"• **Member ID:** `{member_id}`\n"
+            f"• **MR URL:** {mr_url}\n"
+            f"• **Commit URL:** {commit_url}\n"
+            f"• **Supplemented by:** {supplemented_by}\n\n"
+            f"This student will now appear as having a validated MR in the On Track sheet."
+        )
+    
+    @commands.command(name='list_supplements')
+    async def list_supplements(self, ctx: commands.Context):
+        """List all supplemented MRs."""
+        import json
+        import os
+        
+        supplemented_file = os.path.join('data', 'uploads', '_supplemented_mrs.json')
+        
+        if not os.path.exists(supplemented_file):
+            await ctx.send("📋 No supplemented MRs.")
+            return
+        
+        with open(supplemented_file, 'r') as f:
+            data = json.load(f)
+        
+        supplemented = data.get('supplemented_mrs', {})
+        
+        if not supplemented:
+            await ctx.send("📋 No supplemented MRs.")
+            return
+        
+        lines = ["**🔗 Supplemented MRs**\n"]
+        for mid, info in sorted(supplemented.items(), key=lambda x: x[1].get('name', '').lower()):
+            name = info.get('name', 'Unknown')
+            supplemented_by = info.get('supplemented_by', 'Unknown')
+            supplemented_at = info.get('supplemented_at', '')[:10]  # Just the date part
+            lines.append(f"• **{name}** (`{mid}`) by {supplemented_by} on {supplemented_at}")
+            lines.append(f"  └─ MR: <{info.get('mr_url', 'N/A')}>")
+            lines.append(f"  └─ Commit: <{info.get('commit_url', 'N/A')}>")
+        
+        await ctx.send("\n".join(lines))
+    
+    @commands.command(name='unsupplement')
+    async def unsupplement_mr(self, ctx: commands.Context, member_id: str = None):
+        """Remove a supplemented MR.
+        
+        Usage: !tracker unsupplement <member_id>
+        """
+        import json
+        import os
+        
+        if not member_id:
+            await ctx.send(
+                "**🔗 Remove Supplemented MR**\n\n"
+                "Usage: `!tracker unsupplement <member_id>`\n\n"
+                "Example: `!tracker unsupplement 12345`"
+            )
+            return
+        
+        supplemented_file = os.path.join('data', 'uploads', '_supplemented_mrs.json')
+        
+        if not os.path.exists(supplemented_file):
+            await ctx.send(f"❌ No supplemented MRs found.")
+            return
+        
+        with open(supplemented_file, 'r') as f:
+            data = json.load(f)
+        
+        if member_id not in data.get('supplemented_mrs', {}):
+            await ctx.send(f"❌ No supplemented MR found for member `{member_id}`.")
+            return
+        
+        student_name = data['supplemented_mrs'][member_id].get('name', 'Unknown')
+        del data['supplemented_mrs'][member_id]
+        
+        with open(supplemented_file, 'w') as f:
+            json.dump(data, f, indent=2)
+        
+        await ctx.send(f"✅ Supplemented MR removed for **{student_name}** (`{member_id}`).")
     
     @commands.command(name='get_member_id')
     async def get_member_id(self, ctx: commands.Context, *, discord_info: str = None):

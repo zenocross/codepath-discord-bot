@@ -587,7 +587,10 @@ class EmbedBuilder:
             value=(
                 "`!tracker no_mr` - Show validated MR status (requires validate first)\n"
                 "`!tracker no_mr validate` - Crawl READMEs to find/validate MR URLs + author check\n"
-                "`!tracker dl_mr` - Download validated MRs as CSV (cached data)"
+                "`!tracker dl_mr` - Download validated MRs as CSV (cached data)\n"
+                "`!tracker supplement <mid> <mr_url> <commit_url>` - Supplement inaccessible MR\n"
+                "`!tracker list_supplements` - List all supplemented MRs\n"
+                "`!tracker unsupplement <member_id>` - Remove a supplemented MR"
             ),
             inline=False
         )
@@ -779,10 +782,21 @@ class EmbedBuilder:
         embed.add_field(
             name="👑 Admin Commands",
             value=(
-                "`!checkin post [channel_id]` - Post check-in prompt\n"
-                "`!checkin weekly` - View/set scheduled weekly posts\n"
+                "`!checkin preview_post` - Preview post with timing info\n"
+                "`!checkin post <channel> [utc_time]` - Post check-in prompt\n"
                 "`!checkin report` - View all check-ins summary\n"
                 "`!checkin report_download` - Download check-ins as CSV"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🧪 UTC Time Format (for testing)",
+            value=(
+                "Use with `!checkin post` to test different weeks:\n"
+                "`2026-03-25` - Date only (midnight UTC)\n"
+                "`2026-03-25T16:59:00` - Before Wed 5PM cutoff (same week)\n"
+                "`2026-03-25T17:00:00` - At Wed 5PM cutoff (next week)"
             ),
             inline=False
         )
@@ -791,13 +805,13 @@ class EmbedBuilder:
             name="📅 Weekly Schedule Usage",
             value=(
                 "`!checkin weekly` - View current schedule\n"
-                "`!checkin weekly set <channel> <day> <HH:MM>`\n"
+                "`!checkin weekly set <channel> <day> <HH:MM>` (UTC)\n"
                 "`!checkin weekly off` - Remove schedule entirely\n"
                 "`!checkin weekly reset` - Allow re-post this week\n\n"
-                "**off vs reset:** `off` removes the schedule. `reset` keeps the schedule but clears the \"already posted\" flag for testing.\n\n"
+                "**Note:** Time is in UTC (e.g., 09:00 UTC = 5AM EST / 2AM PST)\n\n"
                 "**Examples:**\n"
-                "• `!checkin weekly set 123456789 wed 09:00`\n"
-                "• `!checkin weekly set #general monday 14:30`"
+                "• `!checkin weekly set #general wed 17:00` (Wed 5PM UTC)\n"
+                "• `!checkin weekly set #general mon 14:30` (Mon 2:30PM UTC)"
             ),
             inline=False
         )

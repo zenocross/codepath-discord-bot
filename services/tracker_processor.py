@@ -3268,6 +3268,8 @@ class TrackerDataProcessor(FileProcessor):
         validated_mrs: Dict[str, dict] = {}
         validated_mrs_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 
                                           "data", "uploads", "_validated_mrs.json")
+        supplemented_mrs_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 
+                                              "data", "uploads", "_supplemented_mrs.json")
         try:
             if os.path.exists(validated_mrs_path):
                 with open(validated_mrs_path, 'r') as f:
@@ -3279,6 +3281,14 @@ class TrackerDataProcessor(FileProcessor):
                     for mid, info in mrs_found.items():
                         if mid not in validated_mrs:
                             validated_mrs[mid] = info
+            
+            # Also load supplemented MRs (persistent, separate file)
+            # These take priority as they were manually verified
+            if os.path.exists(supplemented_mrs_path):
+                with open(supplemented_mrs_path, 'r') as f:
+                    supplemented_data = json.load(f)
+                    for mid, info in supplemented_data.get('supplemented_mrs', {}).items():
+                        validated_mrs[mid] = info  # Overwrite with supplemented version
         except Exception:
             pass  # Fall back to mr_url check
         
@@ -3296,7 +3306,10 @@ class TrackerDataProcessor(FileProcessor):
                 mr_data = validated_mrs[str(s.member_id)]
                 # Only count as valid if author matches
                 if mr_data.get('author_match', False):
-                    student_forced_reason[key] = "Has valid MR"
+                    reason = "Has valid MR"
+                    if mr_data.get('supplemented', False):
+                        reason += " (Supplemented)"
+                    student_forced_reason[key] = reason
             # Fall back to mr_url if no validated MRs file
             elif not validated_mrs:
                 if s.mr_url and str(s.mr_url).strip():
@@ -3959,6 +3972,8 @@ class TrackerDataProcessor(FileProcessor):
         # Load validated MRs if available
         validated_mrs_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 
                                           "data", "uploads", "_validated_mrs.json")
+        supplemented_mrs_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 
+                                              "data", "uploads", "_supplemented_mrs.json")
         validated_mrs_data: Dict[str, dict] = {}
         mr_author_mismatch_data: Dict[str, dict] = {}
         try:
@@ -3976,6 +3991,14 @@ class TrackerDataProcessor(FileProcessor):
                             validated_mrs_data[mid] = info
                     # Get author mismatches
                     mr_author_mismatch_data = data.get('mr_author_mismatch', {})
+            
+            # Also load supplemented MRs (persistent, separate file)
+            # These take priority as they were manually verified
+            if os.path.exists(supplemented_mrs_path):
+                with open(supplemented_mrs_path, 'r') as f:
+                    supplemented_data = json.load(f)
+                    for mid, info in supplemented_data.get('supplemented_mrs', {}).items():
+                        validated_mrs_data[mid] = info  # Overwrite with supplemented version
         except Exception:
             pass
         
