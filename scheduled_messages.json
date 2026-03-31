@@ -12,5 +12,37 @@
     "active": true,
     "created_by": 432551600100474881,
     "last_sent": "2026-03-25T17:00:01.039883+00:00"
+  },
+  "46a00630": {
+    "group": "announcement_channel",
+    "type": "once",
+    "config": {
+      "year": 2026,
+      "month": 4,
+      "day": 1,
+      "hour": 14,
+      "minute": 0
+    },
+    "message": "**\ud83c\udfa4 Tomorrow: Mid-Program Event with GitLab Engineers!**\n\ud83d\udcc5 **Thursday April 2nd | 11am - 12pm EST / 8 - 9am PST**\n\ud83d\udd17 [Join on Zoom](https://us06web.zoom.us/j/85747208685?jst=2)\n\nWe're hosting a panel + Q&A with Senior Engineers from GitLab! Here's what we'll be covering:\n\ud83d\udd39 AI & emerging tech - how it's changing day-to-day engineering work and what early-career engineers should pay attention to\n\ud83d\udd39 Open source as a career lever - how contributions have shaped their careers and what they actually look for on resumes\n\ud83d\udd39 Their journeys to and at GitLab - what their paths looked like and what surprised them about working there\n\nWhether you're looking for inspiration, career advice, or want to learn more about working with the GitLab team in our program and beyond - this is a great one to attend!\n\n**[Submit your questions now](https://docs.google.com/forms/d/e/1FAIpQLSdTeIWqrcFP1oAfveaF2JSbbV7RMajg6C1Rz7uzkkV9vpP7MQ/viewform)** so we can make the conversation as relevant to you as possible!\n\nCan't make it? The event will be recorded and shared!\n\nStuck on something and need help outside of the event? [Book time with Cam directly!](https://calendar.app.google/Ww9aLLNCvo5Mm2CRA)\n\nSee you there \ud83d\ude4c",
+    "next_run": "2026-04-01T14:00:00+00:00",
+    "active": true,
+    "created_by": 432551600100474881,
+    "target_type": "channel"
+  },
+  "3ae8cec8": {
+    "group": "announcement_channel",
+    "type": "once",
+    "config": {
+      "year": 2026,
+      "month": 4,
+      "day": 2,
+      "hour": 14,
+      "minute": 0
+    },
+    "message": "**\ud83d\udea8 Starting in 1 hour: Mid-Program Event with GitLab Engineers!**\n\ud83d\udcc5 **Today | 11am - 12pm EST / 8 - 9am PST**\n\ud83d\udd17 [Join on Zoom](https://us06web.zoom.us/j/85747208685?jst=2)\n\nWe're kicking off a panel + Q&A with Senior GitLab Engineers in just one hour! We'll be talking about AI in engineering, open source as a career lever, and their journeys to and at GitLab.\n\nThis is a great chance to hear directly from engineers working at GitLab and get career advice, inspiration, or just learn more about how to make the most of your time in the program and beyond.\n\n**[Last chance to submit your questions!](https://docs.google.com/forms/d/e/1FAIpQLSdTeIWqrcFP1oAfveaF2JSbbV7RMajg6C1Rz7uzkkV9vpP7MQ/viewform)**\n\nCan't make it? No worries - the event will be recorded and shared!\n\nSee you in there! \ud83d\udcaa",
+    "next_run": "2026-04-02T14:00:00+00:00",
+    "active": true,
+    "created_by": 432551600100474881,
+    "target_type": "channel"
   }
 }

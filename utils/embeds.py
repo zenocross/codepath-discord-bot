@@ -461,10 +461,11 @@ class EmbedBuilder:
         
         embed.add_field(
             name="⏰ Scheduling (auto-detects channel vs DM group)",
-            value="`!announce schedule <group> minutely <N> [msg]` - Every N minutes\n"
+            value="`!announce schedule <group> once <YYYY-MM-DD> <HH:MM> [msg]` - One-time (UTC)\n"
+                  "`!announce schedule <group> minutely <N> [msg]` - Every N minutes\n"
                   "`!announce schedule <group> hourly <N> [msg]` - Every N hours\n"
-                  "`!announce schedule <group> daily <HH:MM> [msg]` - Daily (GMT)\n"
-                  "`!announce schedule <group> weekly <day> <HH:MM> [msg]` - Weekly",
+                  "`!announce schedule <group> daily <HH:MM> [msg]` - Daily (UTC)\n"
+                  "`!announce schedule <group> weekly <day> <HH:MM> [msg]` - Weekly (UTC)",
             inline=False
         )
         
@@ -472,6 +473,7 @@ class EmbedBuilder:
             name="📋 Schedule Management",
             value="`!announce schedules` - List all schedules\n"
                   "`!announce preview <id>` - Preview schedule + time until sent\n"
+                  "`!announce preview_msg <id> <channel>` - Test send to channel\n"
                   "`!announce cancel <id>` - Cancel a schedule\n"
                   "`!announce cancelall` - Cancel all schedules",
             inline=False

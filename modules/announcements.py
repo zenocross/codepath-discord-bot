@@ -701,23 +701,45 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
                 message = ' '.join(args[2:]) if len(args) > 2 else None
             except ValueError as e:
                 return None, None, str(e)
+        
+        elif schedule_type == 'once':
+            if len(args) < 2:
+                return None, None, "Please specify date and time: `!announce schedule <group> once <YYYY-MM-DD> <HH:MM> [message]`"
+            try:
+                # Parse date (YYYY-MM-DD)
+                date_parts = args[0].split('-')
+                if len(date_parts) != 3:
+                    return None, None, "Invalid date format. Use YYYY-MM-DD (e.g., 2026-03-26)"
+                config['year'] = int(date_parts[0])
+                config['month'] = int(date_parts[1])
+                config['day'] = int(date_parts[2])
+                
+                # Parse time (HH:MM)
+                hour, minute = parse_time_string(args[1])
+                config['hour'] = hour
+                config['minute'] = minute
+                message = ' '.join(args[2:]) if len(args) > 2 else None
+            except (ValueError, IndexError):
+                return None, None, "Invalid date/time format. Use: `once <YYYY-MM-DD> <HH:MM>`\nExample: `once 2026-03-26 14:30`"
         else:
-            return None, None, "Invalid schedule type. Use: minutely, hourly, daily, or weekly"
+            return None, None, "Invalid schedule type. Use: once, minutely, hourly, daily, or weekly"
         
         return config, message, None
     
     @commands.command(name='schedule')
     async def schedule_message(self, ctx: commands.Context, group_name: str = None, schedule_type: str = None, *args) -> None:
-        """Schedule a recurring message to a channel group or DM group.
+        """Schedule a message to a channel group or DM group.
         
         Usage:
+        !announce schedule <group> once <YYYY-MM-DD> <HH:MM> [message] - One-time at specific date/time (UTC)
         !announce schedule <group> minutely <N> [message] - Every N minutes (1-1440)
         !announce schedule <group> hourly <N> [message] - Every N hours
-        !announce schedule <group> daily <HH:MM> [message] - Daily at time (GMT)
+        !announce schedule <group> daily <HH:MM> [message] - Daily at time (UTC)
         !announce schedule <group> weekly <day> <HH:MM> [message] - Weekly (day: mon/tue/wed/thu/fri/sat/sun)
         
         The group can be either a channel group or DM group - automatically detected.
         If message is not provided, you'll be prompted for it.
+        One-shot schedules are automatically deleted after sending.
         """
         if not isinstance(ctx.channel, discord.DMChannel):
             await ctx.send("⚠️ This command only works in DMs for security.")
@@ -730,11 +752,13 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
         if not group_name or not schedule_type:
             await ctx.send(
                 "Usage:\n"
+                "`!announce schedule <group> once <YYYY-MM-DD> <HH:MM> [message]` - One-time (UTC)\n"
                 "`!announce schedule <group> minutely <N> [message]` - Every N minutes\n"
                 "`!announce schedule <group> hourly <N> [message]` - Every N hours\n"
-                "`!announce schedule <group> daily <HH:MM> [message]` - Daily at time (GMT)\n"
+                "`!announce schedule <group> daily <HH:MM> [message]` - Daily at time (UTC)\n"
                 "`!announce schedule <group> weekly <day> <HH:MM> [message]` - Weekly\n\n"
-                "💡 Group can be a channel group or DM group (auto-detected)"
+                "💡 Group can be a channel group or DM group (auto-detected)\n"
+                "💡 One-shot schedules are automatically deleted after sending"
             )
             return
         
@@ -858,6 +882,90 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
         )
         await ctx.send(embed=embed)
     
+    @commands.command(name='preview_msg')
+    async def preview_msg_to_channel(self, ctx: commands.Context, schedule_id: str = None, channel_id: str = None) -> None:
+        """Send a scheduled message to a test channel for preview.
+        
+        Usage: !announce preview_msg <schedule_id> <channel_id>
+        
+        This instantly posts the scheduled message to the specified channel
+        without affecting the actual schedule.
+        """
+        if not isinstance(ctx.channel, discord.DMChannel):
+            await ctx.send("⚠️ This command only works in DMs for security.")
+            return
+        
+        if not self._check_dm_permission(ctx):
+            await ctx.send("❌ You don't have permission to use announce commands.")
+            return
+        
+        if not schedule_id or not channel_id:
+            await ctx.send("Usage: `!announce preview_msg <schedule_id> <channel_id>`\n"
+                          "Example: `!announce preview_msg abc123 1234567890`")
+            return
+        
+        if schedule_id not in self.bot.scheduled_messages:
+            await ctx.send(f"❌ Schedule `{schedule_id}` not found.")
+            return
+        
+        # Parse channel ID
+        channel_id_clean = channel_id.strip('<#>').strip()
+        try:
+            target_channel = self.bot.get_channel(int(channel_id_clean))
+            if target_channel is None:
+                target_channel = await self.bot.fetch_channel(int(channel_id_clean))
+        except (ValueError, discord.NotFound, discord.Forbidden):
+            await ctx.send(f"❌ Could not find channel `{channel_id}`. Make sure the bot has access.")
+            return
+        
+        sched = self.bot.scheduled_messages[schedule_id]
+        message = sched.get('message', '')
+        
+        if not message:
+            await ctx.send(f"❌ Schedule `{schedule_id}` has no message content.")
+            return
+        
+        # Calculate time until scheduled send
+        next_run = sched.get('next_run')
+        time_info = ""
+        if next_run:
+            from datetime import datetime, timezone, timedelta
+            now = datetime.now(timezone.utc)
+            if next_run.tzinfo is None:
+                next_run = next_run.replace(tzinfo=timezone.utc)
+            delta = next_run - now
+            total_hours = delta.total_seconds() / 3600
+            
+            # Format scheduled time in multiple timezones (with dates)
+            utc_dt = next_run
+            est_dt = next_run - timedelta(hours=4)   # UTC-4 (EDT)
+            pdt_dt = next_run - timedelta(hours=7)   # UTC-7 (PDT)
+            pht_dt = next_run + timedelta(hours=8)   # UTC+8 (PHT)
+            
+            fmt = '%b %d %H:%M'
+            tz_info = (
+                f"📅 **UTC:** {utc_dt.strftime(fmt)} | **EST:** {est_dt.strftime(fmt)} | "
+                f"**PDT:** {pdt_dt.strftime(fmt)} | **PHT:** {pht_dt.strftime(fmt)}"
+            )
+            
+            if total_hours > 0:
+                time_info = f"⏰ **{total_hours:.1f} hours** until scheduled send\n{tz_info}\n\n"
+            else:
+                time_info = f"⏰ **Scheduled time has passed**\n{tz_info}\n\n"
+        
+        try:
+            # Send with time info prefix
+            preview_message = f"{time_info}{message}"
+            await target_channel.send(preview_message, suppress_embeds=True)
+            await ctx.send(f"✅ **Preview sent!**\n"
+                          f"• Schedule: `{schedule_id}`\n"
+                          f"• Channel: <#{target_channel.id}>\n"
+                          f"• Message length: {len(message)} chars")
+        except discord.Forbidden:
+            await ctx.send(f"❌ I don't have permission to post in <#{target_channel.id}>.")
+        except Exception as e:
+            await ctx.send(f"❌ Failed to send preview: {e}")
+    
     @commands.command(name='cancel')
     async def cancel_schedule(self, ctx: commands.Context, schedule_id: str = None) -> None:
         """Cancel a scheduled message."""
@@ -975,7 +1083,7 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
             return
         
         try:
-            await channel.send(message)
+            await channel.send(message, suppress_embeds=True)
             await ctx.send(f"✅ Message sent to #{channel.name}!")
         except Exception as e:
             await ctx.send(f"❌ Failed to send: {e}")
@@ -1034,7 +1142,7 @@ class AnnouncementsCog(commands.Cog, name="Announcements"):
             try:
                 channel = self.bot.get_channel(channel_id)
                 if channel:
-                    await channel.send(message)
+                    await channel.send(message, suppress_embeds=True)
                     sent_count += 1
                 else:
                     failed_count += 1

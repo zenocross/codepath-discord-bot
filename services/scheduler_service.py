@@ -12,7 +12,7 @@ class SchedulerService:
         """Calculate the next run time for a scheduled message - aligned to flat time boundaries.
         
         Args:
-            schedule_type: Type of schedule ('minutely', 'hourly', 'daily', 'weekly')
+            schedule_type: Type of schedule ('minutely', 'hourly', 'daily', 'weekly', 'once')
             config: Configuration dict with timing parameters
             
         Returns:
@@ -20,7 +20,16 @@ class SchedulerService:
         """
         now = datetime.now(timezone.utc)
         
-        if schedule_type == 'minutely':
+        if schedule_type == 'once':
+            # One-shot schedule at specific date/time
+            year = config.get('year', now.year)
+            month = config.get('month', now.month)
+            day = config.get('day', now.day)
+            hour = config.get('hour', 12)
+            minute = config.get('minute', 0)
+            return datetime(year, month, day, hour, minute, 0, tzinfo=timezone.utc)
+        
+        elif schedule_type == 'minutely':
             minutes = config.get('minutes', 5)
             # Round down to current flat minute, then find next aligned minute
             base = now.replace(second=0, microsecond=0)
@@ -71,7 +80,7 @@ class SchedulerService:
         return now + timedelta(hours=1)  # Default fallback
     
     @staticmethod
-    def get_interval_delta(schedule_type: str, config: Dict) -> timedelta:
+    def get_interval_delta(schedule_type: str, config: Dict) -> Optional[timedelta]:
         """Get the interval timedelta for a schedule type.
         
         Args:
@@ -79,9 +88,11 @@ class SchedulerService:
             config: Configuration dict with timing parameters
             
         Returns:
-            timedelta representing the interval
+            timedelta representing the interval, or None for one-shot schedules
         """
-        if schedule_type == 'minutely':
+        if schedule_type == 'once':
+            return None  # One-shot, no repeat
+        elif schedule_type == 'minutely':
             return timedelta(minutes=config.get('minutes', 5))
         elif schedule_type == 'hourly':
             return timedelta(hours=config.get('hours', 1))
@@ -102,7 +113,9 @@ class SchedulerService:
         Returns:
             Human-readable frequency string
         """
-        if schedule_type == 'minutely':
+        if schedule_type == 'once':
+            return f"Once on {config.get('year', 2026)}-{config.get('month', 1):02d}-{config.get('day', 1):02d} at {config.get('hour', 0):02d}:{config.get('minute', 0):02d} UTC"
+        elif schedule_type == 'minutely':
             return f"Every {config.get('minutes', 5)} minutes"
         elif schedule_type == 'hourly':
             return f"Every {config.get('hours', 1)} hours"
@@ -124,7 +137,9 @@ class SchedulerService:
         Returns:
             Short human-readable frequency string
         """
-        if schedule_type == 'minutely':
+        if schedule_type == 'once':
+            return f"Once at {config.get('month', 1):02d}/{config.get('day', 1):02d} {config.get('hour', 0):02d}:{config.get('minute', 0):02d} UTC"
+        elif schedule_type == 'minutely':
             return f"Every {config.get('minutes', 5)}m"
         elif schedule_type == 'hourly':
             return f"Every {config.get('hours', 1)}h"

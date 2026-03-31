@@ -187,7 +187,7 @@ class DiscordBot(commands.Bot):
         try:
             user = await self.fetch_user(user_id)
             if user:
-                await user.send(message)
+                await user.send(message, suppress_embeds=True)
                 return True, ""
             return False, "User not found"
         except discord.Forbidden:
@@ -253,6 +253,13 @@ class DiscordBot(commands.Bot):
                     # Track when we sent
                     sched['last_sent'] = now
                     
+                    # Handle one-shot schedules - delete after sending
+                    if sched['type'] == 'once':
+                        del self.scheduled_messages[schedule_id]
+                        self.save_scheduled_messages()
+                        print(f"[Scheduler] One-shot schedule {schedule_id} deleted after sending")
+                        continue
+                    
                     # Calculate next run time - ensure it's in the future
                     next_run_candidate = SchedulerService.calculate_next_run(
                         sched['type'], 
@@ -260,11 +267,9 @@ class DiscordBot(commands.Bot):
                     )
                     
                     # If somehow still in the past (clock drift/long operation), keep adding intervals
-                    while next_run_candidate <= now:
-                        next_run_candidate = next_run_candidate + SchedulerService.get_interval_delta(
-                            sched['type'], 
-                            sched.get('config', {})
-                        )
+                    interval = SchedulerService.get_interval_delta(sched['type'], sched.get('config', {}))
+                    while next_run_candidate <= now and interval:
+                        next_run_candidate = next_run_candidate + interval
                     
                     sched['next_run'] = next_run_candidate
                     self.save_scheduled_messages()
@@ -303,7 +308,7 @@ class DiscordBot(commands.Bot):
             try:
                 channel = self.get_channel(channel_id)
                 if channel:
-                    await channel.send(message)
+                    await channel.send(message, suppress_embeds=True)
                     sent_count += 1
             except Exception as e:
                 print(f"Error sending to channel {channel_id}: {e}")
@@ -508,7 +513,7 @@ class DiscordBot(commands.Bot):
             try:
                 channel = self.get_channel(channel_id)
                 if channel:
-                    await channel.send(message.content)
+                    await channel.send(message.content, suppress_embeds=True)
                     sent_count += 1
                 else:
                     failed_count += 1
@@ -528,7 +533,7 @@ class DiscordBot(commands.Bot):
         try:
             channel = self.get_channel(channel_id)
             if channel:
-                await channel.send(message.content)
+                await channel.send(message.content, suppress_embeds=True)
                 await message.channel.send(f"✅ Message sent to #{channel_name}!")
             else:
                 await message.channel.send(f"❌ Channel not found or bot doesn't have access.")
