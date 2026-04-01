@@ -1085,7 +1085,7 @@ class CheckinCog(commands.Cog, name="Checkin"):
         Args:
             channel: Target channel to post in
             mocked_utc: Optional mocked UTC datetime for testing week calculation
-            skip_mentions: If True, don't @everyone (useful for testing)
+            skip_mentions: If True, don't mention any role (useful for testing)
         """
         from utils.time_utils import get_program_week
         
@@ -1128,8 +1128,19 @@ class CheckinCog(commands.Cog, name="Checkin"):
                 inline=False
             )
         
-        # Send message (with or without @everyone)
-        content = None if skip_mentions else "@everyone"
+        # Send message with role mention (SP26-Students) or no mention if testing
+        content = None
+        if not skip_mentions and hasattr(channel, 'guild') and channel.guild:
+            # Look up the SP26-Students role (case-insensitive)
+            role = discord.utils.find(
+                lambda r: r.name.lower() == "sp26-students",
+                channel.guild.roles
+            )
+            if role:
+                content = role.mention
+            else:
+                # Fallback to @everyone if role not found
+                content = "@everyone"
         message = await channel.send(content=content, embed=embed)
         await message.add_reaction(CHECKIN_EMOJI)
         
@@ -1788,7 +1799,7 @@ class CheckinCog(commands.Cog, name="Checkin"):
         UTC timestamp format: YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS
         Example: !checkin post #general 2026-03-26T18:00:00
         
-        When using mocked time, @everyone is skipped to prevent pings during testing.
+        When using mocked time, role mentions are skipped to prevent pings during testing.
         Users can react to start their weekly check-in via DM.
         """
         from datetime import timezone
@@ -1835,7 +1846,7 @@ class CheckinCog(commands.Cog, name="Checkin"):
             return
         
         try:
-            # Skip @everyone when testing with mocked time
+            # Skip role mentions when testing with mocked time
             await self._post_checkin_to_channel(target_channel, mocked_utc=mocked_utc, skip_mentions=mocked_utc is not None)
             
             test_info = f" (mocked UTC: `{utc_timestamp}`)" if mocked_utc else ""
@@ -2059,7 +2070,12 @@ class CheckinCog(commands.Cog, name="Checkin"):
                 )
             else:
                 # Start the check-in process via DM
-                total_steps = 7 if checkin_week in SURVEY_WEEKS else 3
+                if checkin_week in SURVEY_WEEKS:
+                    total_steps = 7
+                elif checkin_week in EVENT_SURVEY_WEEKS:
+                    total_steps = 5
+                else:
+                    total_steps = 3
                 await user.send(
                     f"📋 **Week {checkin_week} Check-in**\n"
                     f"Let's get your weekly check-in started!"
