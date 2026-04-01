@@ -67,7 +67,18 @@ PROFICIENCY_LABELS = {
 }
 
 # Weeks where extended survey questions are shown (specific weeks only)
-SURVEY_WEEKS = {5}  # Only week 5 has the extended survey
+SURVEY_WEEKS = {5}  # Only week 5 has the NPS survey
+
+# Weeks where event/office hours questions are shown
+EVENT_SURVEY_WEEKS = {6}  # Only week 6 has the event questions
+
+# Reasons for not attending (shared between event and office hours questions)
+NOT_ATTENDING_REASONS = [
+    ("schedule_conflict", "Schedule conflict"),
+    ("didnt_know", "Didn't know about it"),
+    ("not_valuable", "Don't find it valuable right now"),
+    ("other", "Other")
+]
 
 CHECKIN_DATA_FILE = os.path.join('data', 'checkins.json')
 CHECKIN_SETTINGS_FILE = os.path.join('data', '_checkin_settings.json')
@@ -234,9 +245,11 @@ class BlockStatusSelect(ui.Select):
             await self.view.show_support_options(interaction)
         else:
             self.view.support_needed = []
-            # Continue to survey questions only for specific survey weeks
+            # Continue to survey questions based on week
             if self.view.week in SURVEY_WEEKS:
                 await self.view.show_nps_question(interaction)
+            elif self.view.week in EVENT_SURVEY_WEEKS:
+                await self.view.show_midprogram_question(interaction)
             else:
                 await self.view.finish_checkin(interaction)
 
@@ -261,9 +274,11 @@ class SupportSelect(ui.Select):
     
     async def callback(self, interaction: discord.Interaction):
         self.view.support_needed = self.values
-        # Continue to survey questions only for specific survey weeks
+        # Continue to survey questions based on week
         if self.view.week in SURVEY_WEEKS:
             await self.view.show_nps_question(interaction)
+        elif self.view.week in EVENT_SURVEY_WEEKS:
+            await self.view.show_midprogram_question(interaction)
         else:
             await self.view.finish_checkin(interaction)
 
@@ -401,6 +416,116 @@ class AIConfidenceSelect(ui.Select):
         await self.view.finish_checkin(interaction)
 
 
+# ==================== Week 6 Event Survey Components ====================
+
+class MidprogramEventSelect(ui.Select):
+    """Select menu for midprogram event attendance."""
+    
+    def __init__(self):
+        options = [
+            discord.SelectOption(
+                label="Yes, I'm attending",
+                value="yes",
+                emoji="✅"
+            ),
+            discord.SelectOption(
+                label="No, I can't attend",
+                value="no",
+                emoji="❌"
+            )
+        ]
+        super().__init__(
+            placeholder="Select your answer...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        self.view.attending_midprogram = self.values[0] == "yes"
+        if self.view.attending_midprogram:
+            # Skip reason, go to office hours question
+            self.view.midprogram_reason = None
+            await self.view.show_office_hours_question(interaction)
+        else:
+            # Show reason question
+            await self.view.show_midprogram_reason(interaction)
+
+
+class MidprogramReasonSelect(ui.Select):
+    """Select menu for reason not attending midprogram event."""
+    
+    def __init__(self):
+        options = [
+            discord.SelectOption(label=label, value=value)
+            for value, label in NOT_ATTENDING_REASONS
+        ]
+        super().__init__(
+            placeholder="Select the main reason...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        self.view.midprogram_reason = self.values[0]
+        await self.view.show_office_hours_question(interaction)
+
+
+class OfficeHoursSelect(ui.Select):
+    """Select menu for office hours attendance."""
+    
+    def __init__(self):
+        options = [
+            discord.SelectOption(
+                label="Yes, I have attended",
+                value="yes",
+                emoji="✅"
+            ),
+            discord.SelectOption(
+                label="No, I haven't attended",
+                value="no",
+                emoji="❌"
+            )
+        ]
+        super().__init__(
+            placeholder="Select your answer...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        self.view.attended_office_hours = self.values[0] == "yes"
+        if self.view.attended_office_hours:
+            # Skip reason, finish checkin
+            self.view.office_hours_reason = None
+            await self.view.finish_checkin(interaction)
+        else:
+            # Show reason question
+            await self.view.show_office_hours_reason(interaction)
+
+
+class OfficeHoursReasonSelect(ui.Select):
+    """Select menu for reason not attending office hours."""
+    
+    def __init__(self):
+        options = [
+            discord.SelectOption(label=label, value=value)
+            for value, label in NOT_ATTENDING_REASONS
+        ]
+        super().__init__(
+            placeholder="Select the main reason...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        self.view.office_hours_reason = self.values[0]
+        await self.view.finish_checkin(interaction)
+
+
 class CheckinView(ui.View):
     """Main view for the check-in questionnaire."""
     
@@ -418,25 +543,40 @@ class CheckinView(ui.View):
         self.blocked: Optional[bool] = None
         self.support_needed: List[str] = []
         
-        # Response data - Survey questions (only for week 5+)
+        # Response data - Survey questions (only for week 5)
         self.nps_score: Optional[int] = None
         self.nps_reason: str = "N/A"
         self.opensource_confidence: Optional[int] = None
         self.gitlab_proficiency: Optional[int] = None
         self.ai_confidence: Optional[int] = None
         
+        # Response data - Event survey questions (only for week 6)
+        self.attending_midprogram: Optional[bool] = None
+        self.midprogram_reason: Optional[str] = None
+        self.attended_office_hours: Optional[bool] = None
+        self.office_hours_reason: Optional[str] = None
+        
         # Add initial phase select
         self.add_item(PhaseSelect())
     
     @property
     def has_survey(self) -> bool:
-        """Check if this week includes the extended survey questions."""
+        """Check if this week includes the NPS survey questions (week 5)."""
         return self.week in SURVEY_WEEKS
     
     @property
+    def has_event_survey(self) -> bool:
+        """Check if this week includes the event survey questions (week 6)."""
+        return self.week in EVENT_SURVEY_WEEKS
+    
+    @property
     def total_steps(self) -> int:
-        """Get total number of steps (3 for weeks 1-4, 7 for week 5+)."""
-        return 7 if self.has_survey else 3
+        """Get total number of steps based on week."""
+        if self.has_survey:
+            return 7  # Week 5: 3 core + 4 NPS survey
+        elif self.has_event_survey:
+            return 5  # Week 6: 3 core + 2 event questions (reasons are sub-questions)
+        return 3  # Other weeks: 3 core questions
     
     async def _safe_edit_message(self, interaction: discord.Interaction, embed: discord.Embed, view):
         """Safely edit message with fallback for expired interactions."""
@@ -575,6 +715,80 @@ class CheckinView(ui.View):
         
         await self._safe_edit_message(interaction, embed, self)
     
+    # ==================== Week 6 Event Survey Methods ====================
+    
+    async def show_midprogram_question(self, interaction: discord.Interaction):
+        """Show the midprogram event attendance question (only for week 6)."""
+        self.clear_items()
+        self.add_item(MidprogramEventSelect())
+        
+        blocked_str = "🚧 Yes" if self.blocked else "✅ No"
+        embed = discord.Embed(
+            title=f"📋 Weekly Check-in (Step 4/{self.total_steps})",
+            description=(
+                f"**Phase:** {self.phase_label}\n"
+                f"**Blocked:** {blocked_str}\n\n"
+                "**Are you attending the midprogram event on Thursday?**"
+            ),
+            color=discord.Color.blue()
+        )
+        
+        await self._safe_edit_message(interaction, embed, self)
+    
+    async def show_midprogram_reason(self, interaction: discord.Interaction):
+        """Show the reason for not attending midprogram event."""
+        self.clear_items()
+        self.add_item(MidprogramReasonSelect())
+        
+        embed = discord.Embed(
+            title=f"📋 Weekly Check-in (Step 4/{self.total_steps} - follow-up)",
+            description=(
+                "**Attending midprogram event:** ❌ No\n\n"
+                "**Why can't you come?**"
+            ),
+            color=discord.Color.orange()
+        )
+        
+        await self._safe_edit_message(interaction, embed, self)
+    
+    async def show_office_hours_question(self, interaction: discord.Interaction):
+        """Show the office hours attendance question (only for week 6)."""
+        self.clear_items()
+        self.add_item(OfficeHoursSelect())
+        
+        midprogram_str = "✅ Yes" if self.attending_midprogram else "❌ No"
+        reason_str = ""
+        if not self.attending_midprogram and self.midprogram_reason:
+            reason_label = next((label for val, label in NOT_ATTENDING_REASONS if val == self.midprogram_reason), self.midprogram_reason)
+            reason_str = f" ({reason_label})"
+        
+        embed = discord.Embed(
+            title=f"📋 Weekly Check-in (Step 5/{self.total_steps})",
+            description=(
+                f"**Attending midprogram event:** {midprogram_str}{reason_str}\n\n"
+                "**Have you attended an office hours session with GitLab mentors?**"
+            ),
+            color=discord.Color.blue()
+        )
+        
+        await self._safe_edit_message(interaction, embed, self)
+    
+    async def show_office_hours_reason(self, interaction: discord.Interaction):
+        """Show the reason for not attending office hours."""
+        self.clear_items()
+        self.add_item(OfficeHoursReasonSelect())
+        
+        embed = discord.Embed(
+            title=f"📋 Weekly Check-in (Step 5/{self.total_steps} - follow-up)",
+            description=(
+                "**Attended office hours:** ❌ No\n\n"
+                "**Why not?**"
+            ),
+            color=discord.Color.orange()
+        )
+        
+        await self._safe_edit_message(interaction, embed, self)
+    
     async def finish_checkin(self, interaction: discord.Interaction):
         """Complete the check-in and save data."""
         # Build support labels
@@ -608,12 +822,17 @@ class CheckinView(ui.View):
             'support_labels': support_labels,
             'full_name': full_name,
             'discord_name': discord_name,
-            # Survey questions
+            # NPS Survey questions (week 5)
             'nps_score': self.nps_score,
             'nps_reason': self.nps_reason,
             'opensource_confidence': self.opensource_confidence,
             'gitlab_proficiency': self.gitlab_proficiency,
-            'ai_confidence': self.ai_confidence
+            'ai_confidence': self.ai_confidence,
+            # Event survey questions (week 6)
+            'attending_midprogram': self.attending_midprogram,
+            'midprogram_reason': self.midprogram_reason,
+            'attended_office_hours': self.attended_office_hours,
+            'office_hours_reason': self.office_hours_reason
         }
         
         save_user_checkin(self.user_id, self.week, checkin_data)
@@ -649,7 +868,7 @@ class CheckinView(ui.View):
         if points_awarded > 0:
             points_msg = f"\n\n🏆 **+{points_awarded} community points** awarded!"
         
-        # Build survey summary (only for week 5+)
+        # Build survey summary based on week
         survey_summary = ""
         if self.has_survey:
             os_conf_label = CONFIDENCE_LABELS.get(str(self.opensource_confidence), "N/A")
@@ -662,6 +881,22 @@ class CheckinView(ui.View):
                 f"• Open Source Confidence: {self.opensource_confidence}/5 ({os_conf_label})\n"
                 f"• GitLab Proficiency: {self.gitlab_proficiency}/5 ({gl_prof_label})\n"
                 f"• AI Tools Confidence: {self.ai_confidence}/5 ({ai_conf_label})"
+            )
+        elif self.has_event_survey:
+            midprogram_str = "✅ Yes" if self.attending_midprogram else "❌ No"
+            if not self.attending_midprogram and self.midprogram_reason:
+                reason_label = next((label for val, label in NOT_ATTENDING_REASONS if val == self.midprogram_reason), self.midprogram_reason)
+                midprogram_str += f" ({reason_label})"
+            
+            office_hours_str = "✅ Yes" if self.attended_office_hours else "❌ No"
+            if not self.attended_office_hours and self.office_hours_reason:
+                reason_label = next((label for val, label in NOT_ATTENDING_REASONS if val == self.office_hours_reason), self.office_hours_reason)
+                office_hours_str += f" ({reason_label})"
+            
+            survey_summary = (
+                f"\n\n**📊 Event Survey:**\n"
+                f"• Attending midprogram event: {midprogram_str}\n"
+                f"• Attended office hours: {office_hours_str}"
             )
         
         if self.blocked:
@@ -791,7 +1026,7 @@ class CheckinView(ui.View):
         embed.add_field(name="Phase", value=self.phase_label, inline=True)
         embed.add_field(name="Status", value=summary, inline=False)
         
-        # Add survey responses for week 5+
+        # Add survey responses for week 5 (NPS survey)
         if self.has_survey and self.nps_score is not None:
             survey_text = (
                 f"**Recommendation Score (0-10):** {self.nps_score}\n"
@@ -801,6 +1036,23 @@ class CheckinView(ui.View):
                 f"**AI Confidence (1-5):** {self.ai_confidence}"
             )
             embed.add_field(name="📊 Survey Responses", value=survey_text, inline=False)
+        # Add event survey responses for week 6
+        elif self.has_event_survey and self.attending_midprogram is not None:
+            midprogram_str = "Yes" if self.attending_midprogram else "No"
+            if not self.attending_midprogram and self.midprogram_reason:
+                reason_label = next((label for val, label in NOT_ATTENDING_REASONS if val == self.midprogram_reason), self.midprogram_reason)
+                midprogram_str += f" ({reason_label})"
+            
+            office_hours_str = "Yes" if self.attended_office_hours else "No"
+            if not self.attended_office_hours and self.office_hours_reason:
+                reason_label = next((label for val, label in NOT_ATTENDING_REASONS if val == self.office_hours_reason), self.office_hours_reason)
+                office_hours_str += f" ({reason_label})"
+            
+            survey_text = (
+                f"**Attending Midprogram Event:** {midprogram_str}\n"
+                f"**Attended Office Hours:** {office_hours_str}"
+            )
+            embed.add_field(name="📅 Event Survey", value=survey_text, inline=False)
         
         embed.set_footer(text=f"User ID: {self.user_id}")
         
@@ -1009,6 +1261,22 @@ class CheckinCog(commands.Cog, name="Checkin"):
                 f"• Open Source Confidence: {os_conf}/5 ({os_conf_label})\n"
                 f"• GitLab Proficiency: {gl_prof}/5 ({gl_prof_label})\n"
                 f"• AI Tools Confidence: {ai_conf}/5 ({ai_conf_label})"
+            )
+        elif checkin.get('attending_midprogram') is not None:
+            midprogram_str = "✅ Yes" if checkin.get('attending_midprogram') else "❌ No"
+            if not checkin.get('attending_midprogram') and checkin.get('midprogram_reason'):
+                reason_label = next((label for val, label in NOT_ATTENDING_REASONS if val == checkin.get('midprogram_reason')), checkin.get('midprogram_reason'))
+                midprogram_str += f" ({reason_label})"
+            
+            office_hours_str = "✅ Yes" if checkin.get('attended_office_hours') else "❌ No"
+            if not checkin.get('attended_office_hours') and checkin.get('office_hours_reason'):
+                reason_label = next((label for val, label in NOT_ATTENDING_REASONS if val == checkin.get('office_hours_reason')), checkin.get('office_hours_reason'))
+                office_hours_str += f" ({reason_label})"
+            
+            survey_summary = (
+                f"\n\n**📅 Event Survey:**\n"
+                f"• Attending midprogram event: {midprogram_str}\n"
+                f"• Attended office hours: {office_hours_str}"
             )
         
         # Build status display
@@ -1229,11 +1497,13 @@ class CheckinCog(commands.Cog, name="Checkin"):
         output = io.StringIO()
         writer = csv.writer(output)
         
-        # Header (including new survey columns)
+        # Header (including all survey columns)
         writer.writerow([
             'User ID', 'Week', 'Phase', 'Phase Label', 'Blocked', 'Support Needed',
             'NPS Score', 'NPS Reason', 'Open Source Confidence', 'GitLab Proficiency', 
-            'AI Tools Confidence', 'Submitted At'
+            'AI Tools Confidence',
+            'Attending Midprogram', 'Midprogram Reason', 'Attended Office Hours', 'Office Hours Reason',
+            'Submitted At'
         ])
         
         # Data rows
@@ -1244,6 +1514,13 @@ class CheckinCog(commands.Cog, name="Checkin"):
                 
                 week_num = week_key.replace('week_', '')
                 support_str = "; ".join(checkin.get('support_labels', []))
+                
+                # Format event survey fields
+                attending_midprogram = checkin.get('attending_midprogram')
+                attending_midprogram_str = '' if attending_midprogram is None else ('Yes' if attending_midprogram else 'No')
+                
+                attended_office_hours = checkin.get('attended_office_hours')
+                attended_office_hours_str = '' if attended_office_hours is None else ('Yes' if attended_office_hours else 'No')
                 
                 writer.writerow([
                     user_id,
@@ -1257,6 +1534,10 @@ class CheckinCog(commands.Cog, name="Checkin"):
                     checkin.get('opensource_confidence', ''),
                     checkin.get('gitlab_proficiency', ''),
                     checkin.get('ai_confidence', ''),
+                    attending_midprogram_str,
+                    checkin.get('midprogram_reason', ''),
+                    attended_office_hours_str,
+                    checkin.get('office_hours_reason', ''),
                     checkin.get('submitted_at', '')
                 ])
         
@@ -1614,11 +1895,17 @@ class CheckinCog(commands.Cog, name="Checkin"):
             )
             embed.add_field(name="Status", value="✅ Enabled", inline=True)
             embed.add_field(name="Channel", value=f"<#{channel_id}>", inline=True)
-            embed.add_field(name="Day & Time", value=f"{day_name} at {time_str} UTC", inline=True)
+            embed.add_field(name="Schedule", value=f"Every {day_name} at {time_str} UTC", inline=True)
             
             if next_run:
+                from datetime import datetime
+                try:
+                    next_dt = datetime.fromisoformat(next_run.replace('Z', '+00:00'))
+                    next_date_str = next_dt.strftime('%b %d, %Y at %H:%M UTC')
+                except:
+                    next_date_str = next_run
                 time_until = format_time_until(next_run)
-                embed.add_field(name="Next Post", value=time_until, inline=True)
+                embed.add_field(name="Next Post", value=f"{next_date_str}\n({time_until})", inline=True)
             
             await ctx.send(embed=embed)
             return
