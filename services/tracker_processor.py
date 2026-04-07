@@ -2729,6 +2729,43 @@ class TrackerDataProcessor(FileProcessor):
             print(f"[TrackerProcessor] Error loading issue interventions: {e}")
             return {}
     
+    def _load_checkin_weeks_lookup(self) -> Dict[str, set]:
+        """Load checkin data and build lookup of discord_username -> set of weeks with check-ins.
+        
+        Returns:
+            Dict mapping discord_username (lowercase) to set of week numbers they checked in
+        """
+        checkin_file = os.path.join('data', 'checkins.json')
+        
+        if not os.path.exists(checkin_file):
+            return {}
+        
+        try:
+            with open(checkin_file, 'r') as f:
+                data = json.load(f)
+        except Exception as e:
+            print(f"[TrackerProcessor] Error loading checkins: {e}")
+            return {}
+        
+        # Build lookup: discord_username.lower() -> set of weeks
+        lookup: Dict[str, set] = {}
+        
+        for user_id, weeks_data in data.items():
+            for week_key, checkin in weeks_data.items():
+                if not week_key.startswith('week_'):
+                    continue
+                
+                discord_name = checkin.get('discord_name', '')
+                if discord_name:
+                    key = discord_name.lower()
+                    week_num = int(week_key.replace('week_', ''))
+                    
+                    if key not in lookup:
+                        lookup[key] = set()
+                    lookup[key].add(week_num)
+        
+        return lookup
+    
     def _calculate_grade_status(self, students: List[StudentRecord], 
                                 start_date: Optional[datetime] = None,
                                 target_date: Optional[datetime] = None,
@@ -2749,6 +2786,8 @@ class TrackerDataProcessor(FileProcessor):
         if issue_interventions is None:
             issue_interventions = self._load_issue_interventions()
         
+        # Load checkin data to cross-reference (students with check-ins for a week are not missing Wednesday)
+        checkin_weeks_lookup = self._load_checkin_weeks_lookup()
         
         # First pass: Build lookup of each student's maximum submission count
         # Key: member_id -> max_submission_num
@@ -2891,10 +2930,25 @@ class TrackerDataProcessor(FileProcessor):
                 # Add missing Wednesday interventions (starting from latest expected week)
                 # If expected 2 Wed and have 1, missing is Week 2 Wed
                 # Append asterisk (*) to the latest (most recent) missing one
+                # BUT skip if student has a check-in for that week (check-in counts as Wednesday participation)
+                student_discord = (student.discord_username or '').lower()
+                student_checkin_weeks = checkin_weeks_lookup.get(student_discord, set())
+                
+                actual_missing_wed_weeks = []
                 for i in range(missing_wed_count):
                     missing_week = expected_wed - i
-                    suffix = "*" if i == 0 else ""  # Latest gets asterisk
+                    # Skip if student has a check-in for this week
+                    if missing_week in student_checkin_weeks:
+                        continue
+                    actual_missing_wed_weeks.append(missing_week)
+                
+                # Add interventions for actually missing weeks (first one gets asterisk)
+                for idx, missing_week in enumerate(actual_missing_wed_weeks):
+                    suffix = "*" if idx == 0 else ""  # Latest gets asterisk
                     missing_interventions.append(f"MISSING_WEDNESDAY_WK_{missing_week}{suffix}")
+                
+                # Update missing_wed_count to reflect actual missing (after checkin filter)
+                missing_wed_count = len(actual_missing_wed_weeks)
                 
                 # Add missing Sunday interventions
                 for i in range(missing_sun_count):
@@ -2911,7 +2965,7 @@ class TrackerDataProcessor(FileProcessor):
                 elif missing_wed_count > 0:
                     # Mark for CSV export but keep as ON TRACK
                     student._missing_wed_only = True
-                    student._missing_wed_weeks = [expected_wed - i for i in range(missing_wed_count)]
+                    student._missing_wed_weeks = actual_missing_wed_weeks
                 
                 # Join all missing interventions (still track for reporting)
                 if missing_interventions:
