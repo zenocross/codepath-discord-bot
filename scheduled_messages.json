@@ -12,22 +12,5 @@
     "active": true,
     "created_by": 432551600100474881,
     "last_sent": "2026-04-01T17:00:02.162590+00:00"
-  },
-  "3ae8cec8": {
-    "group": "announcement_channel",
-    "type": "once",
-    "config": {
-      "year": 2026,
-      "month": 4,
-      "day": 2,
-      "hour": 14,
-      "minute": 0
-    },
-    "message": "**\ud83d\udea8 Starting in 1 hour: Mid-Program Event with GitLab Engineers!**\n\ud83d\udcc5 **Today | 11am - 12pm EST / 8 - 9am PST**\n\ud83d\udd17 [Join on Zoom](https://us06web.zoom.us/j/85747208685?jst=2)\n\nWe're kicking off a panel + Q&A with Senior GitLab Engineers in just one hour! We'll be talking about AI in engineering, open source as a career lever, and their journeys to and at GitLab.\n\nThis is a great chance to hear directly from engineers working at GitLab and get career advice, inspiration, or just learn more about how to make the most of your time in the program and beyond.\n\n**[Last chance to submit your questions!](https://docs.google.com/forms/d/e/1FAIpQLSdTeIWqrcFP1oAfveaF2JSbbV7RMajg6C1Rz7uzkkV9vpP7MQ/viewform)**\n\nCan't make it? No worries - the event will be recorded and shared!\n\nSee you in there! \ud83d\udcaa",
-    "next_run": "2026-04-02T14:00:00+00:00",
-    "active": true,
-    "created_by": 432551600100474881,
-    "target_type": "channel",
-    "last_sent": null
   }
 }
