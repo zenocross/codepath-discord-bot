@@ -24,6 +24,7 @@ Commands:
     !tracker no_issues validate - Crawl READMEs to find/validate issue URLs
     !tracker search_issues_title <term> - Search issue titles (use NOT:<term> to exclude)
     !tracker search_dl_issues_title <term> - Search + download CSV (use NOT:<term> to exclude)
+    !tracker mr_report [week_start] [week_end] - Report merged MRs by week range
     !tracker help             - Show help (handled by bot/events.py)
 """
 
@@ -4123,6 +4124,10 @@ class TrackerCog(commands.Cog, name="Tracker"):
                 found_alternate_count = 0
                 total_to_verify = len(mrs_to_verify)
                 
+                # Track ALL merged MRs across all students (for total count)
+                all_merged_mrs_count = 0
+                all_merged_mrs_urls = []  # Track URLs for debugging
+                
                 for idx, (mid, mr_url, name, source, all_mrs) in enumerate(mrs_to_verify, 1):
                     if idx % 20 == 0:
                         await ctx.send(f"⏳ Progress: {idx}/{total_to_verify} MRs checked...")
@@ -4170,8 +4175,15 @@ class TrackerCog(commands.Cog, name="Tracker"):
                                 # Add the primary MR to the list
                                 all_mrs_details.append({
                                     'url': mr_url,
-                                    'author': actual_author
+                                    'author': actual_author,
+                                    'is_merged': is_merged,
+                                    'mr_state': mr_state
                                 })
+                                
+                                # Count primary MR if merged (even if author doesn't match)
+                                if is_merged:
+                                    all_merged_mrs_count += 1
+                                    all_merged_mrs_urls.append(mr_url)
                                 
                                 if all_mrs:
                                     # Scan backwards (latest first), skip the one we already checked
@@ -4203,6 +4215,12 @@ class TrackerCog(commands.Cog, name="Tracker"):
                                                     'mr_state': alt_state,
                                                     'is_merged': alt_merged
                                                 })
+                                                
+                                                # Count this MR if merged (for total count)
+                                                if alt_merged:
+                                                    all_merged_mrs_count += 1
+                                                    all_merged_mrs_urls.append(alt_mr_url)
+                                                
                                                 if alt_author == expected_gitlab:
                                                     found_student_mr = {
                                                         'url': alt_mr_url,
@@ -4269,17 +4287,101 @@ class TrackerCog(commands.Cog, name="Tracker"):
                                     mrs_found[mid].update(validation_info)
                                 elif source == 'readme_field' and mid in mr_url_in_readme_link:
                                     mr_url_in_readme_link[mid].update(validation_info)
+                                
+                                # Count this MR if merged
+                                if is_merged:
+                                    all_merged_mrs_count += 1
+                                    all_merged_mrs_urls.append(mr_url)
+                                
+                                # Also scan all_mrs_found to count ALL merged MRs for this student
+                                if all_mrs:
+                                    checked_urls = {mr_url.lower().rstrip('/')}
+                                    student_merged_count = 1 if is_merged else 0
+                                    student_all_mrs_with_status = [{
+                                        'url': mr_url,
+                                        'is_merged': is_merged,
+                                        'mr_state': mr_state
+                                    }]
+                                    
+                                    for alt_mr_url in all_mrs:
+                                        alt_normalized = alt_mr_url.lower().rstrip('/')
+                                        if alt_normalized in checked_urls:
+                                            continue
+                                        checked_urls.add(alt_normalized)
+                                        
+                                        alt_match = MR_EXTRACT_PATTERN.search(alt_mr_url)
+                                        if not alt_match:
+                                            continue
+                                        
+                                        alt_repo = alt_match.group(1)
+                                        alt_iid = alt_match.group(2)
+                                        
+                                        await asyncio.sleep(0.3)
+                                        
+                                        try:
+                                            alt_mr_data = gitlab_service.verify_merge_request(alt_repo, alt_iid)
+                                            if alt_mr_data.get('exists'):
+                                                alt_state = alt_mr_data.get('state', '')
+                                                alt_merged = alt_state == 'merged'
+                                                student_all_mrs_with_status.append({
+                                                    'url': alt_mr_url,
+                                                    'is_merged': alt_merged,
+                                                    'mr_state': alt_state
+                                                })
+                                                if alt_merged:
+                                                    all_merged_mrs_count += 1
+                                                    all_merged_mrs_urls.append(alt_mr_url)
+                                                    student_merged_count += 1
+                                        except Exception:
+                                            continue
+                                    
+                                    # Store all MRs with status for this student
+                                    if source == 'readme' and mid in mrs_found:
+                                        mrs_found[mid]['all_mrs_with_status'] = student_all_mrs_with_status
+                                        mrs_found[mid]['merged_mrs_count'] = student_merged_count
                     except Exception as e:
                         print(f"[MR Validate] Error verifying MR for {name}: {e}")
                 
                 print(f"[MR Validate] Verified {verified_count} MRs, found {mismatch_count} author mismatches, {found_alternate_count} corrected via README scan")
+                print(f"[MR Validate] Total merged MRs found (including multiples): {all_merged_mrs_count}")
             else:
                 found_alternate_count = 0
+                all_merged_mrs_count = 0
+                all_merged_mrs_urls = []
+            
+            # Calculate summary statistics
+            # Count students with merged MR (unique students)
+            students_with_merged_count = 0
+            total_mrs_found = 0
+            
+            # Count from students_with_valid_mr
+            for mid, info in students_with_valid_mr.items():
+                if info.get('is_merged'):
+                    students_with_merged_count += 1
+            
+            # Count from mrs_found
+            for mid, info in mrs_found.items():
+                if mid not in students_with_valid_mr:  # Avoid double-counting students
+                    if info.get('is_merged'):
+                        students_with_merged_count += 1
+                # Count all MRs found in READMEs
+                total_mrs_found += len(info.get('all_mrs_found', []))
+            
+            # Count from mr_url_in_readme_link
+            for mid, info in mr_url_in_readme_link.items():
+                if mid not in students_with_valid_mr and mid not in mrs_found:
+                    if info.get('is_merged'):
+                        students_with_merged_count += 1
             
             # Save results to JSON
             from datetime import datetime
             results = {
                 'validated_at': datetime.now().isoformat(),
+                'summary_stats': {
+                    'students_with_merged_mr': students_with_merged_count,
+                    'total_merged_mrs': all_merged_mrs_count,  # Includes multiples per student
+                    'total_mrs_found_in_readmes': total_mrs_found,
+                },
                 'students_with_valid_mr': students_with_valid_mr,
                 'students_with_invalid_mr': students_with_invalid_mr,
                 'readme_url_in_mr_field': readme_url_in_mr_field,
@@ -4841,6 +4943,247 @@ class TrackerCog(commands.Cog, name="Tracker"):
             f"• With MRs: {has_mr_count}\n"
             f"• Without MRs: {no_mr_count}\n"
             f"• Needs Attention: {needs_attention_count}\n"
+        )
+        
+        await ctx.send(summary, file=discord.File(io.BytesIO(csv_content), filename=filename))
+    
+    @commands.command(name='mr_report')
+    async def mr_report(self, ctx: commands.Context, week_start: Optional[str] = None, week_end: Optional[str] = None):
+        """Generate a report of merged MRs within a week range.
+        
+        Usage:
+            !tracker mr_report              - All merged MRs (entire program)
+            !tracker mr_report 3            - Merged MRs from week 3 only
+            !tracker mr_report 3 5          - Merged MRs from week 3 to week 5
+        
+        Reads from validated_mrs.json and filters by merged_at date.
+        """
+        import json
+        import os
+        import csv
+        from io import StringIO
+        from datetime import datetime, timezone
+        
+        # Check for start date
+        start_date = self.storage.get_start_date()
+        if not start_date:
+            await ctx.send(
+                "❌ **No start date set.**\n\n"
+                "Set the program start date first using `!tracker start_date MM/DD/YYYY`."
+            )
+            return
+        
+        # Parse week range
+        week_start_num = None
+        week_end_num = None
+        
+        if week_start is not None:
+            try:
+                week_start_num = int(week_start)
+                if week_start_num < 1:
+                    await ctx.send("❌ Week number must be at least 1.")
+                    return
+            except ValueError:
+                await ctx.send(f"❌ Invalid week number: `{week_start}`. Use a number like 3 or 5.")
+                return
+        
+        if week_end is not None:
+            try:
+                week_end_num = int(week_end)
+                if week_end_num < 1:
+                    await ctx.send("❌ Week number must be at least 1.")
+                    return
+            except ValueError:
+                await ctx.send(f"❌ Invalid week number: `{week_end}`. Use a number like 3 or 5.")
+                return
+        
+        # If only one week specified, make it a single-week range
+        if week_start_num is not None and week_end_num is None:
+            week_end_num = week_start_num
+        
+        # Validate range
+        if week_start_num is not None and week_end_num is not None:
+            if week_end_num < week_start_num:
+                await ctx.send(f"❌ End week ({week_end_num}) must be >= start week ({week_start_num}).")
+                return
+        
+        # Check for validated MRs file
+        results_file = os.path.join('data', 'uploads', '_validated_mrs.json')
+        if not os.path.exists(results_file):
+            await ctx.send(
+                "❌ **No validated MR data found.**\n\n"
+                "Run `!tracker no_mr validate` first to generate the data."
+            )
+            return
+        
+        # Load validated MRs
+        try:
+            with open(results_file, 'r') as f:
+                data = json.load(f)
+        except Exception as e:
+            await ctx.send(f"❌ **Error reading validated MRs file:** {str(e)}")
+            return
+        
+        validated_at = data.get('validated_at', 'Unknown')
+        
+        # Build week range description
+        if week_start_num is None:
+            range_desc = "all weeks"
+        elif week_start_num == week_end_num:
+            range_desc = f"week {week_start_num}"
+        else:
+            range_desc = f"weeks {week_start_num}-{week_end_num}"
+        
+        await ctx.send(f"📊 **Generating MR report for {range_desc}...**\nData from: `{validated_at}`")
+        
+        # Helper function to calculate week from merged_at date
+        def get_week_from_date(date_str: str) -> Optional[int]:
+            if not date_str:
+                return None
+            try:
+                # Parse ISO format date
+                merged_date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                return get_program_week(start_date, merged_date)
+            except Exception:
+                return None
+        
+        # Collect all merged MRs from all sections
+        merged_mrs = []
+        
+        def add_mr_if_merged(mid: str, info: dict, source: str):
+            if not info.get('is_merged'):
+                return
+            
+            merged_at = info.get('merged_at', '')
+            week = get_week_from_date(merged_at)
+            
+            # Filter by week range if specified
+            if week_start_num is not None:
+                if week is None:
+                    return  # Skip if we can't determine the week
+                if week < week_start_num or week > week_end_num:
+                    return  # Outside range
+            
+            merged_mrs.append({
+                'member_id': mid,
+                'name': info.get('name', ''),
+                'mr_url': info.get('mr_url', ''),
+                'author': info.get('actual_author', info.get('expected_author', '')),
+                'merged_at': merged_at,
+                'week': week,
+                'source': source,
+                'author_match': info.get('author_match', None)
+            })
+        
+        # Process students_with_valid_mr
+        for mid, info in data.get('students_with_valid_mr', {}).items():
+            add_mr_if_merged(mid, info, 'typeform')
+        
+        # Process mrs_found
+        for mid, info in data.get('mrs_found', {}).items():
+            add_mr_if_merged(mid, info, 'readme')
+            
+            # Also check all_mrs_with_status for additional merged MRs
+            for mr_detail in info.get('all_mrs_with_status', []):
+                if mr_detail.get('is_merged') and mr_detail.get('url') != info.get('mr_url'):
+                    merged_at = mr_detail.get('merged_at', '')
+                    week = get_week_from_date(merged_at) if merged_at else info.get('week')
+                    
+                    # Use the main record's merged_at if this one doesn't have it
+                    if not merged_at and info.get('is_merged'):
+                        merged_at = info.get('merged_at', '')
+                        week = get_week_from_date(merged_at)
+                    
+                    # Filter by week range if specified
+                    if week_start_num is not None:
+                        if week is None:
+                            continue
+                        if week < week_start_num or week > week_end_num:
+                            continue
+                    
+                    merged_mrs.append({
+                        'member_id': mid,
+                        'name': info.get('name', ''),
+                        'mr_url': mr_detail.get('url', ''),
+                        'author': info.get('actual_author', info.get('expected_author', '')),
+                        'merged_at': merged_at,
+                        'week': week,
+                        'source': 'readme (additional)',
+                        'author_match': info.get('author_match', None)
+                    })
+        
+        # Process mr_url_in_readme_link
+        for mid, info in data.get('mr_url_in_readme_link', {}).items():
+            add_mr_if_merged(mid, info, 'readme_field')
+        
+        # Sort by week (None last), then by name
+        merged_mrs.sort(key=lambda x: (x['week'] if x['week'] is not None else 999, x['name'].lower()))
+        
+        if not merged_mrs:
+            await ctx.send(f"📋 **No merged MRs found for {range_desc}.**")
+            return
+        
+        # Count unique students
+        unique_students = set(mr['member_id'] for mr in merged_mrs)
+        
+        # Build CSV
+        output = StringIO()
+        writer = csv.writer(output)
+        
+        # Header row
+        writer.writerow(['Week', 'Name', 'Member ID', 'MR URL', 'Author', 'Merged At', 'Author Match', 'Source'])
+        
+        # Data rows
+        for mr in merged_mrs:
+            author_match_str = 'Yes' if mr['author_match'] is True else ('No' if mr['author_match'] is False else 'Unknown')
+            writer.writerow([
+                mr['week'] if mr['week'] is not None else 'Unknown',
+                mr['name'],
+                mr['member_id'],
+                mr['mr_url'],
+                mr['author'],
+                mr['merged_at'],
+                author_match_str,
+                mr['source']
+            ])
+        
+        # Add summary footer
+        writer.writerow([])
+        writer.writerow(['--- SUMMARY ---'])
+        writer.writerow([f'Total Merged MRs: {len(merged_mrs)}'])
+        writer.writerow([f'Unique Students with Merged MRs: {len(unique_students)}'])
+        writer.writerow([f'Week Range: {range_desc}'])
+        writer.writerow([f'Program Start Date: {start_date.strftime("%Y-%m-%d")}'])
+        writer.writerow([f'Data validated at: {validated_at}'])
+        
+        # Create file for Discord
+        csv_content = output.getvalue().encode('utf-8')
+        if week_start_num is None:
+            filename = f"mr_report_all_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        elif week_start_num == week_end_num:
+            filename = f"mr_report_week{week_start_num}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        else:
+            filename = f"mr_report_weeks{week_start_num}-{week_end_num}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        
+        # Build week breakdown
+        week_counts = {}
+        for mr in merged_mrs:
+            w = mr['week'] if mr['week'] is not None else 'Unknown'
+            week_counts[w] = week_counts.get(w, 0) + 1
+        
+        week_breakdown = []
+        for w in sorted([k for k in week_counts.keys() if k != 'Unknown']):
+            week_breakdown.append(f"• Week {w}: {week_counts[w]} MRs")
+        if 'Unknown' in week_counts:
+            week_breakdown.append(f"• Unknown week: {week_counts['Unknown']} MRs")
+        
+        # Send summary and file
+        summary = (
+            f"✅ **MR Report Generated**\n\n"
+            f"📊 **Summary ({range_desc}):**\n"
+            f"• Total Merged MRs: **{len(merged_mrs)}**\n"
+            f"• Unique Students: **{len(unique_students)}**\n\n"
+            f"📅 **By Week:**\n" + '\n'.join(week_breakdown)
         )
         
         await ctx.send(summary, file=discord.File(io.BytesIO(csv_content), filename=filename))

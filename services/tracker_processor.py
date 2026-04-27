@@ -4030,10 +4030,13 @@ class TrackerDataProcessor(FileProcessor):
                                               "data", "uploads", "_supplemented_mrs.json")
         validated_mrs_data: Dict[str, dict] = {}
         mr_author_mismatch_data: Dict[str, dict] = {}
+        summary_stats: Dict[str, Any] = {}
         try:
             if os.path.exists(validated_mrs_path):
                 with open(validated_mrs_path, 'r') as f:
                     data = json.load(f)
+                    # Get summary stats if available
+                    summary_stats = data.get('summary_stats', {})
                     # Merge typeform MRs and README-crawled MRs
                     for mid, info in data.get('students_with_valid_mr', {}).items():
                         validated_mrs_data[mid] = info
@@ -4212,9 +4215,24 @@ class TrackerDataProcessor(FileProcessor):
         ws.cell(row=row, column=3).fill = Styles.GREEN_FILL
         
         row += 1
-        ws.cell(row=row, column=2, value="└─ MRs Merged:")
-        ws.cell(row=row, column=3, value=f"{mr_merged} ({mr_merged/total*100:.1f}%)" if total else "0")
+        ws.cell(row=row, column=2, value="└─ Students with merged MR:")
+        ws.cell(row=row, column=3, value=f"{mr_merged}/{total} ({mr_merged/total*100:.1f}%)" if total else "0")
         ws.cell(row=row, column=3).fill = Styles.GREEN_FILL
+        
+        # Show total merged MRs (including multiples per student) from summary_stats
+        total_merged_mrs = summary_stats.get('total_merged_mrs', 0)
+        if total_merged_mrs > 0:
+            row += 1
+            ws.cell(row=row, column=2, value="└─ Total merged MRs:")
+            ws.cell(row=row, column=3, value=f"{total_merged_mrs}")
+            ws.cell(row=row, column=3).fill = Styles.GREEN_FILL
+        
+        # Show total MRs found in READMEs if available from summary_stats
+        total_mrs_in_readmes = summary_stats.get('total_mrs_found_in_readmes', 0)
+        if total_mrs_in_readmes > 0:
+            row += 1
+            ws.cell(row=row, column=2, value="└─ Total MRs in READMEs:")
+            ws.cell(row=row, column=3, value=f"{total_mrs_in_readmes}")
         
         # Interventions
         row += 2

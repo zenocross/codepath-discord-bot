@@ -21,7 +21,7 @@ class NotionService:
             "Content-Type": "application/json",
             "Notion-Version": "2025-09-03"
         }
-    
+     
     @staticmethod
     async def fetch_gitlab_issue_data(issue_url: str) -> Optional[Dict]:
         """Fetch issue data from GitLab API.

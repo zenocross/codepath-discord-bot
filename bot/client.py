@@ -24,7 +24,7 @@ class DiscordBot(commands.Bot):
         intents.members = True  # Required for username lookup across servers
         
         super().__init__(
-            command_prefix=['!announce ', '!tracker ', '!game ', '!app ', '!checkin ', '!checkin'],
+            command_prefix=['!announce ', '!tracker ', '!game ', '!app ', '!checkin ', '!checkin', '!report '],
             intents=intents,
             help_command=None
         )
@@ -208,6 +208,7 @@ class DiscordBot(commands.Bot):
         await self.load_extension('modules.app')
         await self.load_extension('modules.completion')
         await self.load_extension('modules.checkin')
+        await self.load_extension('modules.report')
         await self.load_extension('bot.events')
         
         # Start background tasks

@@ -918,6 +918,17 @@ class EmbedBuilder:
         )
         
         embed.add_field(
+            name="📊 !report",
+            value="Student activity reports from READMEs\n"
+                  "`!report <student_id>` - Commits/MRs breakdown + per-week activity\n"
+                  "`!report <student_id> validate` - Verify commit/MR ownership\n"
+                  "`!report all` - Bulk CSV export for all students\n"
+                  "`!report all validate` - Bulk CSV with validation\n"
+                  "`!report help` for detailed breakdown",
+            inline=False
+        )
+        
+        embed.add_field(
             name="👥 !app users (Owner only, DM)",
             value="`!app users` - List allowed users\n"
                   "`!app users add <id>` - Add user\n"
@@ -940,6 +951,129 @@ class EmbedBuilder:
         )
         
         embed.set_footer(text="Use !app help to see this overview")
+        
+        return embed
+    
+    @staticmethod
+    def report_help_embed() -> discord.Embed:
+        """Create help embed for report commands.
+        
+        Returns:
+            Configured Discord embed
+        """
+        embed = discord.Embed(
+            title="📊 Report Bot - Help",
+            description="Generate student activity reports from README submissions.\nAnalyzes commits, MRs, and provides per-week activity breakdown.",
+            color=discord.Color.teal()
+        )
+        
+        embed.add_field(
+            name="━━━━━━━━━━━━━━━━━━━━━━",
+            value="**📋 STUDENT REPORT COMMANDS**",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="`!report <student_id>`",
+            value=(
+                "Generate activity report for a student.\n"
+                "**Shows:**\n"
+                "• Student info (Member ID, GitLab username)\n"
+                "• Total commits and MRs found in READMEs\n"
+                "• **MR Status Breakdown:** ✅ merged / 📝 open / ❌ closed\n"
+                "• **Submissions:** Wed & Sun per week (vs 10 expected)\n"
+                "• Per-week breakdown: commits, MRs, submission status\n"
+                "• All README URLs checked\n\n"
+                "**Example:** `!report 12345`"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="`!report <student_id> validate`",
+            value=(
+                "Same as above + validates ownership.\n"
+                "**Checks:**\n"
+                "• Commit author name/email matches GitLab username\n"
+                "• MR author matches GitLab username\n"
+                "• Shows owned vs total count\n"
+                "• Lists any mismatches found\n\n"
+                "**Example:** `!report 12345 validate`"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="━━━━━━━━━━━━━━━━━━━━━━",
+            value="**📥 BULK DOWNLOAD**",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="`!report all`",
+            value=(
+                "Download CSV with all students' data.\n"
+                "**Includes:**\n"
+                "• Member ID, Name, GitLab Username\n"
+                "• Total Commits, MRs (Open/Closed/Merged)\n"
+                "• Wed/Sun submissions per week\n"
+                "• All README URLs\n\n"
+                "**Example:** `!report all`"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="`!report all validate`",
+            value=(
+                "Same as above + ownership validation.\n"
+                "**Additional data:**\n"
+                "• Owned Commits vs Total\n"
+                "• Owned MRs vs Total\n"
+                "• Summary of validation issues\n\n"
+                "**Example:** `!report all validate`\n"
+                "⚠️ May take a while for many students"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="━━━━━━━━━━━━━━━━━━━━━━",
+            value="**ℹ️ HOW IT WORKS**",
+            inline=False
+        )
+        
+        embed.add_field(
+            name="Data Sources",
+            value=(
+                "• **Typeform CSVs:** All `readme_url` fields from submissions\n"
+                "• **Validated MRs:** GitLab usernames from `_validated_mrs.json`\n"
+                "• **GitLab API:** Verifies commits/MRs exist and gets metadata"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="Week Calculation",
+            value=(
+                "• Uses program `start_date` from tracker settings\n"
+                "• Week 1 = first week of program\n"
+                "• Commits/MRs grouped by their creation date"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="Multiple READMEs",
+            value=(
+                "• Collects ALL unique README URLs across ALL submissions\n"
+                "• Parses each README for commit/MR links\n"
+                "• Deduplicates commits/MRs by SHA/IID"
+            ),
+            inline=False
+        )
+        
+        embed.set_footer(text="Use !report <student_id> to get started!")
         
         return embed
 

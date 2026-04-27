@@ -32,6 +32,24 @@ class EventsCog(commands.Cog, name="Events"):
             print(f'[Announce] ⚠️ BOT_OWNER_ID not set in .env!')
         print('------')
     
+    @commands.Cog.listener()
+    async def on_command_error(self, ctx: commands.Context, error: commands.CommandError) -> None:
+        """Global error handler - suppress expected errors."""
+        if isinstance(error, commands.CommandNotFound):
+            # Suppress CommandNotFound for !report <student_id> pattern
+            # The on_message listener in report.py handles these
+            if ctx.prefix == '!report ':
+                content_after_prefix = ctx.message.content[8:].strip()
+                if content_after_prefix:
+                    first_arg = content_after_prefix.split()[0]
+                    if first_arg.isdigit():
+                        return
+            # Let other CommandNotFound errors pass silently (or log if needed)
+            return
+        
+        # Re-raise other errors so they get logged
+        raise error
+    
     # ==================== Help Command ====================
     
     @commands.command(name='help')
@@ -51,6 +69,8 @@ class EventsCog(commands.Cog, name="Events"):
             await ctx.send(embed=EmbedBuilder.app_help_embed())
         elif ctx.prefix == '!checkin ':
             await ctx.send(embed=EmbedBuilder.checkin_help_embed())
+        elif ctx.prefix == '!report ':
+            await ctx.send(embed=EmbedBuilder.report_help_embed())
         else:
             # Fallback: DMs default to announce, channels default to app overview
             if isinstance(ctx.channel, discord.DMChannel):
