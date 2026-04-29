@@ -178,6 +178,55 @@ class ReportService:
         self._validated_mrs_cache = {}
         return self._validated_mrs_cache
     
+    def _get_gitlab_username_from_master(self, member_id: str) -> str:
+        """Get GitLab username from master CSV file.
+        
+        Args:
+            member_id: The student's member ID
+        
+        Returns:
+            GitLab username (without @ prefix) or empty string if not found
+        """
+        uploads_dir = "data/uploads"
+        
+        try:
+            # Find master CSV file
+            master_files = [f for f in os.listdir(uploads_dir) 
+                          if f.startswith("master_") and f.endswith(".csv")]
+            if not master_files:
+                return ""
+            
+            master_path = os.path.join(uploads_dir, sorted(master_files)[-1])
+            
+            with open(master_path, 'r', encoding='utf-8-sig') as f:
+                # Master CSV may have metadata rows before the header
+                # Skip rows until we find one containing "Member ID"
+                header_row = None
+                for line in f:
+                    if 'Member ID' in line:
+                        header_row = line.strip().split(',')
+                        break
+                
+                if not header_row:
+                    return ""
+                
+                # Read remaining rows as data
+                reader = csv.DictReader(f, fieldnames=header_row)
+                for row in reader:
+                    row_member_id = row.get('Member ID', '').strip()
+                    if row_member_id == member_id:
+                        # Try different column names for GitLab username
+                        for col in ['GitLab Username', 'Gitlab Username', 'gitlab_username', 'GitLab']:
+                            username = row.get(col, '').strip()
+                            if username:
+                                # Remove @ prefix if present
+                                return username.lstrip('@').lstrip('.')
+                        break
+        except Exception as e:
+            print(f"[ReportService] Error reading master CSV: {e}")
+        
+        return ""
+    
     def _get_all_typeform_csvs(self) -> List[str]:
         """Get paths to all typeform CSV files in the uploads directory."""
         uploads_dir = "data/uploads"
@@ -323,12 +372,17 @@ class ReportService:
         validated_mrs = self._load_validated_mrs()
         gitlab_username = ""
         
+        # First try to get from validated MRs
         for bucket in ['students_with_valid_mr', 'mrs_found', 'mr_url_in_readme_link']:
             if student_id in validated_mrs.get(bucket, {}):
                 data = validated_mrs[bucket][student_id]
                 if data.get('expected_author'):
                     gitlab_username = data['expected_author']
                     break
+        
+        # Fallback: try to get from master CSV if not found
+        if not gitlab_username:
+            gitlab_username = self._get_gitlab_username_from_master(student_id)
         
         return {
             'member_id': student_id,
@@ -386,19 +440,48 @@ class ReportService:
                 if member_id in students and mr_data.get('expected_author'):
                     students[member_id]['gitlab_username'] = mr_data['expected_author']
         
+        # Fallback: get GitLab usernames from master CSV for students without one
+        for member_id, data in students.items():
+            if not data.get('gitlab_username'):
+                data['gitlab_username'] = self._get_gitlab_username_from_master(member_id)
+        
         return students
     
     def _extract_repo_from_url(self, url: str) -> Optional[str]:
-        """Extract repository path from a GitLab URL."""
-        patterns = [
-            r'gitlab\.com/([^/]+/[^/]+)/-/',
-            r'gitlab\.com/([^/]+/[^/]+)/?(?:\?|#|$)',
-        ]
+        """Extract repository path from a GitLab URL.
         
-        for pattern in patterns:
-            match = re.search(pattern, url)
-            if match:
-                return match.group(1)
+        Handles various URL formats including:
+        - Standard blob/tree URLs: gitlab.com/user/repo/-/blob/...
+        - Nested namespaces: gitlab.com/group/subgroup/repo/-/...
+        - Plain repo URLs: gitlab.com/user/repo
+        - URLs without /-/ marker: gitlab.com/user/repo/file.md
+        - URLs with .git suffix: gitlab.com/user/repo.git
+        """
+        if not url:
+            return None
+        
+        url = url.strip()
+        
+        # Pattern 1: URLs with /-/ marker (handles nested namespaces)
+        # gitlab.com/user/repo/-/blob/... or gitlab.com/group/sub/repo/-/...
+        match = re.search(r'gitlab\.com/([^/]+(?:/[^/]+)+)/-/', url)
+        if match:
+            repo_path = match.group(1)
+            return repo_path.rstrip('.git')
+        
+        # Pattern 2: Plain repo URL or URL ending with repo name
+        # gitlab.com/user/repo or gitlab.com/user/repo.git
+        match = re.search(r'gitlab\.com/([^/]+/[^/]+?)(?:\.git)?(?:/|\?|#|$)', url)
+        if match:
+            return match.group(1)
+        
+        # Pattern 3: URL with file path but no /-/ marker
+        # gitlab.com/user/repo/file.md
+        match = re.search(r'gitlab\.com/([^/]+/[^/]+)', url)
+        if match:
+            repo_path = match.group(1)
+            # Strip .git suffix if present
+            return repo_path.rstrip('.git') if repo_path.endswith('.git') else repo_path
         
         return None
     
@@ -425,6 +508,43 @@ class ReportService:
             return content, repo_path
         
         return None, repo_path
+    
+    def _fetch_all_readmes_from_repos(self, readme_urls: List[str]) -> List[Tuple[str, str]]:
+        """Fetch ALL README files from all unique repos referenced in the URLs.
+        
+        This matches the tracker's behavior of scanning all READMEs in a repo,
+        not just the specific URL submitted.
+        
+        Args:
+            readme_urls: List of README URLs from student submissions
+        
+        Returns:
+            List of tuples: [(repo_path, combined_content), ...]
+        """
+        repos_crawled: Set[str] = set()
+        results: List[Tuple[str, str]] = []
+        
+        for readme_url in readme_urls:
+            repo_path = self._extract_repo_from_url(readme_url)
+            if not repo_path or repo_path in repos_crawled:
+                continue
+            
+            repos_crawled.add(repo_path)
+            
+            # Fetch ALL README files from this repo (like tracker does)
+            all_readme_contents = self.gitlab.fetch_all_readme_contents(repo_path)
+            
+            if all_readme_contents:
+                # Combine all README contents
+                combined = "\n\n".join([content for _, content in all_readme_contents])
+                results.append((repo_path, combined))
+            else:
+                # Fallback to single README fetch
+                content, _ = self._fetch_readme_content(readme_url)
+                if content:
+                    results.append((repo_path, content))
+        
+        return results
     
     def generate_student_report(self, student_id: str, 
                                  validate_ownership: bool = False) -> StudentReport:
@@ -456,8 +576,10 @@ class ReportService:
         seen_commits: Set[str] = set()
         seen_mrs: Set[str] = set()
         
-        for readme_url in report.readme_urls:
-            content, repo_path = self._fetch_readme_content(readme_url)
+        # Fetch ALL READMEs from all referenced repos (aligns with tracker behavior)
+        repo_contents = self._fetch_all_readmes_from_repos(report.readme_urls)
+        
+        for repo_path, content in repo_contents:
             if not content:
                 continue
             
@@ -495,7 +617,8 @@ class ReportService:
                         except Exception:
                             pass
                     
-                    if validate_ownership and report.gitlab_username:
+                    # Always calculate ownership for accurate counting
+                    if report.gitlab_username:
                         username_lower = report.gitlab_username.lower()
                         email_prefix = author_email.split('@')[0].lower() if author_email else ''
                         is_owned = (
@@ -563,7 +686,8 @@ class ReportService:
                         except Exception:
                             pass
                     
-                    if validate_ownership and report.gitlab_username:
+                    # Always calculate ownership for accurate merged MR counting
+                    if report.gitlab_username:
                         is_owned = author.lower() == report.gitlab_username.lower()
                 
                 mr_info = MRInfo(
@@ -584,13 +708,91 @@ class ReportService:
                 if week_num > 0:
                     report.mrs_by_week[week_num].append(mr_info)
         
+        # Also process direct MR URLs from typeform submissions
+        # These are MRs the student submitted directly, not found in READMEs
+        mr_urls = student_data.get('mr_urls', [])
+        for mr_url in mr_urls:
+            # Parse MR URL to extract repo and iid
+            import re
+            mr_match = re.search(r'gitlab\.com/([^/]+(?:/[^/]+)+)/-/merge_requests/(\d+)', mr_url)
+            if not mr_match:
+                continue
+            
+            repo_path = mr_match.group(1)
+            iid = mr_match.group(2)
+            mr_key = f"{repo_path}:{iid}"
+            
+            if mr_key in seen_mrs:
+                continue
+            seen_mrs.add(mr_key)
+            
+            mr_data = self.gitlab.verify_merge_request(repo_path, iid)
+            
+            merged_at = None
+            week_num = 0
+            is_merged = False
+            is_owned = False
+            author = ""
+            title = ""
+            state = ""
+            created_at = None
+            
+            if mr_data.get('exists'):
+                author = mr_data.get('author', '')
+                title = mr_data.get('title', '')
+                state = mr_data.get('state', '')
+                is_merged = state == 'merged'
+                
+                if mr_data.get('created_at'):
+                    try:
+                        created_at = datetime.fromisoformat(
+                            mr_data['created_at'].replace('Z', '+00:00')
+                        )
+                        week_num = self.get_week_number(created_at)
+                    except Exception:
+                        pass
+                
+                if mr_data.get('merged_at'):
+                    try:
+                        merged_at = datetime.fromisoformat(
+                            mr_data['merged_at'].replace('Z', '+00:00')
+                        )
+                    except Exception:
+                        pass
+                
+                # Always calculate ownership for accurate merged MR counting
+                if report.gitlab_username:
+                    is_owned = author.lower() == report.gitlab_username.lower()
+            
+            mr_info = MRInfo(
+                iid=iid,
+                url=mr_url,
+                repo_path=repo_path,
+                title=title,
+                state=state,
+                author=author,
+                created_at=created_at,
+                merged_at=merged_at,
+                is_merged=is_merged,
+                is_owned=is_owned,
+                week_number=week_num
+            )
+            
+            report.merge_requests.append(mr_info)
+            if week_num > 0:
+                report.mrs_by_week[week_num].append(mr_info)
+        
         report.total_commits = len(report.commits)
         report.total_mrs = len(report.merge_requests)
-        report.merged_mrs = sum(1 for mr in report.merge_requests if mr.is_merged)
         report.open_mrs = sum(1 for mr in report.merge_requests if mr.state == 'opened')
         report.closed_mrs = sum(1 for mr in report.merge_requests if mr.state == 'closed')
         report.owned_commits = sum(1 for c in report.commits if c.is_owned)
         report.owned_mrs = sum(1 for mr in report.merge_requests if mr.is_owned)
+        
+        # Count merged MRs only if student owns them (author matches)
+        # This excludes MRs by other students that were merely referenced
+        report.merged_mrs = sum(1 for mr in report.merge_requests 
+                               if mr.is_merged and mr.is_owned)
         
         if validate_ownership:
             for commit in report.commits:

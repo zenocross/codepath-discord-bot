@@ -31,9 +31,10 @@ MR_PATTERN = re.compile(
     re.IGNORECASE
 )
 
-# Pattern to extract repo path from README link
+# Pattern to extract repo path from README link (handles nested namespaces)
+# Matches: gitlab.com/user/repo or gitlab.com/group/subgroup/repo
 README_REPO_PATTERN = re.compile(
-    r'https?://gitlab\.com/([^/]+/[^/]+)',
+    r'https?://gitlab\.com/([^/]+(?:/[^/]+)+?)(?:/-/|\.git|/(?:README|contribution)|(?:\?|#|$))',
     re.IGNORECASE
 )
 
@@ -153,6 +154,79 @@ class GitLabService:
         
         return None
     
+    def fetch_all_markdown_content(self, repo_path: str) -> Optional[str]:
+        """Fetch content from ALL markdown files in a GitLab repository.
+        
+        This crawls the repository tree and fetches all .md files, combining
+        their content. This is useful when students document multiple contributions
+        in separate files (e.g., contribution-1.md, contribution-2.md, etc.)
+        
+        Args:
+            repo_path: The full path to the repo (e.g., "username/project")
+        
+        Returns:
+            Combined content from all markdown files, or None if repo not found.
+        """
+        encoded_path = urllib.parse.quote(repo_path, safe="")
+        
+        # First check if project exists and get default branch
+        project_url = f"{GITLAB_URL}/api/v4/projects/{encoded_path}"
+        project_data = self._make_request(project_url)
+        
+        if not project_data:
+            return None  # Project doesn't exist
+        
+        default_branch = project_data.get("default_branch", "main")
+        
+        # Get repository tree (recursive to find all files)
+        tree_url = f"{GITLAB_URL}/api/v4/projects/{encoded_path}/repository/tree?ref={default_branch}&recursive=true&per_page=100"
+        tree_data = self._make_request(tree_url)
+        
+        if not tree_data:
+            # Fall back to just README.md
+            return self.fetch_readme(repo_path)
+        
+        # Find all markdown files
+        md_files = []
+        for item in tree_data:
+            if item.get('type') == 'blob':
+                path = item.get('path', '')
+                # Match .md files (case insensitive)
+                if path.lower().endswith('.md'):
+                    md_files.append(path)
+        
+        if not md_files:
+            return None
+        
+        # Sort files to process README.md first, then others alphabetically
+        def sort_key(path):
+            name = path.lower()
+            if 'readme' in name:
+                return (0, path)  # README files first
+            return (1, path)  # Then alphabetically
+        
+        md_files.sort(key=sort_key)
+        
+        # Fetch content from each markdown file
+        all_content = []
+        for file_path in md_files:
+            encoded_file = urllib.parse.quote(file_path, safe="")
+            file_url = f"{GITLAB_URL}/api/v4/projects/{encoded_path}/repository/files/{encoded_file}?ref={default_branch}"
+            file_data = self._make_request(file_url)
+            
+            if file_data and "content" in file_data:
+                try:
+                    content = base64.b64decode(file_data["content"]).decode("utf-8")
+                    # Add file marker for debugging/tracking
+                    all_content.append(f"<!-- File: {file_path} -->\n{content}")
+                except Exception:
+                    continue
+        
+        if not all_content:
+            return None
+        
+        return "\n\n".join(all_content)
+    
     def parse_gitlab_links(self, readme_content: str, owner_repo: Optional[str] = None) -> Dict[str, List[Dict]]:
         """Parse GitLab commit and MR links from README content.
         
@@ -253,6 +327,12 @@ class GitLabService:
     def extract_repo_from_readme_link(self, readme_link: str) -> Tuple[Optional[str], str]:
         """Extract repository path from a GitLab README link.
         
+        Handles various URL formats including:
+        - Standard blob/tree URLs: gitlab.com/user/repo/-/blob/...
+        - Nested namespaces: gitlab.com/group/subgroup/repo/-/...
+        - Plain repo URLs: gitlab.com/user/repo
+        - URLs with .git suffix: gitlab.com/user/repo.git
+        
         Args:
             readme_link: URL to a README file on GitLab
         
@@ -264,10 +344,32 @@ class GitLabService:
         
         readme_link = readme_link.strip()
         
-        if "gitlab.com" in readme_link.lower():
-            match = README_REPO_PATTERN.search(readme_link)
-            if match:
-                return match.group(1), "gitlab"
+        if "gitlab.com" not in readme_link.lower():
+            return None, ""
+        
+        # Pattern 1: URLs with /-/ marker (handles nested namespaces)
+        # gitlab.com/user/repo/-/blob/... or gitlab.com/group/sub/repo/-/...
+        match = re.search(r'gitlab\.com/([^/]+(?:/[^/]+)+)/-/', readme_link, re.IGNORECASE)
+        if match:
+            repo_path = match.group(1)
+            # Strip .git suffix if present
+            if repo_path.endswith('.git'):
+                repo_path = repo_path[:-4]
+            return repo_path, "gitlab"
+        
+        # Pattern 2: Plain repo URL or URL ending with repo name
+        # gitlab.com/user/repo or gitlab.com/user/repo.git
+        match = re.search(r'gitlab\.com/([^/]+/[^/]+?)(?:\.git)?(?:/|\?|#|$)', readme_link, re.IGNORECASE)
+        if match:
+            return match.group(1), "gitlab"
+        
+        # Pattern 3: Fallback - basic two-level extraction
+        match = re.search(r'gitlab\.com/([^/]+/[^/]+)', readme_link, re.IGNORECASE)
+        if match:
+            repo_path = match.group(1)
+            if repo_path.endswith('.git'):
+                repo_path = repo_path[:-4]
+            return repo_path, "gitlab"
         
         return None, ""
     
@@ -319,13 +421,16 @@ class GitLabService:
         return False
     
     def list_readme_files(self, repo_path: str) -> List[str]:
-        """List all README files in a GitLab repository.
+        """List all markdown documentation files in a GitLab repository.
+        
+        This includes README files and contribution documentation files where
+        students might document their MR contributions.
         
         Args:
             repo_path: The full path to the repo (e.g., "username/project")
         
         Returns:
-            List of file paths for README files found (e.g., ["README.md", "contribution-1-README.md"])
+            List of file paths for markdown files found
         """
         encoded_path = urllib.parse.quote(repo_path, safe="")
         
@@ -345,8 +450,9 @@ class GitLabService:
         if not tree_data or not isinstance(tree_data, list):
             return []
         
-        # Filter for README files (case-insensitive, various patterns)
-        readme_files = []
+        # Filter for markdown documentation files
+        # Include: README.md, contribution-X.md, contribution-X-README.md, etc.
+        md_files = []
         for item in tree_data:
             if item.get('type') != 'blob':
                 continue
@@ -354,14 +460,41 @@ class GitLabService:
             name = item.get('name', '').lower()
             path = item.get('path', '')
             
-            # Match README files: readme.md, README.md, contribution-X-README.md, etc.
-            if 'readme' in name and name.endswith('.md'):
-                readme_files.append(path)
+            # Match all .md files that are likely documentation
+            if name.endswith('.md'):
+                # Include files with these patterns:
+                # - readme (README.md, readme.md, contribution-1-README.md)
+                # - contribution (contribution-1.md, contribution.md)
+                # - Any other .md file in the root or students directories
+                if ('readme' in name or 
+                    'contribution' in name or
+                    'plan' in name or
+                    '/' not in path or  # Root level .md files
+                    path.startswith('students/') or
+                    path.startswith('contribution')):
+                    md_files.append(path)
         
-        return readme_files
+        # Sort: README.md first, then contribution files, then others
+        def sort_key(path):
+            name = path.lower()
+            if 'readme' in name and '/' not in path:
+                return (0, path)  # Root README first
+            elif 'readme' in name:
+                return (1, path)  # Other READMEs
+            elif 'contribution' in name:
+                return (2, path)  # Contribution files
+            return (3, path)  # Everything else
+        
+        md_files.sort(key=sort_key)
+        
+        return md_files
     
     def fetch_all_readme_contents(self, repo_path: str) -> List[tuple]:
-        """Fetch content from all README files in a repository.
+        """Fetch content from all markdown documentation files in a repository.
+        
+        This fetches README.md files as well as contribution documentation files
+        (e.g., contribution-1.md, contribution-2.md) where students document their
+        MR contributions.
         
         Args:
             repo_path: The full path to the repo
@@ -369,10 +502,10 @@ class GitLabService:
         Returns:
             List of tuples: [(file_path, content), ...]
         """
-        readme_files = self.list_readme_files(repo_path)
+        md_files = self.list_readme_files(repo_path)
         results = []
         
-        for file_path in readme_files:
+        for file_path in md_files:
             content = self._fetch_gitlab_file(repo_path, file_path)
             if content:
                 results.append((file_path, content))

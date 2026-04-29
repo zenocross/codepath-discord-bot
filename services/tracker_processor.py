@@ -4092,7 +4092,24 @@ class TrackerDataProcessor(FileProcessor):
             if member_id_str in validated_mrs_data:
                 students_with_mr.add(key)
                 mr_info = validated_mrs_data[member_id_str]
-                if mr_info.get('is_merged'):
+                # Check if student has ANY OWNED merged MR (author_match = True)
+                # Only count merged MRs that the student authored, not referenced ones
+                has_owned_merged = False
+                if mr_info.get('author_match') is True:
+                    # merged_mrs_count tracks all merged MRs from all_mrs_found
+                    # is_merged tracks the primary MR's status
+                    if mr_info.get('is_merged', False):
+                        has_owned_merged = True
+                    elif mr_info.get('merged_mrs_count', 0) > 0:
+                        has_owned_merged = True
+                    else:
+                        # Check all_mrs_with_status for any OWNED merged MRs
+                        for mr_status in mr_info.get('all_mrs_with_status', []):
+                            # Only count if merged AND owned (is_owned defaults to True for old data)
+                            if mr_status.get('is_merged') and mr_status.get('is_owned', True):
+                                has_owned_merged = True
+                                break
+                if has_owned_merged:
                     students_with_merged_mr.add(key)
                     
                 # Check author_match status
@@ -4129,6 +4146,35 @@ class TrackerDataProcessor(FileProcessor):
                 students_with_mr.add(key)
                 if s.mr_status and "merged" in s.mr_status.lower():
                     students_with_merged_mr.add(key)
+        
+        # Second pass: ensure ALL students in validated_mrs_data are counted
+        # (some students may be in validated data but not in typeform list)
+        for member_id_str, mr_info in validated_mrs_data.items():
+            if member_id_str in processed_member_ids:
+                continue  # Already processed in first pass
+            
+            # Use member_id as key for consistency
+            key = member_id_str
+            students_with_mr.add(key)
+            
+            # Check if student has ANY owned merged MR
+            # Only count as merged if author_match is True (owned MR)
+            has_owned_merged = False
+            if mr_info.get('author_match') is True:
+                if mr_info.get('is_merged', False):
+                    has_owned_merged = True
+                elif mr_info.get('merged_mrs_count', 0) > 0:
+                    has_owned_merged = True
+                else:
+                    # Check all_mrs_with_status for any OWNED merged MRs
+                    for mr_status in mr_info.get('all_mrs_with_status', []):
+                        # Only count if merged AND owned (is_owned defaults to True for old data)
+                        if mr_status.get('is_merged') and mr_status.get('is_owned', True):
+                            has_owned_merged = True
+                            break
+            
+            if has_owned_merged:
+                students_with_merged_mr.add(key)
         
         mr_submitted = len(students_with_mr)
         mr_merged = len(students_with_merged_mr)

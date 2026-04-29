@@ -2895,8 +2895,9 @@ class TrackerCog(commands.Cog, name="Tracker"):
                         student_errors.append(f"{readme_link}: Could not extract repo path")
                         continue
                     
-                    file_path = gitlab_service.extract_file_path_from_url(readme_link)
-                    is_tree = gitlab_service.is_tree_url(readme_link)
+                    # Skip if we already fully crawled this repo
+                    if repo_path in repos_crawled:
+                        continue
                     
                     readme_content = None
                     all_readme_contents = []
@@ -2907,32 +2908,15 @@ class TrackerCog(commands.Cog, name="Tracker"):
                             if attempt > 0 or processed > 1:
                                 await asyncio.sleep(API_DELAY)
                             
-                            if is_tree or not file_path:
-                                # Tree URL or repo root: fetch ALL README files in the repo
-                                # Only do this once per repo
-                                if repo_path not in repos_crawled:
-                                    all_readme_contents = gitlab_service.fetch_all_readme_contents(repo_path)
-                                    repos_crawled.add(repo_path)
-                                    if all_readme_contents:
-                                        readme_content = "\n\n".join([content for _, content in all_readme_contents])
-                                        student_readme_links_crawled.append(f"{readme_link} (all READMEs)")
-                                        break
-                                else:
-                                    # Already crawled this repo
-                                    break
-                            else:
-                                # Specific file URL
-                                readme_content = gitlab_service.fetch_file_content(repo_path, file_path)
-                                if readme_content:
-                                    student_readme_links_crawled.append(readme_link)
+                            # ALWAYS fetch ALL markdown files from the repo
+                            # This ensures we find issues in contribution-X.md files,
+                            # not just the specific README.md the student linked
+                            all_readme_contents = gitlab_service.fetch_all_readme_contents(repo_path)
+                            repos_crawled.add(repo_path)
                             
-                            if not readme_content and repo_path not in repos_crawled:
-                                # Fall back to fetching all READMEs
-                                all_readme_contents = gitlab_service.fetch_all_readme_contents(repo_path)
-                                repos_crawled.add(repo_path)
-                                if all_readme_contents:
-                                    readme_content = "\n\n".join([content for _, content in all_readme_contents])
-                                    student_readme_links_crawled.append(f"{readme_link} (all READMEs)")
+                            if all_readme_contents:
+                                readme_content = "\n\n".join([content for _, content in all_readme_contents])
+                                student_readme_links_crawled.append(f"{readme_link} (all markdown files)")
                             
                             if readme_content:
                                 break
@@ -4007,8 +3991,9 @@ class TrackerCog(commands.Cog, name="Tracker"):
                         student_errors.append(f"{readme_link}: Could not extract repo path")
                         continue
                     
-                    file_path = gitlab_service.extract_file_path_from_url(readme_link)
-                    is_tree = gitlab_service.is_tree_url(readme_link)
+                    # Skip if we already fully crawled this repo
+                    if repo_path in repos_crawled:
+                        continue
                     
                     readme_content = None
                     all_readme_contents = []
@@ -4019,32 +4004,15 @@ class TrackerCog(commands.Cog, name="Tracker"):
                             if attempt > 0 or processed > 1:
                                 await asyncio.sleep(API_DELAY)
                             
-                            if is_tree or not file_path:
-                                # Tree URL or repo root: fetch ALL README files in the repo
-                                # Only do this once per repo
-                                if repo_path not in repos_crawled:
-                                    all_readme_contents = gitlab_service.fetch_all_readme_contents(repo_path)
-                                    repos_crawled.add(repo_path)
-                                    if all_readme_contents:
-                                        readme_content = "\n\n".join([content for _, content in all_readme_contents])
-                                        student_readme_links_crawled.append(f"{readme_link} (all READMEs)")
-                                        break
-                                else:
-                                    # Already crawled this repo
-                                    break
-                            else:
-                                # Specific file URL
-                                readme_content = gitlab_service.fetch_file_content(repo_path, file_path)
-                                if readme_content:
-                                    student_readme_links_crawled.append(readme_link)
+                            # ALWAYS fetch ALL markdown files from the repo
+                            # This ensures we find MRs in contribution-X.md files,
+                            # not just the specific README.md the student linked
+                            all_readme_contents = gitlab_service.fetch_all_readme_contents(repo_path)
+                            repos_crawled.add(repo_path)
                             
-                            if not readme_content and repo_path not in repos_crawled:
-                                # Fall back to fetching all READMEs
-                                all_readme_contents = gitlab_service.fetch_all_readme_contents(repo_path)
-                                repos_crawled.add(repo_path)
-                                if all_readme_contents:
-                                    readme_content = "\n\n".join([content for _, content in all_readme_contents])
-                                    student_readme_links_crawled.append(f"{readme_link} (all READMEs)")
+                            if all_readme_contents:
+                                readme_content = "\n\n".join([content for _, content in all_readme_contents])
+                                student_readme_links_crawled.append(f"{readme_link} (all markdown files)")
                             
                             if readme_content:
                                 break
@@ -4060,8 +4028,11 @@ class TrackerCog(commands.Cog, name="Tracker"):
                         # Find MR URLs in this README content
                         mrs_in_readme = MR_PATTERN.findall(readme_content)
                         for mr in mrs_in_readme:
-                            if mr not in student_all_mrs:
-                                student_all_mrs.append(mr)
+                            # Normalize URL: strip fragment (#note_xxx) to avoid counting same MR twice
+                            mr_normalized = mr.split('#')[0].rstrip('/')
+                            # Check if we already have this MR (by normalized URL)
+                            if not any(existing.split('#')[0].rstrip('/') == mr_normalized for existing in student_all_mrs):
+                                student_all_mrs.append(mr_normalized)
                     elif last_error:
                         student_errors.append(f"{readme_link}: {last_error}")
                 
@@ -4127,6 +4098,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
                 # Track ALL merged MRs across all students (for total count)
                 all_merged_mrs_count = 0
                 all_merged_mrs_urls = []  # Track URLs for debugging
+                globally_checked_mrs = set()  # GLOBAL deduplication across all students
                 
                 for idx, (mid, mr_url, name, source, all_mrs) in enumerate(mrs_to_verify, 1):
                     if idx % 20 == 0:
@@ -4172,24 +4144,26 @@ class TrackerCog(commands.Cog, name="Tracker"):
                                 found_student_mr = None
                                 all_mrs_details = []  # Track all MRs checked with their authors
                                 
-                                # Add the primary MR to the list
+                                # Add the primary MR to the list (but mark as not owned)
                                 all_mrs_details.append({
                                     'url': mr_url,
                                     'author': actual_author,
                                     'is_merged': is_merged,
-                                    'mr_state': mr_state
+                                    'mr_state': mr_state,
+                                    'is_owned': False
                                 })
                                 
-                                # Count primary MR if merged (even if author doesn't match)
-                                if is_merged:
-                                    all_merged_mrs_count += 1
-                                    all_merged_mrs_urls.append(mr_url)
+                                # DON'T count primary MR if author doesn't match (not owned)
+                                # Just track it in globally_checked_mrs for deduplication
+                                mr_normalized = mr_url.split('#')[0].lower().rstrip('/')
+                                globally_checked_mrs.add(mr_normalized)
                                 
                                 if all_mrs:
                                     # Scan backwards (latest first), skip the one we already checked
-                                    checked_urls = {mr_url.lower().rstrip('/')}
+                                    # Strip fragments (#note_xxx) for proper deduplication
+                                    checked_urls = {mr_normalized}
                                     for alt_mr_url in reversed(all_mrs):
-                                        alt_normalized = alt_mr_url.lower().rstrip('/')
+                                        alt_normalized = alt_mr_url.split('#')[0].lower().rstrip('/')
                                         if alt_normalized in checked_urls:
                                             continue
                                         checked_urls.add(alt_normalized)
@@ -4209,17 +4183,21 @@ class TrackerCog(commands.Cog, name="Tracker"):
                                                 alt_author = alt_mr_data.get('author', '').lower()
                                                 alt_state = alt_mr_data.get('state', '')
                                                 alt_merged = alt_state == 'merged'
+                                                alt_is_owned = (alt_author == expected_gitlab.lower()) if expected_gitlab else False
+                                                
                                                 all_mrs_details.append({
                                                     'url': alt_mr_url,
                                                     'author': alt_author,
                                                     'mr_state': alt_state,
-                                                    'is_merged': alt_merged
+                                                    'is_merged': alt_merged,
+                                                    'is_owned': alt_is_owned
                                                 })
                                                 
-                                                # Count this MR if merged (for total count)
-                                                if alt_merged:
+                                                # Count this MR if merged AND owned (with GLOBAL deduplication)
+                                                if alt_merged and alt_is_owned and alt_normalized not in globally_checked_mrs:
                                                     all_merged_mrs_count += 1
                                                     all_merged_mrs_urls.append(alt_mr_url)
+                                                globally_checked_mrs.add(alt_normalized)
                                                 
                                                 if alt_author == expected_gitlab:
                                                     found_student_mr = {
@@ -4239,11 +4217,27 @@ class TrackerCog(commands.Cog, name="Tracker"):
                                     found_alternate_count += 1
                                     print(f"[MR Validate] Found alternate MR for {name}: {found_student_mr['url']}")
                                     
+                                    # Convert all_mrs_details to all_mrs_with_status format (include ownership)
+                                    student_all_mrs_with_status = [
+                                        {
+                                            'url': d['url'], 
+                                            'is_merged': d.get('is_merged', False), 
+                                            'mr_state': d.get('mr_state', ''),
+                                            'author': d.get('author', ''),
+                                            'is_owned': d.get('is_owned', False)
+                                        }
+                                        for d in all_mrs_details
+                                    ]
+                                    # Only count merged MRs that the student OWNS
+                                    student_merged_count = sum(1 for d in all_mrs_details if d.get('is_merged') and d.get('is_owned'))
+                                    
                                     if source == 'typeform' and mid in students_with_valid_mr:
                                         # Keep in valid but note we found a different one in README
                                         students_with_valid_mr[mid]['alternate_mr'] = found_student_mr['url']
                                         students_with_valid_mr[mid]['note'] = f"Typeform MR by {actual_author}, but found student's MR in README"
                                         students_with_valid_mr[mid].update(validation_info)
+                                        students_with_valid_mr[mid]['all_mrs_with_status'] = student_all_mrs_with_status
+                                        students_with_valid_mr[mid]['merged_mrs_count'] = student_merged_count
                                     elif source == 'readme' and mid in mrs_found:
                                         # Update to the correct MR
                                         mrs_found[mid]['mr_url'] = found_student_mr['url']
@@ -4255,9 +4249,13 @@ class TrackerCog(commands.Cog, name="Tracker"):
                                         mrs_found[mid]['mr_state'] = found_student_mr.get('mr_state', '')
                                         mrs_found[mid]['is_merged'] = found_student_mr.get('is_merged', False)
                                         mrs_found[mid]['merged_at'] = found_student_mr.get('merged_at', '')
+                                        mrs_found[mid]['all_mrs_with_status'] = student_all_mrs_with_status
+                                        mrs_found[mid]['merged_mrs_count'] = student_merged_count
                                     elif source == 'readme_field' and mid in mr_url_in_readme_link:
                                         mr_url_in_readme_link[mid]['alternate_mr'] = found_student_mr['url']
                                         mr_url_in_readme_link[mid].update(validation_info)
+                                        mr_url_in_readme_link[mid]['all_mrs_with_status'] = student_all_mrs_with_status
+                                        mr_url_in_readme_link[mid]['merged_mrs_count'] = student_merged_count
                                 else:
                                     # No alternate found - mark as mismatch
                                     mismatch_count += 1
@@ -4288,14 +4286,17 @@ class TrackerCog(commands.Cog, name="Tracker"):
                                 elif source == 'readme_field' and mid in mr_url_in_readme_link:
                                     mr_url_in_readme_link[mid].update(validation_info)
                                 
-                                # Count this MR if merged
-                                if is_merged:
+                                # Count this MR if merged (with GLOBAL deduplication)
+                                mr_normalized = mr_url.split('#')[0].lower().rstrip('/')
+                                if is_merged and mr_normalized not in globally_checked_mrs:
                                     all_merged_mrs_count += 1
                                     all_merged_mrs_urls.append(mr_url)
+                                globally_checked_mrs.add(mr_normalized)
                                 
                                 # Also scan all_mrs_found to count ALL merged MRs for this student
                                 if all_mrs:
-                                    checked_urls = {mr_url.lower().rstrip('/')}
+                                    # Strip fragments (#note_xxx) for proper deduplication
+                                    checked_urls = {mr_normalized}
                                     student_merged_count = 1 if is_merged else 0
                                     student_all_mrs_with_status = [{
                                         'url': mr_url,
@@ -4304,7 +4305,7 @@ class TrackerCog(commands.Cog, name="Tracker"):
                                     }]
                                     
                                     for alt_mr_url in all_mrs:
-                                        alt_normalized = alt_mr_url.lower().rstrip('/')
+                                        alt_normalized = alt_mr_url.split('#')[0].lower().rstrip('/')
                                         if alt_normalized in checked_urls:
                                             continue
                                         checked_urls.add(alt_normalized)
@@ -4323,20 +4324,35 @@ class TrackerCog(commands.Cog, name="Tracker"):
                                             if alt_mr_data.get('exists'):
                                                 alt_state = alt_mr_data.get('state', '')
                                                 alt_merged = alt_state == 'merged'
+                                                alt_author = alt_mr_data.get('author', '').lower()
+                                                
+                                                # ONLY include this MR if the student authored it
+                                                alt_is_owned = (alt_author == expected_gitlab.lower()) if expected_gitlab else False
+                                                
                                                 student_all_mrs_with_status.append({
                                                     'url': alt_mr_url,
                                                     'is_merged': alt_merged,
-                                                    'mr_state': alt_state
+                                                    'mr_state': alt_state,
+                                                    'author': alt_author,
+                                                    'is_owned': alt_is_owned
                                                 })
-                                                if alt_merged:
-                                                    all_merged_mrs_count += 1
-                                                    all_merged_mrs_urls.append(alt_mr_url)
+                                                
+                                                # Only count merged MRs that the student OWNS
+                                                if alt_merged and alt_is_owned:
                                                     student_merged_count += 1
+                                                    # Count for total (with GLOBAL deduplication)
+                                                    if alt_normalized not in globally_checked_mrs:
+                                                        all_merged_mrs_count += 1
+                                                        all_merged_mrs_urls.append(alt_mr_url)
+                                                globally_checked_mrs.add(alt_normalized)
                                         except Exception:
                                             continue
                                     
-                                    # Store all MRs with status for this student
-                                    if source == 'readme' and mid in mrs_found:
+                                    # Store all MRs with status for this student (regardless of source)
+                                    if source == 'typeform' and mid in students_with_valid_mr:
+                                        students_with_valid_mr[mid]['all_mrs_with_status'] = student_all_mrs_with_status
+                                        students_with_valid_mr[mid]['merged_mrs_count'] = student_merged_count
+                                    elif source == 'readme' and mid in mrs_found:
                                         mrs_found[mid]['all_mrs_with_status'] = student_all_mrs_with_status
                                         mrs_found[mid]['merged_mrs_count'] = student_merged_count
                     except Exception as e:
@@ -4351,27 +4367,60 @@ class TrackerCog(commands.Cog, name="Tracker"):
             
             # Calculate summary statistics
             # Count students with merged MR (unique students)
+            # A student has merged MR if: is_merged=True OR merged_mrs_count > 0
             students_with_merged_count = 0
             total_mrs_found = 0
+            counted_students = set()  # Track which students we've counted
             
             # Count from students_with_valid_mr
             for mid, info in students_with_valid_mr.items():
-                if info.get('is_merged'):
+                # Check if has merged: either primary is merged OR has owned merged MRs
+                # Note: is_merged refers to the primary validated MR which author matched
+                # merged_mrs_count should now only count owned MRs
+                has_merged = info.get('is_merged', False) or info.get('merged_mrs_count', 0) > 0
+                # Also check all_mrs_with_status - but ONLY count OWNED merged MRs
+                if not has_merged:
+                    for mr_status in info.get('all_mrs_with_status', []):
+                        # Only count if merged AND owned by this student
+                        if mr_status.get('is_merged') and mr_status.get('is_owned', True):
+                            has_merged = True
+                            break
+                if has_merged and mid not in counted_students:
                     students_with_merged_count += 1
+                    counted_students.add(mid)
             
-            # Count from mrs_found
+            # Count from mrs_found - ONLY if author_match is True (owned MRs)
             for mid, info in mrs_found.items():
-                if mid not in students_with_valid_mr:  # Avoid double-counting students
-                    if info.get('is_merged'):
-                        students_with_merged_count += 1
+                # Only count if student owns the primary MR (author_match = True)
+                if info.get('author_match') is not True:
+                    # Still count total MRs found, but don't count as student's merged MR
+                    total_mrs_found += len(info.get('all_mrs_found', []))
+                    continue
+                    
+                has_merged = info.get('is_merged', False) or info.get('merged_mrs_count', 0) > 0
+                # Also check all_mrs_with_status - but ONLY count OWNED merged MRs
+                if not has_merged:
+                    for mr_status in info.get('all_mrs_with_status', []):
+                        # Only count if merged AND owned by this student
+                        if mr_status.get('is_merged') and mr_status.get('is_owned', True):
+                            has_merged = True
+                            break
+                if has_merged and mid not in counted_students:
+                    students_with_merged_count += 1
+                    counted_students.add(mid)
                 # Count all MRs found in READMEs
                 total_mrs_found += len(info.get('all_mrs_found', []))
             
-            # Count from mr_url_in_readme_link
+            # Count from mr_url_in_readme_link - ONLY if author_match is True (owned MRs)
             for mid, info in mr_url_in_readme_link.items():
-                if mid not in students_with_valid_mr and mid not in mrs_found:
-                    if info.get('is_merged'):
-                        students_with_merged_count += 1
+                # Only count if student owns the MR (author_match = True)
+                if info.get('author_match') is not True:
+                    continue
+                    
+                has_merged = info.get('is_merged', False) or info.get('merged_mrs_count', 0) > 0
+                if has_merged and mid not in counted_students:
+                    students_with_merged_count += 1
+                    counted_students.add(mid)
             
             # Save results to JSON
             from datetime import datetime
