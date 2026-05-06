@@ -72,6 +72,9 @@ SURVEY_WEEKS = {5}  # Only week 5 has the NPS survey
 # Weeks where event/office hours questions are shown
 EVENT_SURVEY_WEEKS = {6}  # Only week 6 has the event questions
 
+# Weeks where final event question is shown
+FINAL_EVENT_WEEKS = {10}  # Only week 10 has the final event question
+
 # Reasons for not attending (shared between event and office hours questions)
 NOT_ATTENDING_REASONS = [
     ("schedule_conflict", "Schedule conflict"),
@@ -250,6 +253,8 @@ class BlockStatusSelect(ui.Select):
                 await self.view.show_nps_question(interaction)
             elif self.view.week in EVENT_SURVEY_WEEKS:
                 await self.view.show_midprogram_question(interaction)
+            elif self.view.week in FINAL_EVENT_WEEKS:
+                await self.view.show_final_event_question(interaction)
             else:
                 await self.view.finish_checkin(interaction)
 
@@ -279,6 +284,8 @@ class SupportSelect(ui.Select):
             await self.view.show_nps_question(interaction)
         elif self.view.week in EVENT_SURVEY_WEEKS:
             await self.view.show_midprogram_question(interaction)
+        elif self.view.week in FINAL_EVENT_WEEKS:
+            await self.view.show_final_event_question(interaction)
         else:
             await self.view.finish_checkin(interaction)
 
@@ -526,6 +533,36 @@ class OfficeHoursReasonSelect(ui.Select):
         await self.view.finish_checkin(interaction)
 
 
+# ==================== Week 10 Final Event Component ====================
+
+class FinalEventSelect(ui.Select):
+    """Select menu for final event attendance."""
+    
+    def __init__(self):
+        options = [
+            discord.SelectOption(
+                label="Yes",
+                value="yes",
+                emoji="✅"
+            ),
+            discord.SelectOption(
+                label="No",
+                value="no",
+                emoji="❌"
+            )
+        ]
+        super().__init__(
+            placeholder="Select your answer...",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+    
+    async def callback(self, interaction: discord.Interaction):
+        self.view.attending_final_event = self.values[0] == "yes"
+        await self.view.finish_checkin(interaction)
+
+
 class CheckinView(ui.View):
     """Main view for the check-in questionnaire."""
     
@@ -556,6 +593,9 @@ class CheckinView(ui.View):
         self.attended_office_hours: Optional[bool] = None
         self.office_hours_reason: Optional[str] = None
         
+        # Response data - Final event question (only for week 10)
+        self.attending_final_event: Optional[bool] = None
+        
         # Add initial phase select
         self.add_item(PhaseSelect())
     
@@ -570,12 +610,19 @@ class CheckinView(ui.View):
         return self.week in EVENT_SURVEY_WEEKS
     
     @property
+    def has_final_event_survey(self) -> bool:
+        """Check if this week includes the final event question (week 10)."""
+        return self.week in FINAL_EVENT_WEEKS
+    
+    @property
     def total_steps(self) -> int:
         """Get total number of steps based on week."""
         if self.has_survey:
             return 7  # Week 5: 3 core + 4 NPS survey
         elif self.has_event_survey:
             return 5  # Week 6: 3 core + 2 event questions (reasons are sub-questions)
+        elif self.has_final_event_survey:
+            return 4  # Week 10: 3 core + 1 final event question
         return 3  # Other weeks: 3 core questions
     
     async def _safe_edit_message(self, interaction: discord.Interaction, embed: discord.Embed, view):
@@ -789,6 +836,26 @@ class CheckinView(ui.View):
         
         await self._safe_edit_message(interaction, embed, self)
     
+    # ==================== Week 10 Final Event Method ====================
+    
+    async def show_final_event_question(self, interaction: discord.Interaction):
+        """Show the final event attendance question (only for week 10)."""
+        self.clear_items()
+        self.add_item(FinalEventSelect())
+        
+        blocked_str = "🚧 Yes" if self.blocked else "✅ No"
+        embed = discord.Embed(
+            title=f"📋 Weekly Check-in (Step 4/{self.total_steps})",
+            description=(
+                f"**Phase:** {self.phase_label}\n"
+                f"**Blocked:** {blocked_str}\n\n"
+                "**Are you planning to attend our final event with GitLab on Friday from 11-12pm EST?**"
+            ),
+            color=discord.Color.blue()
+        )
+        
+        await self._safe_edit_message(interaction, embed, self)
+    
     async def finish_checkin(self, interaction: discord.Interaction):
         """Complete the check-in and save data."""
         # Build support labels
@@ -832,7 +899,9 @@ class CheckinView(ui.View):
             'attending_midprogram': self.attending_midprogram,
             'midprogram_reason': self.midprogram_reason,
             'attended_office_hours': self.attended_office_hours,
-            'office_hours_reason': self.office_hours_reason
+            'office_hours_reason': self.office_hours_reason,
+            # Final event question (week 10)
+            'attending_final_event': self.attending_final_event
         }
         
         save_user_checkin(self.user_id, self.week, checkin_data)
@@ -897,6 +966,12 @@ class CheckinView(ui.View):
                 f"\n\n**📊 Event Survey:**\n"
                 f"• Attending midprogram event: {midprogram_str}\n"
                 f"• Attended office hours: {office_hours_str}"
+            )
+        elif self.has_final_event_survey:
+            final_event_str = "✅ Yes" if self.attending_final_event else "❌ No"
+            survey_summary = (
+                f"\n\n**📊 Final Event:**\n"
+                f"• Attending final event: {final_event_str}"
             )
         
         if self.blocked:
@@ -1053,6 +1128,11 @@ class CheckinView(ui.View):
                 f"**Attended Office Hours:** {office_hours_str}"
             )
             embed.add_field(name="📅 Event Survey", value=survey_text, inline=False)
+        # Add final event response for week 10
+        elif self.has_final_event_survey and self.attending_final_event is not None:
+            final_event_str = "Yes" if self.attending_final_event else "No"
+            survey_text = f"**Attending Final Event:** {final_event_str}"
+            embed.add_field(name="🎉 Final Event", value=survey_text, inline=False)
         
         embed.set_footer(text=f"User ID: {self.user_id}")
         
@@ -1202,8 +1282,15 @@ class CheckinCog(commands.Cog, name="Checkin"):
             await ctx.send(embed=embed)
             return
         
-        # Start the questionnaire (3 steps normally, 7 steps for survey weeks)
-        total_steps = 7 if week in SURVEY_WEEKS else 3
+        # Start the questionnaire (steps vary by week)
+        if week in SURVEY_WEEKS:
+            total_steps = 7
+        elif week in EVENT_SURVEY_WEEKS:
+            total_steps = 5
+        elif week in FINAL_EVENT_WEEKS:
+            total_steps = 4
+        else:
+            total_steps = 3
         title = f"📋 Modify Week Check-in (Step 1/{total_steps})" if is_modify else f"📋 Weekly Check-in (Step 1/{total_steps})"
         subtitle = "Modify Mode" if is_modify else "Check-in"
         embed = discord.Embed(
@@ -1288,6 +1375,12 @@ class CheckinCog(commands.Cog, name="Checkin"):
                 f"\n\n**📅 Event Survey:**\n"
                 f"• Attending midprogram event: {midprogram_str}\n"
                 f"• Attended office hours: {office_hours_str}"
+            )
+        elif checkin.get('attending_final_event') is not None:
+            final_event_str = "✅ Yes" if checkin.get('attending_final_event') else "❌ No"
+            survey_summary = (
+                f"\n\n**🎉 Final Event:**\n"
+                f"• Attending final event: {final_event_str}"
             )
         
         # Build status display
@@ -1514,6 +1607,7 @@ class CheckinCog(commands.Cog, name="Checkin"):
             'NPS Score', 'NPS Reason', 'Open Source Confidence', 'GitLab Proficiency', 
             'AI Tools Confidence',
             'Attending Midprogram', 'Midprogram Reason', 'Attended Office Hours', 'Office Hours Reason',
+            'Attending Final Event',
             'Submitted At'
         ])
         
@@ -1533,6 +1627,10 @@ class CheckinCog(commands.Cog, name="Checkin"):
                 attended_office_hours = checkin.get('attended_office_hours')
                 attended_office_hours_str = '' if attended_office_hours is None else ('Yes' if attended_office_hours else 'No')
                 
+                # Format final event field
+                attending_final_event = checkin.get('attending_final_event')
+                attending_final_event_str = '' if attending_final_event is None else ('Yes' if attending_final_event else 'No')
+                
                 writer.writerow([
                     user_id,
                     week_num,
@@ -1549,6 +1647,7 @@ class CheckinCog(commands.Cog, name="Checkin"):
                     checkin.get('midprogram_reason', ''),
                     attended_office_hours_str,
                     checkin.get('office_hours_reason', ''),
+                    attending_final_event_str,
                     checkin.get('submitted_at', '')
                 ])
         
@@ -2074,6 +2173,8 @@ class CheckinCog(commands.Cog, name="Checkin"):
                     total_steps = 7
                 elif checkin_week in EVENT_SURVEY_WEEKS:
                     total_steps = 5
+                elif checkin_week in FINAL_EVENT_WEEKS:
+                    total_steps = 4
                 else:
                     total_steps = 3
                 await user.send(

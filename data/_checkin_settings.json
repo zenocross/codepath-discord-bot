@@ -57,7 +57,14 @@
       "guild_id": 1417608659508265123,
       "week": 9,
       "posted_at": "2026-04-22 17:00:05"
+    },
+    {
+      "message_id": 1499092908446453862,
+      "channel_id": 1451043721130020996,
+      "guild_id": 1417608659508265123,
+      "week": 10,
+      "posted_at": "2026-04-29 17:00:03"
     }
   ],
-  "last_scheduled_week": 9
+  "last_scheduled_week": 10
 }

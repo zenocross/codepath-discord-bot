@@ -288,6 +288,27 @@
       "office_hours_reason": null,
       "submitted_at": "2026-04-23T01:13:29.282292",
       "week": 9
+    },
+    "week_10": {
+      "phase": "3",
+      "phase_label": "Phase 3: Implementation",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Ryan Lawton",
+      "discord_name": "rlawton.cs",
+      "nps_score": null,
+      "nps_reason": "N/A",
+      "opensource_confidence": null,
+      "gitlab_proficiency": null,
+      "ai_confidence": null,
+      "attending_midprogram": null,
+      "midprogram_reason": null,
+      "attended_office_hours": null,
+      "office_hours_reason": null,
+      "attending_final_event": true,
+      "submitted_at": "2026-04-30T01:20:41.046618",
+      "week": 10
     }
   },
   "1029490163639930911": {
@@ -397,6 +418,27 @@
       "office_hours_reason": null,
       "submitted_at": "2026-04-23T02:16:51.444608",
       "week": 9
+    },
+    "week_10": {
+      "phase": "1",
+      "phase_label": "Phase 1: Issue Selection",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Luciano Scarpaci",
+      "discord_name": "lucianoscarpaci",
+      "nps_score": null,
+      "nps_reason": "N/A",
+      "opensource_confidence": null,
+      "gitlab_proficiency": null,
+      "ai_confidence": null,
+      "attending_midprogram": null,
+      "midprogram_reason": null,
+      "attended_office_hours": null,
+      "office_hours_reason": null,
+      "attending_final_event": true,
+      "submitted_at": "2026-04-30T21:36:40.605046",
+      "week": 10
     }
   },
   "1301283445808304221": {
@@ -516,6 +558,27 @@
       "office_hours_reason": null,
       "submitted_at": "2026-04-23T01:00:26.161648",
       "week": 9
+    },
+    "week_10": {
+      "phase": "1",
+      "phase_label": "Phase 1: Issue Selection",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Olayinka Vaughan",
+      "discord_name": "olayinkav",
+      "nps_score": null,
+      "nps_reason": "N/A",
+      "opensource_confidence": null,
+      "gitlab_proficiency": null,
+      "ai_confidence": null,
+      "attending_midprogram": null,
+      "midprogram_reason": null,
+      "attended_office_hours": null,
+      "office_hours_reason": null,
+      "attending_final_event": true,
+      "submitted_at": "2026-04-30T01:38:12.155737",
+      "week": 10
     }
   },
   "1162238751255314432": {
@@ -638,6 +701,27 @@
       "office_hours_reason": null,
       "submitted_at": "2026-04-23T03:05:57.398047",
       "week": 9
+    },
+    "week_10": {
+      "phase": "4",
+      "phase_label": "Phase 4: Submission & Iteration",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Matthew Wyatt",
+      "discord_name": "matthewoscarwyatt",
+      "nps_score": null,
+      "nps_reason": "N/A",
+      "opensource_confidence": null,
+      "gitlab_proficiency": null,
+      "ai_confidence": null,
+      "attending_midprogram": null,
+      "midprogram_reason": null,
+      "attended_office_hours": null,
+      "office_hours_reason": null,
+      "attending_final_event": true,
+      "submitted_at": "2026-04-30T03:50:26.717767",
+      "week": 10
     }
   },
   "433577031473561600": {
@@ -809,6 +893,27 @@
       "office_hours_reason": null,
       "submitted_at": "2026-04-09T02:25:00.600504",
       "week": 7
+    },
+    "week_10": {
+      "phase": "4",
+      "phase_label": "Phase 4: Submission & Iteration",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Hubert Huang",
+      "discord_name": "hube2148",
+      "nps_score": null,
+      "nps_reason": "N/A",
+      "opensource_confidence": null,
+      "gitlab_proficiency": null,
+      "ai_confidence": null,
+      "attending_midprogram": null,
+      "midprogram_reason": null,
+      "attended_office_hours": null,
+      "office_hours_reason": null,
+      "attending_final_event": false,
+      "submitted_at": "2026-05-02T05:48:43.303020",
+      "week": 10
     }
   },
   "457614453991538692": {
@@ -1106,6 +1211,27 @@
       "office_hours_reason": null,
       "submitted_at": "2026-04-23T12:55:28.037244",
       "week": 9
+    },
+    "week_10": {
+      "phase": "4",
+      "phase_label": "Phase 4: Submission & Iteration",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Emanuel Pimentel",
+      "discord_name": "actualjam",
+      "nps_score": null,
+      "nps_reason": "N/A",
+      "opensource_confidence": null,
+      "gitlab_proficiency": null,
+      "ai_confidence": null,
+      "attending_midprogram": null,
+      "midprogram_reason": null,
+      "attended_office_hours": null,
+      "office_hours_reason": null,
+      "attending_final_event": false,
+      "submitted_at": "2026-04-30T06:32:37.363099",
+      "week": 10
     }
   },
   "1392146774378020874": {
@@ -1470,6 +1596,27 @@
       "office_hours_reason": null,
       "submitted_at": "2026-04-23T09:38:20.579438",
       "week": 9
+    },
+    "week_10": {
+      "phase": "2",
+      "phase_label": "Phase 2: Reproduction & Planning",
+      "blocked": false,
+      "support_needed": [],
+      "support_labels": [],
+      "full_name": "Sydelle Nyegamo",
+      "discord_name": "queensydelle",
+      "nps_score": null,
+      "nps_reason": "N/A",
+      "opensource_confidence": null,
+      "gitlab_proficiency": null,
+      "ai_confidence": null,
+      "attending_midprogram": null,
+      "midprogram_reason": null,
+      "attended_office_hours": null,
+      "office_hours_reason": null,
+      "attending_final_event": true,
+      "submitted_at": "2026-04-30T03:09:09.071964",
+      "week": 10
     }
   },
   "209761369011126272": {

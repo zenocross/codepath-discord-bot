@@ -1,16 +1,1 @@
-{
-  "checkin_weekly": {
-    "type": "weekly",
-    "target_type": "checkin",
-    "channel_id": 1451043721130020996,
-    "config": {
-      "day": 2,
-      "hour": 17,
-      "minute": 0
-    },
-    "next_run": "2026-04-29T17:00:00+00:00",
-    "active": true,
-    "created_by": 432551600100474881,
-    "last_sent": "2026-04-22T17:00:01.864449+00:00"
-  }
-}
+{}
